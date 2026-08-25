@@ -1,3 +1,13 @@
+# Design brief (original)
+
+> The brief that led to dropping Next.js for server-rendered Jinja2 + HTMX, and
+> to treating design quality as a build requirement rather than an afterthought.
+>
+> Kept for provenance. The working reference distilled from it is
+> [`design-system.md`](design-system.md) — read that one when building a page.
+
+---
+
 Absolutely. **FastAPI + Jinja2 + HTMX does not mean the UI has to look old-fashioned.** You can build a very polished, professional dashboard with it.
 
 In fact, for SESKit, I think the combination could work extremely well.
