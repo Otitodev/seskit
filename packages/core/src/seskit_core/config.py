@@ -44,6 +44,25 @@ class Settings(BaseSettings):
     DATABASE_URL: PostgresDsn
     REDIS_URL: RedisDsn
 
+    # -- Dashboard authentication -------------------------------------------
+
+    #: Registration is always permitted while no account exists, so a fresh
+    #: install can be claimed by whoever sets it up. It closes immediately
+    #: afterwards unless this is turned on: a self-hosted instance is often
+    #: reachable before anyone is watching it, and an open signup form on a
+    #: public URL means a stranger can take it over.
+    ALLOW_SIGNUP: bool = False
+
+    SESSION_COOKIE_NAME: str = "seskit_session"
+
+    #: Idle timeout, not absolute - reading a session refreshes it, so an active
+    #: user is never signed out mid-task.
+    SESSION_TTL_DAYS: int = 14
+
+    #: Failed logins per email and IP before the door closes for a while.
+    LOGIN_MAX_ATTEMPTS: int = 10
+    LOGIN_ATTEMPT_WINDOW_SECONDS: int = 900
+
     # -- Local email provider (§25) -----------------------------------------
     # Points at Mailpit in local development. Production sending goes through
     # Amazon SES instead; see the provider-selection note on `smtp_configured`.
@@ -58,6 +77,22 @@ class Settings(BaseSettings):
     @property
     def is_local(self) -> bool:
         return self.ENVIRONMENT is Environment.LOCAL
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def session_ttl_seconds(self) -> int:
+        return self.SESSION_TTL_DAYS * 24 * 60 * 60
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def session_cookie_secure(self) -> bool:
+        """Whether to set the Secure flag on the session cookie.
+
+        Cannot be unconditional: a Secure cookie is not sent over plain HTTP, so
+        forcing it on would break login at http://localhost, which is the
+        documented way to run this (§25).
+        """
+        return not self.is_local
 
     @computed_field  # type: ignore[prop-decorator]
     @property
