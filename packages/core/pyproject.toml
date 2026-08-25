@@ -10,6 +10,8 @@ dependencies = [
     "asyncpg>=0.29",
     "redis>=5.0",
     "structlog>=24.4",
+    "pwdlib[argon2]>=0.2",
+    "python-ulid>=3.0",
 ]
 
 [build-system]
