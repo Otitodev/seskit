@@ -1,0 +1,47 @@
+"""The Project model (§6).
+
+A project is the tenancy boundary. Every later phase hangs off it: API keys
+(§6), domains, emails, webhook endpoints. Anything project-scoped must be
+reachable only by the project's owner.
+"""
+
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+from sqlalchemy import ForeignKey, String
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+from seskit_core.db import Base
+from seskit_core.ids import IDPrefix, generate_id
+from seskit_core.models.base import TimestampMixin
+
+if TYPE_CHECKING:
+    from seskit_core.models.user import User
+
+DEFAULT_PROJECT_NAME = "Default"
+
+
+class Project(Base, TimestampMixin):
+    __tablename__ = "projects"
+
+    id: Mapped[str] = mapped_column(
+        String(64),
+        primary_key=True,
+        default=lambda: generate_id(IDPrefix.PROJECT),
+    )
+
+    # Cascade in the database, not only in the ORM: a delete issued by psql or
+    # a migration has to leave no orphaned projects behind either.
+    user_id: Mapped[str] = mapped_column(
+        String(64),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        index=True,
+        nullable=False,
+    )
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+
+    user: Mapped[User] = relationship(back_populates="projects")
+
+    def __repr__(self) -> str:
+        return f"<Project {self.id}>"

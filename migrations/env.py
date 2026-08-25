@@ -9,16 +9,15 @@ has no async API of its own; the async template drives an async engine through
 import asyncio
 from logging.config import fileConfig
 
+# seskit_core.models is imported for its side effect: it registers every model
+# on Base.metadata. Without it, autogenerate silently produces empty migrations.
+import seskit_core.models  # noqa: F401
 from alembic import context
 from seskit_core.config import get_settings
 from seskit_core.db import Base
 from sqlalchemy import pool
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
-
-# Importing the models package registers every model on Base.metadata.
-# Without this, autogenerate silently produces empty migrations.
-# (No models exist yet - Phase 2 adds the first ones.)
 
 config = context.config
 

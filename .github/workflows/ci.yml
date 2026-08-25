@@ -10,11 +10,10 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  # Phase 1's suite stubs its data dependencies, but these are set so the
-  # settings object validates and so integration tests added in later phases
-  # have live services to talk to.
+  # The suite creates its own "seskit_test" database from this connection, so
+  # DATABASE_URL points at the development database, exactly as it does locally.
   SECRET_KEY: ci-secret-key
-  DATABASE_URL: postgresql+asyncpg://seskit:seskit@localhost:5432/seskit_test
+  DATABASE_URL: postgresql+asyncpg://seskit:seskit@localhost:5432/seskit
   REDIS_URL: redis://localhost:6379/0
   ENVIRONMENT: local
 
@@ -29,11 +28,11 @@ jobs:
         env:
           POSTGRES_USER: seskit
           POSTGRES_PASSWORD: seskit
-          POSTGRES_DB: seskit_test
+          POSTGRES_DB: seskit
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U seskit -d seskit_test"
+          --health-cmd "pg_isready -U seskit -d seskit"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10

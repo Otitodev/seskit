@@ -78,4 +78,8 @@ ignore_missing_imports = true
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+# Per-test loops by default; the session-scoped database fixture opts into a
+# session loop explicitly. It yields only a URL, so no live connection is
+# shared across loops.
+asyncio_default_fixture_loop_scope = "function"
 addopts = "-q"
