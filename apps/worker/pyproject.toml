@@ -1,0 +1,16 @@
+[project]
+name = "seskit-worker"
+version = "0.1.0"
+description = "SESKit background worker (ARQ)"
+requires-python = ">=3.12"
+dependencies = [
+    "seskit-core",
+    "arq>=0.26",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/seskit_worker"]

@@ -1,0 +1,119 @@
+{# SESKit component macros.
+
+   The vocabulary Phase 9 builds its pages from. Every visual decision lives
+   here or in static/css/app.css - pages compose these, they do not restyle.
+
+   Import at the top of a page:
+     {% from "components/ui.html" import button, card_open, card_close, badge %}
+#}
+
+{% from "components/icons.html" import icon %}
+
+{# --------------------------------------------------------------- button #}
+{% macro button(label, variant="default", size="", type="button", href=None,
+                icon_name=None, disabled=False, attrs="") -%}
+  {%- set classes = "btn" ~ (" btn--" ~ variant if variant != "default" else "")
+                          ~ (" btn--" ~ size if size else "") -%}
+  {%- if href -%}
+    <a class="{{ classes }}" href="{{ href }}"
+       {%- if disabled %} aria-disabled="true"{% endif %} {{ attrs|safe }}>
+      {%- if icon_name %}{{ icon(icon_name, class="btn__icon") }}{% endif -%}
+      {{ label }}
+    </a>
+  {%- else -%}
+    <button class="{{ classes }}" type="{{ type }}"
+            {%- if disabled %} disabled{% endif %} {{ attrs|safe }}>
+      {%- if icon_name %}{{ icon(icon_name, class="btn__icon") }}{% endif -%}
+      {{ label }}
+    </button>
+  {%- endif -%}
+{%- endmacro %}
+
+{# ---------------------------------------------------------------- badge #}
+{# `tone` is semantic state, never decoration: success/warning/danger/accent. #}
+{% macro badge(label, tone="", dot=True) -%}
+  <span class="badge{{ ' badge--' ~ tone if tone else '' }}">
+    {%- if dot %}<span class="badge__dot"></span>{% endif -%}
+    {{ label }}
+  </span>
+{%- endmacro %}
+
+{# ----------------------------------------------------------------- card #}
+{# Split open/close rather than a `caller()` block so pages can stream long
+   table bodies into a card without buffering the whole thing. #}
+{% macro card_open(title=None, flush=False, actions=None) -%}
+  <section class="card{{ ' card--flush' if flush else '' }}">
+    {%- if title or actions %}
+    <header class="card__header">
+      {%- if title %}<h3 class="card__title">{{ title }}</h3>{% endif -%}
+      {%- if actions %}<div class="row">{{ actions|safe }}</div>{% endif -%}
+    </header>
+    {%- endif %}
+    <div class="card__body">
+{%- endmacro %}
+
+{% macro card_close() -%}
+    </div>
+  </section>
+{%- endmacro %}
+
+{# --------------------------------------------------------------- metric #}
+{% macro metric(label, value, meta=None) -%}
+  <div class="metric">
+    <span class="metric__label">{{ label }}</span>
+    <span class="metric__value">{{ value }}</span>
+    {%- if meta %}<span class="metric__meta">{{ meta }}</span>{% endif -%}
+  </div>
+{%- endmacro %}
+
+{# ---------------------------------------------------------------- field #}
+{% macro field(name, label, type="text", value="", placeholder="", hint=None,
+               error=None, required=False, mono=False, attrs="") -%}
+  <div class="field">
+    <label class="field__label" for="{{ name }}">
+      {{ label }}{% if required %} <span class="subtle">*</span>{% endif %}
+    </label>
+    <input class="input{{ ' input--mono' if mono else '' }}"
+           id="{{ name }}" name="{{ name }}" type="{{ type }}"
+           value="{{ value }}" placeholder="{{ placeholder }}"
+           {%- if required %} required{% endif %}
+           {%- if error %} aria-invalid="true" aria-describedby="{{ name }}-error"{% endif %}
+           {{ attrs|safe }}>
+    {%- if error %}
+      <p class="field__error" id="{{ name }}-error">{{ error }}</p>
+    {%- elif hint %}
+      <p class="field__hint">{{ hint }}</p>
+    {%- endif %}
+  </div>
+{%- endmacro %}
+
+{# ----------------------------------------------------------- empty state #}
+{# Empty states are the first thing a new install shows on every page, so they
+   explain the next action rather than just reporting absence. #}
+{% macro empty(title, body, icon_name="inbox", action_label=None, action_href=None) -%}
+  <div class="empty">
+    {{ icon(icon_name, class="empty__icon") }}
+    <p class="empty__title">{{ title }}</p>
+    <p class="empty__body">{{ body }}</p>
+    {%- if action_label and action_href %}
+    <div class="empty__actions">
+      {{ button(action_label, variant="primary", href=action_href) }}
+    </div>
+    {%- endif %}
+  </div>
+{%- endmacro %}
+
+{# ----------------------------------------------------------------- code #}
+{% macro code_block(content, language=None, copyable=True) -%}
+  <div class="code">
+    {%- if language or copyable %}
+    <div class="code__header">
+      <span>{{ language or "" }}</span>
+      {%- if copyable %}
+      <button class="btn btn--ghost btn--sm" type="button" data-copy="{{ content }}">Copy</button>
+      {%- endif %}
+    </div>
+    {%- endif %}
+    <pre><code>{{ content }}</code></pre>
+  </div>
+{%- endmacro %}

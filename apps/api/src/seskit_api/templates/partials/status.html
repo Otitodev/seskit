@@ -1,0 +1,12 @@
+{% from "components/ui.html" import badge %}
+
+{#- Swapped into the topbar by HTMX on load and every 30s. Reports what is
+    actually reachable rather than just "running". -#}
+{% if ready %}
+  {{ badge("All systems operational", tone="success") }}
+{% else %}
+  {%- set down = [] -%}
+  {%- if not dependencies.database %}{% set _ = down.append("database") %}{% endif -%}
+  {%- if not dependencies.redis %}{% set _ = down.append("Redis") %}{% endif -%}
+  {{ badge((down | join(" and ")) ~ " unavailable", tone="danger") }}
+{% endif %}

@@ -1,0 +1,37 @@
+#!/bin/sh
+# SESKit pre-commit hook.
+#
+# Runs the file checks configured in .pre-commit-config.yaml (ruff, mypy, the
+# hygiene hooks). Delegating rather than reimplementing keeps one source of
+# truth that CI runs too.
+#
+# See .githooks/commit-msg for why this chains to global hooks.
+
+set -e
+
+# --- chain to the contributor's global hook, if any --------------------------
+
+global_hooks=$(git config --global --get core.hooksPath 2>/dev/null || true)
+if [ -n "$global_hooks" ]; then
+    case "$global_hooks" in
+        "~/"*) global_hooks="$HOME/${global_hooks#~/}" ;;
+    esac
+    if [ -x "$global_hooks/pre-commit" ]; then
+        "$global_hooks/pre-commit" || exit $?
+    fi
+fi
+
+# --- run the configured checks ----------------------------------------------
+
+# Soft-skip when the toolchain is absent: someone fixing a typo through the
+# GitHub web UI or a fresh clone should not be blocked by a missing dependency.
+# CI runs the same checks, so nothing escapes review.
+
+if command -v uv >/dev/null 2>&1; then
+    exec uv run pre-commit run --hook-stage pre-commit
+elif command -v pre-commit >/dev/null 2>&1; then
+    exec pre-commit run --hook-stage pre-commit
+fi
+
+echo "SESKit: uv/pre-commit not found; skipping file checks (CI still runs them)." >&2
+exit 0

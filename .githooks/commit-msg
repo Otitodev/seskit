@@ -1,0 +1,50 @@
+#!/bin/sh
+# SESKit commit-msg hook.
+#
+# Enforces the convention documented in .gitmessage.
+#
+# Chains to a globally-configured commit-msg hook first. Git runs exactly one
+# hook per event, so pointing core.hooksPath at this directory would otherwise
+# silently disable whatever a contributor has set up globally - and a hook that
+# stops running without saying so is worse than no hook at all.
+
+set -e
+
+msg_file="$1"
+
+# --- chain to the contributor's global hook, if any --------------------------
+
+global_hooks=$(git config --global --get core.hooksPath 2>/dev/null || true)
+if [ -n "$global_hooks" ]; then
+    # ~ is not expanded by git config, so do it here.
+    case "$global_hooks" in
+        "~/"*) global_hooks="$HOME/${global_hooks#~/}" ;;
+    esac
+    if [ -x "$global_hooks/commit-msg" ]; then
+        "$global_hooks/commit-msg" "$msg_file" || exit $?
+    fi
+fi
+
+# --- validate the resulting message -----------------------------------------
+
+# The global hook above may have rewritten the message, so validate what is
+# actually about to be committed, not what was originally written.
+
+repo_root=$(git rev-parse --show-toplevel)
+checker="$repo_root/scripts/check_commit_msg.py"
+
+if [ ! -f "$checker" ]; then
+    echo "SESKit: $checker is missing; skipping the commit message check." >&2
+    exit 0
+fi
+
+if command -v python3 >/dev/null 2>&1; then
+    python3 "$checker" "$msg_file"
+elif command -v python >/dev/null 2>&1; then
+    python "$checker" "$msg_file"
+elif command -v py >/dev/null 2>&1; then
+    py "$checker" "$msg_file"
+else
+    echo "SESKit: no python interpreter found; skipping the commit message check." >&2
+    exit 0
+fi

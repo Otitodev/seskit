@@ -1,0 +1,58 @@
+{# Inline SVG icon set.
+
+   Inline rather than a sprite sheet or icon font: no extra request, icons
+   inherit `currentColor` so they theme for free, and there is no flash of
+   unstyled icon. Stroke-based, 1.5px, on a 24px grid.
+
+   Usage:  {{ icon("mail", class="nav-item__icon") }}
+#}
+
+{% macro icon(name, class="", size=None) -%}
+  {%- set attrs -%}
+    {%- if size %}width="{{ size }}" height="{{ size }}"{% endif -%}
+  {%- endset -%}
+  <svg class="{{ class }}" {{ attrs }} viewBox="0 0 24 24" aria-hidden="true" focusable="false"
+       stroke-linecap="round" stroke-linejoin="round">
+    {%- if name == "overview" -%}
+      <rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/>
+      <rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/>
+    {%- elif name == "mail" -%}
+      <rect x="2.5" y="4.5" width="19" height="15" rx="2"/><path d="m3 6.5 8.4 6a1 1 0 0 0 1.2 0l8.4-6"/>
+    {%- elif name == "globe" -%}
+      <circle cx="12" cy="12" r="9"/><path d="M3 12h18"/>
+      <path d="M12 3a14 14 0 0 1 0 18a14 14 0 0 1 0-18"/>
+    {%- elif name == "key" -%}
+      <circle cx="8" cy="12" r="4"/><path d="M12 12h9"/><path d="M17 12v3.5"/><path d="M20.5 12v2.5"/>
+    {%- elif name == "webhook" -%}
+      <path d="M13 3 6.5 13.5"/><circle cx="5" cy="16" r="3"/><circle cx="19" cy="16" r="3"/>
+      <circle cx="12" cy="4" r="3"/><path d="M8 16h8"/><path d="m17.5 13.5-3-5"/>
+    {%- elif name == "cloud" -%}
+      <path d="M7 18a4.5 4.5 0 0 1-.5-8.97A6 6 0 0 1 18 9.5a4.25 4.25 0 0 1-.5 8.5z"/>
+    {%- elif name == "settings" -%}
+      <path d="M4 6h10"/><path d="M18 6h2"/><circle cx="16" cy="6" r="2"/>
+      <path d="M4 12h2"/><path d="M10 12h10"/><circle cx="8" cy="12" r="2"/>
+      <path d="M4 18h10"/><path d="M18 18h2"/><circle cx="16" cy="18" r="2"/>
+    {%- elif name == "book" -%}
+      <path d="M4 4.5A1.5 1.5 0 0 1 5.5 3H19a1 1 0 0 1 1 1v13H5.5A1.5 1.5 0 0 0 4 18.5z"/>
+      <path d="M4 18.5A1.5 1.5 0 0 0 5.5 20H20"/>
+    {%- elif name == "sun" -%}
+      <circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.9 4.9 1.4 1.4"/>
+      <path d="m17.7 17.7 1.4 1.4"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.3 17.7-1.4 1.4"/>
+      <path d="m19.1 4.9-1.4 1.4"/>
+    {%- elif name == "moon" -%}
+      <path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5"/>
+    {%- elif name == "inbox" -%}
+      <path d="M3 12h4l2 3h6l2-3h4"/>
+      <path d="M5.5 5h13l2.5 7v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-5z"/>
+    {%- elif name == "book-open" -%}
+      <path d="M12 6.5C10.5 5 8.5 4.5 4 4.5v13c4.5 0 6.5.5 8 2"/>
+      <path d="M12 6.5c1.5-1.5 3.5-2 8-2v13c-4.5 0-6.5.5-8 2z"/>
+    {%- elif name == "arrow-right" -%}
+      <path d="M5 12h14"/><path d="m13 6 6 6-6 6"/>
+    {%- elif name == "check" -%}
+      <path d="m4 12.5 5 5L20 6.5"/>
+    {%- elif name == "alert" -%}
+      <circle cx="12" cy="12" r="9"/><path d="M12 7.5v5.5"/><path d="M12 16.5h.01"/>
+    {%- endif -%}
+  </svg>
+{%- endmacro %}

@@ -1,0 +1,86 @@
+{% from "components/icons.html" import icon %}
+
+{# Defined before use - Jinja binds macros in document order, so a macro called
+   above its definition is undefined at render time. #}
+{% macro nav_link(icon_name, label, href, active) -%}
+  <a class="nav-item" href="{{ href }}"
+     {%- if active == icon_name or active == label|lower %} aria-current="page"{% endif %}>
+    {{ icon(icon_name, class="nav-item__icon") }}
+    {{ label }}
+  </a>
+{%- endmacro %}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}SESKit{% endblock %}</title>
+  <meta name="description" content="A Python-native developer email platform built on Amazon SES.">
+  <meta name="color-scheme" content="light dark">
+
+  {# Applied before first paint so a dark-theme user never sees a light flash. #}
+  <script>
+    (function () {
+      try {
+        var t = localStorage.getItem("seskit-theme");
+        if (t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t);
+      } catch (e) {}
+    })();
+  </script>
+
+  <link rel="stylesheet" href="{{ url_for('static', path='/css/app.css') }}">
+  <script defer src="{{ url_for('static', path='/js/htmx.min.js') }}"></script>
+  <script defer src="{{ url_for('static', path='/js/app.js') }}"></script>
+  {% block head %}{% endblock %}
+</head>
+<body>
+  <a class="visually-hidden" href="#main">Skip to content</a>
+
+  <div class="app">
+    <aside class="sidebar">
+      <a class="sidebar__brand" href="/">
+        <span class="sidebar__mark" aria-hidden="true">S</span>
+        SESKit
+      </a>
+
+      <nav class="sidebar__nav" aria-label="Main">
+        {{ nav_link("overview", "Overview", "/", nav_active) }}
+        {{ nav_link("mail", "Emails", "/emails", nav_active) }}
+        {{ nav_link("globe", "Domains", "/domains", nav_active) }}
+        {{ nav_link("key", "API Keys", "/api-keys", nav_active) }}
+        {{ nav_link("webhook", "Webhooks", "/webhooks", nav_active) }}
+        {{ nav_link("cloud", "AWS", "/aws", nav_active) }}
+      </nav>
+
+      <div class="sidebar__footer">
+        {{ nav_link("settings", "Settings", "/settings", nav_active) }}
+        {{ nav_link("book", "Docs", "/docs", nav_active) }}
+      </div>
+    </aside>
+
+    <div class="main">
+      <header class="topbar">
+        <div class="row">
+          {# Polls the readiness probe. Also the working proof that the HTMX
+             request pipeline is wired end to end. #}
+          <span hx-get="/partials/status" hx-trigger="load, every 30s" hx-swap="innerHTML">
+            <span class="badge"><span class="badge__dot"></span>Checking</span>
+          </span>
+        </div>
+
+        <div class="topbar__actions">
+          <button class="btn btn--ghost btn--icon" type="button"
+                  data-theme-toggle aria-label="Switch theme">
+            <span data-icon="sun" hidden>{{ icon("sun", class="btn__icon") }}</span>
+            <span data-icon="moon">{{ icon("moon", class="btn__icon") }}</span>
+          </button>
+        </div>
+      </header>
+
+      <main class="content" id="main">
+        {% block content %}{% endblock %}
+      </main>
+    </div>
+  </div>
+</body>
+</html>

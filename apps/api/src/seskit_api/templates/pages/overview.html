@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% from "components/ui.html" import metric, card_open, card_close, empty, code_block %}
+
+{% block title %}Overview · SESKit{% endblock %}
+
+{% block content %}
+  <div class="page-header">
+    <h1>Overview</h1>
+    <p class="page-header__subtitle">
+      Email activity across this project.
+    </p>
+  </div>
+
+  {# Zeroes, not placeholder numbers. A new install genuinely has sent nothing,
+     and inventing sample data would misrepresent the product. #}
+  <div class="grid-metrics">
+    {{ metric("Sent", "0") }}
+    {{ metric("Delivered", "0", meta="—") }}
+    {{ metric("Bounced", "0", meta="—") }}
+    {{ metric("Complaints", "0", meta="—") }}
+  </div>
+
+  {{ card_open("Email activity") }}
+    {{ empty(
+      "No emails yet",
+      "Once you connect an AWS account and send your first email, delivery
+       activity will appear here. Until then, mail sent locally is captured by
+       Mailpit instead of Amazon SES.",
+      icon_name="inbox"
+    ) }}
+  {{ card_close() }}
+
+  {{ card_open("Send your first email") }}
+    <div class="stack">
+      <p class="muted">
+        SESKit is running. Sending goes live in a later build phase — this is
+        the API the Python SDK will call.
+      </p>
+      {{ code_block(
+        'curl -X POST http://localhost:8000/v1/emails \\\n'
+        '  -H "Authorization: Bearer sk_live_..." \\\n'
+        '  -H "Content-Type: application/json" \\\n'
+        '  -d \'{"from":"hello@example.com","to":["you@example.com"],'
+        '"subject":"Hello","html":"<h1>Hello from SESKit</h1>"}\'',
+        language="cURL"
+      ) }}
+    </div>
+  {{ card_close() }}
+{% endblock %}

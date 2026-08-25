@@ -1,0 +1,124 @@
+# SESKit local development stack.
+#
+#   cp .env.example .env && docker compose up
+#
+# Dashboard  http://localhost:8000
+# API docs   http://localhost:8000/docs
+# Mailpit    http://localhost:8025
+#
+# No AWS account is required: local sending goes to Mailpit, not Amazon SES.
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-seskit}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-seskit}
+      POSTGRES_DB: ${POSTGRES_DB:-seskit}
+    volumes:
+      - seskit-db-data:/var/lib/postgresql/data
+    ports:
+      # Deliberately a high, SESKit-specific port. A machine with PostgreSQL
+      # installed often runs clusters on both 5432 and 5433, and those bind
+      # before Docker does - the container then looks healthy while every host
+      # connection silently reaches the wrong database. Inside the Compose
+      # network this is still plain "db:5432", so nothing else changes.
+      - "${POSTGRES_HOST_PORT:-55432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-seskit} -d ${POSTGRES_DB:-seskit}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - seskit-redis-data:/data
+    ports:
+      # Same reasoning as Postgres above.
+      - "${REDIS_HOST_PORT:-56379}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # Captures every email sent in local development. SMTP on 1025, inbox on 8025.
+  mailpit:
+    image: axllent/mailpit:latest
+    environment:
+      MP_MAX_MESSAGES: 5000
+      MP_SMTP_AUTH_ACCEPT_ANY: 1
+      MP_SMTP_AUTH_ALLOW_INSECURE: 1
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+
+  api:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    command:
+      - uvicorn
+      - seskit_api.main:app
+      - --host
+      - "0.0.0.0"
+      - --port
+      - "8000"
+      - --reload
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-seskit}:${POSTGRES_PASSWORD:-seskit}@db:5432/${POSTGRES_DB:-seskit}
+      REDIS_URL: redis://redis:6379/0
+      # uv installs workspace members into .venv as copies, not editable links,
+      # so without this the bind mounts below would be ignored and --reload
+      # would silently serve the code baked into the image. PYTHONPATH precedes
+      # site-packages on sys.path, so the mounted sources win.
+      PYTHONPATH: /app/packages/core/src:/app/apps/api/src:/app/apps/worker/src
+    volumes:
+      # Bind-mounted for live reload; the image's .venv is shadowed out of the
+      # way so the container keeps using its own installed dependencies.
+      - ./apps:/app/apps
+      - ./packages:/app/packages
+      - ./migrations:/app/migrations
+      - /app/.venv
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  worker:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    command: ["arq", "seskit_worker.main.WorkerSettings"]
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-seskit}:${POSTGRES_PASSWORD:-seskit}@db:5432/${POSTGRES_DB:-seskit}
+      REDIS_URL: redis://redis:6379/0
+      # See the note on the api service.
+      PYTHONPATH: /app/packages/core/src:/app/apps/api/src:/app/apps/worker/src
+    volumes:
+      - ./apps:/app/apps
+      - ./packages:/app/packages
+      - /app/.venv
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+volumes:
+  seskit-db-data:
+  seskit-redis-data:

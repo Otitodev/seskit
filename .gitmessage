@@ -1,0 +1,65 @@
+# <type>(<scope>): <subject>
+#
+# Why:
+#
+# What:
+#
+# Refs: SESKit_MVP.md §
+#
+# ---------------------------------------------------------------------------
+# SUBJECT LINE  -  required, max 72 chars
+#
+#   <type>(<scope>): <subject>
+#
+#   - imperative mood: "add", not "added" / "adds" / "adding"
+#   - no capital first letter (acronyms like SES, API, DKIM are fine)
+#   - no trailing period
+#   - add ! before the colon for a breaking change:  feat(api)!: ...
+#
+# TYPES
+#   feat      a new capability for users of SESKit
+#   fix       a bug fix
+#   docs      documentation only
+#   refactor  restructuring that changes neither behaviour nor interface
+#   perf      a change that improves performance
+#   test      adding or correcting tests
+#   build     build system, Dockerfile, packaging, dependencies
+#   ci        CI configuration and workflows
+#   chore     housekeeping that fits nothing above
+#   revert    reverts a previous commit
+#   style     formatting only, no code change
+#
+# SCOPES
+#   api           apps/api - HTTP routes, middleware, app wiring
+#   ui            dashboard templates, CSS, design system
+#   worker        apps/worker - background jobs
+#   core          packages/core - config, logging, persistence
+#   provider-ses  packages/provider-aws-ses
+#   sdk           packages/sdk-python
+#   migrations    Alembic migrations
+#   docker        Dockerfile, docker-compose
+#   ci            GitHub Actions
+#   deps          dependency bumps
+#   docs          files under docs/, README, the MVP spec
+#   release       version bumps, changelogs, tags
+#
+#   The scope is optional; omit it for repo-wide changes:  chore: ...
+#
+# BODY  -  optional, but explain WHY, not just what
+#
+#   The diff already shows what changed. The body should say what the reader
+#   cannot reconstruct: why the change was needed, what was tried, what a
+#   future reader needs to avoid breaking.
+#
+#   Reference the spec section a change implements, e.g. "Refs: SESKit_MVP.md §12".
+#
+# EXAMPLE
+#
+#   feat(api): add idempotency key support
+#
+#   Why:  Duplicate POST /v1/emails retries were sending twice.
+#   What: Store Idempotency-Key per project; return the existing
+#         Email record instead of re-sending.
+#
+#   Refs: SESKit_MVP.md §12
+# ---------------------------------------------------------------------------

@@ -1,0 +1,52 @@
+# File checks, run by .githooks/pre-commit and by CI.
+#
+# Install once:  git config core.hooksPath .githooks
+# Run manually:  uv run pre-commit run --all-files
+#
+# Do NOT use `pre-commit install` here: it refuses to run when core.hooksPath is
+# set, and it would bypass .githooks/, which is what chains to a contributor's
+# global hooks. The commit *message* check lives in .githooks/commit-msg.
+
+# Vendored third-party assets are not ours to reformat.
+exclude: |
+  (?x)^(
+    apps/api/src/seskit_api/static/js/.*\.min\.js|
+    migrations/README|
+    migrations/script\.py\.mako
+  )$
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-toml
+      - id: check-added-large-files
+        args: [--maxkb=600]
+      - id: check-merge-conflict
+      # Last line of defence against §32.7 - never commit secrets.
+      - id: detect-private-key
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.16.4
+    hooks:
+      - id: ruff-check
+        args: [--fix]
+      - id: ruff-format
+
+  - repo: local
+    hooks:
+      # Run through uv so the hook sees the same resolved environment as CI,
+      # rather than a separately-managed mirror of the dependencies.
+      #
+      # Checks the whole project rather than just the staged files: mypy needs
+      # the full import graph, and a change in one module routinely breaks
+      # types in another that is not part of this commit.
+      - id: mypy
+        name: mypy
+        entry: uv run mypy .
+        language: system
+        types: [python]
+        pass_filenames: false
