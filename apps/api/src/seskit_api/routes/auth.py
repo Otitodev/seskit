@@ -152,11 +152,14 @@ async def signup(
 @router.get("/login", response_class=HTMLResponse)
 async def login_form(
     request: Request,
+    db: Annotated[AsyncSession, Depends(get_session)],
+    settings: Annotated[Settings, Depends(get_app_settings)],
     current: Annotated[CurrentUser | None, Depends(get_optional_user)],
 ) -> Response:
     if current is not None:
         return RedirectResponse(url="/", status_code=status.HTTP_303_SEE_OTHER)
-    return render(request, "pages/login.html")
+    allowed = await signup_allowed(db, allow_signup=settings.ALLOW_SIGNUP)
+    return render(request, "pages/login.html", signup_allowed=allowed)
 
 
 @router.post("/login", response_class=HTMLResponse)
@@ -168,14 +171,21 @@ async def login(
     email: Annotated[str, Form()],
     password: Annotated[str, Form()],
 ) -> Response:
-    def fail(message: str, code: int = status.HTTP_400_BAD_REQUEST) -> Response:
-        return render(request, "pages/login.html", error=message, email=email, status_code=code)
+    async def fail(message: str, code: int = status.HTTP_400_BAD_REQUEST) -> Response:
+        return render(
+            request,
+            "pages/login.html",
+            error=message,
+            email=email,
+            signup_allowed=await signup_allowed(db, allow_signup=settings.ALLOW_SIGNUP),
+            status_code=code,
+        )
 
     client = _client_address(request)
 
     if await is_throttled(redis, email, client, settings.LOGIN_MAX_ATTEMPTS):
         logger.warning("login_throttled", client=client)
-        return fail(
+        return await fail(
             "Too many failed attempts. Wait a few minutes and try again.",
             status.HTTP_429_TOO_MANY_REQUESTS,
         )
@@ -185,7 +195,7 @@ async def login(
     if user is None:
         await record_failure(redis, email, client, settings.LOGIN_ATTEMPT_WINDOW_SECONDS)
         logger.info("login_failed", client=client)
-        return fail(INVALID_CREDENTIALS)
+        return await fail(INVALID_CREDENTIALS)
 
     # authenticate may have upgraded a weak password hash.
     await db.commit()

@@ -1,7 +1,7 @@
 {% extends "base_auth.html" %}
 {% from "components/ui.html" import button, field %}
 
-{% block title %}Create the owner account · SESKit{% endblock %}
+{% block title %}{% if signup_allowed %}Create the owner account{% else %}Registration is closed{% endif %} · SESKit{% endblock %}
 
 {% block content %}
   {% if signup_allowed %}

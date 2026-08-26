@@ -26,5 +26,12 @@
 {% endblock %}
 
 {% block footnote %}
-  Self-hosted SESKit. Forgotten passwords are reset from the command line.
+  {# Shown only while signup is open. On a fresh install this is the only route
+     to /signup, since an anonymous visitor is redirected here from every page;
+     once an owner exists the link would be a dead end, so it goes away. #}
+  {% if signup_allowed %}
+    Not set up yet? <a href="/signup">Create the owner account</a>.
+  {% else %}
+    Self-hosted SESKit. Forgotten passwords are reset from the command line.
+  {% endif %}
 {% endblock %}

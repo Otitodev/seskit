@@ -365,3 +365,38 @@ def test_extract_csrf_finds_the_field() -> None:
 def test_extract_csrf_fails_loudly_when_absent() -> None:
     with pytest.raises(ValueError):
         _extract_csrf("<form></form>")
+
+
+# ------------------------------------------------------------------ caching ---
+
+
+async def test_authenticated_pages_are_not_stored_by_the_browser(
+    app_client: AsyncClient,
+) -> None:
+    """Found in the browser, not in a test: without this, pressing Back after a
+    logout re-displays the dashboard from the history cache. The session is
+    already dead server-side, but the previous user's email and project are
+    still on screen.
+    """
+    await _sign_in(app_client)
+
+    response = await app_client.get("/")
+
+    assert "no-store" in response.headers.get("cache-control", "")
+
+
+async def test_the_login_page_offers_signup_only_while_it_is_open(
+    app_client: AsyncClient,
+) -> None:
+    """On a fresh install /login is the only page an anonymous visitor reaches,
+    so without this link there is no route to /signup at all. Once an owner
+    exists the link would lead to a closed door, so it goes away.
+    """
+    open_install = await app_client.get("/login")
+    assert "/signup" in open_install.text
+
+    await _sign_in(app_client)
+    app_client.cookies.clear()
+
+    closed_install = await app_client.get("/login")
+    assert "/signup" not in closed_install.text

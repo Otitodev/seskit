@@ -41,9 +41,18 @@ def render(
         "current_user": current.user if current else None,
         "csrf_token": current.session.csrf_token if current else None,
     }
-    return templates.TemplateResponse(
+    response = templates.TemplateResponse(
         request=request,
         name=name,
         context={**shared, **context},
         status_code=status_code,
     )
+
+    if current is not None:
+        # Without this the back button after a logout re-displays the dashboard
+        # straight from the browser's history cache - the session is long dead
+        # server-side, but the previous user's email and project are still on
+        # screen, which on a shared machine is a real disclosure.
+        response.headers["Cache-Control"] = "no-store, private"
+
+    return response
