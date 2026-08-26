@@ -6,17 +6,19 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, Request, status
-from fastapi.responses import RedirectResponse
+from fastapi import FastAPI, Request, Response, status
+from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from seskit_core.config import Settings, get_settings
 from seskit_core.db import dispose_engine
+from seskit_core.errors import APIError, ErrorType
 from seskit_core.logging import configure_logging, get_logger
 from seskit_core.redis import close_redis
 
 from seskit_api.dependencies import AuthenticationRequired
 from seskit_api.middleware import RequestContextMiddleware
 from seskit_api.routes import auth, dashboard, health
+from seskit_api.routes import v1 as v1_routes
 
 PACKAGE_DIR = Path(__file__).parent
 STATIC_DIR = PACKAGE_DIR / "static"
@@ -80,9 +82,47 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         """
         return RedirectResponse(url="/login", status_code=status.HTTP_303_SEE_OTHER)
 
+    @app.exception_handler(APIError)
+    async def _api_error(request: Request, exc: APIError) -> JSONResponse:
+        """Render §19's envelope for a public API failure.
+
+        Keyed on the exception type rather than on the request path: what a
+        failure looks like should be a property of what was raised, not of
+        where it happened to be raised from.
+        """
+        return JSONResponse(
+            status_code=exc.status_code,
+            content=exc.as_dict(),
+            headers=exc.headers,
+        )
+
+    @app.exception_handler(Exception)
+    async def _unhandled(request: Request, exc: Exception) -> JSONResponse | Response:
+        """Never let an implementation detail reach a customer (§19).
+
+        An unexpected exception on a ``/v1`` route becomes a generic
+        ``internal_error``; the traceback goes to the log, where it belongs.
+        Dashboard routes are left to the default handler so a developer still
+        sees a normal error page in local development.
+        """
+        if not request.url.path.startswith("/v1"):
+            raise exc
+
+        logger.exception("unhandled_api_error", path=request.url.path)
+        return JSONResponse(
+            status_code=500,
+            content={
+                "error": {
+                    "type": ErrorType.INTERNAL_ERROR.value,
+                    "message": "Something went wrong on our end.",
+                }
+            },
+        )
+
     app.include_router(health.router)
     app.include_router(auth.router)
     app.include_router(dashboard.router)
+    app.include_router(v1_routes.router)
 
     return app
 

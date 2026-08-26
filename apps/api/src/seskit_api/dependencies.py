@@ -1,4 +1,10 @@
-"""Shared request dependencies: the current user, project, and CSRF check."""
+"""Shared request dependencies.
+
+Two doors, deliberately distinct. The dashboard authenticates a *human* with a
+session cookie and redirects when there is none; the public API authenticates
+an *application* with a bearer key and answers JSON. Mixing them would hand an
+SDK an HTML login page.
+"""
 
 from __future__ import annotations
 
@@ -9,11 +15,20 @@ from fastapi import Depends, HTTPException, Request, status
 from redis.asyncio import Redis
 from seskit_core.config import Settings
 from seskit_core.db import get_session
+from seskit_core.errors import AuthenticationFailed, RateLimitExceeded
 from seskit_core.models import Project, User
 from seskit_core.redis import get_redis
+from seskit_core.security.api_keys import parse_authorization
 from seskit_core.security.csrf import CSRF_FIELD, CSRF_HEADER, tokens_match
+from seskit_core.security.ratelimit import RateLimitStatus, check_rate_limit
 from seskit_core.security.sessions import SessionData, read_session
-from seskit_core.services import get_default_project, get_owned_project, get_user_by_id
+from seskit_core.services import (
+    get_default_project,
+    get_owned_project,
+    get_user_by_id,
+    touch_last_used,
+    verify_api_key,
+)
 from sqlalchemy.ext.asyncio import AsyncSession
 
 
@@ -145,3 +160,66 @@ async def verify_csrf(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="This form has expired. Reload the page and try again.",
         )
+
+
+# --------------------------------------------------------- public API (§7) ---
+
+
+@dataclass(frozen=True, slots=True)
+class APIContext:
+    """What a verified API key establishes about a request.
+
+    ``rate_limit`` travels with it so routes can render the ``X-RateLimit-*``
+    headers without repeating the limiter call.
+    """
+
+    project: Project
+    raw_key: str
+    rate_limit: RateLimitStatus
+
+
+async def require_api_key(
+    request: Request,
+    db: Annotated[AsyncSession, Depends(get_session)],
+    redis: Annotated[Redis, Depends(get_redis)],
+    settings: Annotated[Settings, Depends(get_app_settings)],
+) -> APIContext:
+    """Authenticate a public API request and charge it against the project.
+
+    Order matters. The key is verified before the limiter runs, so an
+    unauthenticated flood cannot consume a real project's allowance; and the
+    limiter runs before any work, so a limited caller is cheap to refuse.
+    """
+    raw_key = parse_authorization(request.headers.get("authorization"))
+    if raw_key is None:
+        raise AuthenticationFailed
+
+    project_id = await verify_api_key(
+        db, redis, raw_key=raw_key, cache_ttl_seconds=settings.API_KEY_CACHE_TTL_SECONDS
+    )
+    if project_id is None:
+        raise AuthenticationFailed
+
+    status_ = await check_rate_limit(
+        redis,
+        project_id,
+        limit=settings.API_RATE_LIMIT_PER_MINUTE,
+        window_seconds=settings.API_RATE_LIMIT_WINDOW_SECONDS,
+    )
+    if not status_.allowed:
+        raise RateLimitExceeded(retry_after=status_.retry_after)
+
+    project = await db.get(Project, project_id)
+    if project is None:
+        # The cache outlived the project. Treat it as a bad key rather than a
+        # server error: the credential genuinely no longer authenticates.
+        raise AuthenticationFailed
+
+    await touch_last_used(
+        db,
+        redis,
+        raw_key=raw_key,
+        interval_seconds=settings.API_KEY_LAST_USED_INTERVAL_SECONDS,
+    )
+
+    return APIContext(project=project, raw_key=raw_key, rate_limit=status_)
