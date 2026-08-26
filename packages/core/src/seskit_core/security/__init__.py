@@ -20,6 +20,11 @@ from seskit_core.security.passwords import (
     verify_and_update,
     verify_password,
 )
+from seskit_core.security.ratelimit import (
+    RateLimitStatus,
+    check_rate_limit,
+    reset_rate_limit,
+)
 from seskit_core.security.sessions import (
     SessionData,
     create_session,
@@ -36,8 +41,10 @@ __all__ = [
     "CSRF_FIELD",
     "CSRF_HEADER",
     "PROTECTED_METHODS",
+    "RateLimitStatus",
     "SessionData",
     "burn_dummy_hash",
+    "check_rate_limit",
     "clear_login_attempts",
     "create_session",
     "delete_session",
@@ -53,6 +60,7 @@ __all__ = [
     "parse_authorization",
     "read_session",
     "record_failure",
+    "reset_rate_limit",
     "set_current_project",
     "tokens_match",
     "verify_and_update",

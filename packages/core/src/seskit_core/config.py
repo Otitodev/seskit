@@ -63,6 +63,23 @@ class Settings(BaseSettings):
     LOGIN_MAX_ATTEMPTS: int = 10
     LOGIN_ATTEMPT_WINDOW_SECONDS: int = 900
 
+    # -- Public API (§7, §20) ------------------------------------------------
+
+    #: How long a verified key stays resolved in Redis. Short, and only a
+    #: backstop: revocation deletes the entry outright rather than waiting for
+    #: this to elapse.
+    API_KEY_CACHE_TTL_SECONDS: int = 60
+
+    #: ``last_used_at`` is written at most once per key per interval. Writing on
+    #: every request would add a database write to every API call, for a column
+    #: read a few times a day.
+    API_KEY_LAST_USED_INTERVAL_SECONDS: int = 60
+
+    #: Per project, not per key, so a second key cannot buy more quota. §20's
+    #: suggested starting point; configurable because instances differ.
+    API_RATE_LIMIT_PER_MINUTE: int = 100
+    API_RATE_LIMIT_WINDOW_SECONDS: int = 60
+
     # -- Local email provider (§25) -----------------------------------------
     # Points at Mailpit in local development. Production sending goes through
     # Amazon SES instead; see the provider-selection note on `smtp_configured`.
