@@ -20,7 +20,10 @@ from seskit_core.security.sessions import (
     delete_user_sessions,
     generate_token,
     read_session,
+    set_current_project,
 )
+from seskit_core.security.throttle import clear as clear_login_attempts
+from seskit_core.security.throttle import is_throttled, record_failure
 
 __all__ = [
     "CSRF_FIELD",
@@ -28,13 +31,17 @@ __all__ = [
     "PROTECTED_METHODS",
     "SessionData",
     "burn_dummy_hash",
+    "clear_login_attempts",
     "create_session",
     "delete_session",
     "delete_user_sessions",
     "generate_csrf_token",
     "generate_token",
     "hash_password",
+    "is_throttled",
     "read_session",
+    "record_failure",
+    "set_current_project",
     "tokens_match",
     "verify_and_update",
     "verify_password",

@@ -1,0 +1,48 @@
+{% extends "base_auth.html" %}
+{% from "components/ui.html" import button, field %}
+
+{% block title %}Create the owner account · SESKit{% endblock %}
+
+{% block content %}
+  {% if signup_allowed %}
+    <div class="auth__header">
+      <h1 class="auth__title">Create the owner account</h1>
+      <p class="auth__subtitle">
+        This is a fresh install. The first account owns it, and registration
+        closes afterwards.
+      </p>
+    </div>
+
+    {% if error %}
+      <div class="alert alert--danger" role="alert">{{ error }}</div>
+    {% endif %}
+
+    <form class="stack" method="post" action="/signup">
+      {{ field("email", "Email", type="email", value=email or "", required=True,
+               attrs='autocomplete="username" autofocus') }}
+      {{ field("password", "Password", type="password", required=True,
+               hint="At least " ~ min_password_length ~ " characters.",
+               attrs='autocomplete="new-password" minlength="' ~ min_password_length ~ '"') }}
+      {{ button("Create account", variant="primary", type="submit",
+                attrs='class="btn btn--primary auth__submit"') }}
+    </form>
+
+  {% else %}
+    {# Explained rather than 404'd: a missing page reads as a broken install,
+       and a closed door with a reason does not. #}
+    <div class="auth__header">
+      <h1 class="auth__title">Registration is closed</h1>
+      <p class="auth__subtitle">
+        This instance already has an owner. New accounts are created by the
+        administrator, who can reopen registration by setting
+        <code>ALLOW_SIGNUP=true</code>.
+      </p>
+    </div>
+
+    {{ button("Back to sign in", href="/login", attrs='class="btn auth__submit"') }}
+  {% endif %}
+{% endblock %}
+
+{% block footnote %}
+  {% if signup_allowed %}Already set up? <a href="/login">Sign in</a>.{% endif %}
+{% endblock %}

@@ -1,0 +1,30 @@
+{% extends "base_auth.html" %}
+{% from "components/ui.html" import button, field %}
+
+{% block title %}Sign in · SESKit{% endblock %}
+
+{% block content %}
+  <div class="auth__header">
+    <h1 class="auth__title">Sign in</h1>
+    <p class="auth__subtitle">Continue to your dashboard.</p>
+  </div>
+
+  {% if error %}
+    <div class="alert alert--danger" role="alert">{{ error }}</div>
+  {% endif %}
+
+  {# No CSRF token: this form is reachable without a session, so there is no
+     session to bind a token to. It is also not a state-changing action in the
+     sense CSRF protects - an attacker can only cause a login as themselves. #}
+  <form class="stack" method="post" action="/login">
+    {{ field("email", "Email", type="email", value=email or "", required=True,
+             attrs='autocomplete="username" autofocus') }}
+    {{ field("password", "Password", type="password", required=True,
+             attrs='autocomplete="current-password"') }}
+    {{ button("Sign in", variant="primary", type="submit", attrs='class="btn btn--primary auth__submit"') }}
+  </form>
+{% endblock %}
+
+{% block footnote %}
+  Self-hosted SESKit. Forgotten passwords are reset from the command line.
+{% endblock %}

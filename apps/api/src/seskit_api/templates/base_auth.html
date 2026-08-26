@@ -1,0 +1,42 @@
+{# Centred, sidebar-less shell for login and signup.
+
+   A separate base rather than a flag on base.html: the signed-out pages share
+   no chrome with the dashboard, and threading "hide everything" conditionals
+   through the app shell makes both harder to read. #}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}SESKit{% endblock %}</title>
+  <meta name="color-scheme" content="light dark">
+  <meta name="robots" content="noindex">
+
+  {# Before the stylesheet, so a dark-theme visitor never sees a white flash. #}
+  <script>
+    (function () {
+      try {
+        var t = localStorage.getItem("seskit-theme");
+        if (t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t);
+      } catch (e) {}
+    })();
+  </script>
+
+  <link rel="stylesheet" href="{{ url_for('static', path='/css/app.css') }}">
+  <script defer src="{{ url_for('static', path='/js/app.js') }}"></script>
+</head>
+<body>
+  <main class="auth">
+    <div class="auth__card">
+      <div class="auth__brand">
+        <span class="sidebar__mark" aria-hidden="true">S</span>
+        SESKit
+      </div>
+
+      {% block content %}{% endblock %}
+    </div>
+
+    <p class="auth__footnote">{% block footnote %}{% endblock %}</p>
+  </main>
+</body>
+</html>

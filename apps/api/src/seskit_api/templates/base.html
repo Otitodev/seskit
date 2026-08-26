@@ -33,7 +33,9 @@
   <script defer src="{{ url_for('static', path='/js/app.js') }}"></script>
   {% block head %}{% endblock %}
 </head>
-<body>
+{# hx-headers puts the CSRF token on every HTMX request, so a fragment POST is
+   accepted without each one having to carry a hidden field. #}
+<body{% if csrf_token %} hx-headers='{"X-CSRF-Token": "{{ csrf_token }}"}'{% endif %}>
   <a class="visually-hidden" href="#main">Skip to content</a>
 
   <div class="app">
@@ -42,6 +44,10 @@
         <span class="sidebar__mark" aria-hidden="true">S</span>
         SESKit
       </a>
+
+      {% if projects %}
+        {% include "partials/project_switcher.html" %}
+      {% endif %}
 
       <nav class="sidebar__nav" aria-label="Main">
         {{ nav_link("overview", "Overview", "/", nav_active) }}
@@ -74,6 +80,20 @@
             <span data-icon="sun" hidden>{{ icon("sun", class="btn__icon") }}</span>
             <span data-icon="moon">{{ icon("moon", class="btn__icon") }}</span>
           </button>
+
+          {% if current_user %}
+            <div class="usermenu">
+              <span class="usermenu__email" title="{{ current_user.email }}">
+                {{ current_user.email }}
+              </span>
+              {# A form, not a link: logging out changes state, so it must not
+                 be reachable by a GET that a prefetch could trigger. #}
+              <form method="post" action="/logout">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                <button class="btn btn--ghost btn--sm" type="submit">Sign out</button>
+              </form>
+            </div>
+          {% endif %}
         </div>
       </header>
 

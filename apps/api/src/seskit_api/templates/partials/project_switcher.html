@@ -1,0 +1,27 @@
+{# Sidebar project switcher.
+
+   A single project is the normal case for a while, so it renders as a plain
+   label rather than a control that does nothing when clicked. #}
+
+{% if projects | length > 1 %}
+  <form class="switcher" method="post" action="/projects/switch">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <label class="switcher__label" for="project-switcher">Project</label>
+    <select class="input switcher__select" id="project-switcher" name="project_id"
+            onchange="this.form.submit()">
+      {% for option in projects %}
+        <option value="{{ option.id }}" {% if option.id == project.id %}selected{% endif %}>
+          {{ option.name }}
+        </option>
+      {% endfor %}
+    </select>
+    {# Submitting via onchange keeps the switch to one interaction. The button
+       is the keyboard and no-JavaScript path, not a duplicate control. #}
+    <noscript><button class="btn btn--sm" type="submit">Switch</button></noscript>
+  </form>
+{% elif project %}
+  <div class="switcher">
+    <span class="switcher__label">Project</span>
+    <span class="switcher__current">{{ project.name }}</span>
+  </div>
+{% endif %}

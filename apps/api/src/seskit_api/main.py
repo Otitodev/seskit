@@ -6,15 +6,17 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, status
+from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from seskit_core.config import Settings, get_settings
 from seskit_core.db import dispose_engine
 from seskit_core.logging import configure_logging, get_logger
 from seskit_core.redis import close_redis
 
+from seskit_api.dependencies import AuthenticationRequired
 from seskit_api.middleware import RequestContextMiddleware
-from seskit_api.routes import dashboard, health
+from seskit_api.routes import auth, dashboard, health
 
 PACKAGE_DIR = Path(__file__).parent
 STATIC_DIR = PACKAGE_DIR / "static"
@@ -66,7 +68,20 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     STATIC_DIR.mkdir(parents=True, exist_ok=True)
     app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
+    @app.exception_handler(AuthenticationRequired)
+    async def _authentication_required(
+        request: Request, exc: AuthenticationRequired
+    ) -> RedirectResponse:
+        """Send an anonymous visitor to the login page.
+
+        A dependency deep in the chain cannot return a response, so it raises;
+        this turns that into a redirect. A bare 401 would leave a browser
+        looking at a blank error page.
+        """
+        return RedirectResponse(url="/login", status_code=status.HTTP_303_SEE_OTHER)
+
     app.include_router(health.router)
+    app.include_router(auth.router)
     app.include_router(dashboard.router)
 
     return app

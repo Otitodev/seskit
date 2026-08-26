@@ -225,3 +225,19 @@ async def app_client(
         yield async_client
 
     application.dependency_overrides.clear()
+
+
+@pytest.fixture
+async def signed_in_client(app_client: AsyncClient) -> AsyncClient:
+    """``app_client`` holding a real session cookie for the instance owner.
+
+    Since Phase 2 the dashboard is not reachable while signed out, so a test
+    about how a page renders needs an account before it can see a page at all.
+    """
+    response = await app_client.post(
+        "/signup",
+        data={"email": "owner@example.com", "password": "correct-horse-battery"},
+        follow_redirects=False,
+    )
+    assert response.status_code == 303, response.text
+    return app_client

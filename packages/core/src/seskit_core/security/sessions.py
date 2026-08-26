@@ -34,6 +34,11 @@ class SessionData:
     csrf_token: str
     created_at: str
 
+    #: Which project the dashboard is currently showing. Lives in the session
+    #: rather than the URL so a switch persists across pages, and is always
+    #: re-checked against ownership on read - a session is not a capability.
+    current_project_id: str | None = None
+
 
 def _session_key(token: str) -> str:
     return f"{SESSION_KEY_PREFIX}{token}"
@@ -101,7 +106,22 @@ async def read_session(redis: Redis, token: str, ttl_seconds: int) -> SessionDat
         user_id=raw["user_id"],
         csrf_token=raw["csrf_token"],
         created_at=raw["created_at"],
+        current_project_id=raw.get("current_project_id") or None,
     )
+
+
+async def set_current_project(redis: Redis, token: str, project_id: str, ttl_seconds: int) -> None:
+    """Remember which project the dashboard is showing.
+
+    Callers must confirm the user owns the project first. Storing it here is a
+    convenience, never an authorisation decision - every read re-checks
+    ownership, so a tampered session grants nothing.
+    """
+    key = _session_key(token)
+    pipeline = redis.pipeline()
+    pipeline.hset(key, "current_project_id", project_id)
+    pipeline.expire(key, ttl_seconds)
+    await pipeline.execute()
 
 
 async def delete_session(redis: Redis, token: str) -> None:
