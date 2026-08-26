@@ -1,5 +1,12 @@
 """Security primitives: password hashing, sessions, CSRF (§22)."""
 
+from seskit_core.security.api_keys import (
+    display_prefix,
+    generate_key,
+    hash_key,
+    looks_like_key,
+    parse_authorization,
+)
 from seskit_core.security.csrf import (
     CSRF_FIELD,
     CSRF_HEADER,
@@ -35,10 +42,15 @@ __all__ = [
     "create_session",
     "delete_session",
     "delete_user_sessions",
+    "display_prefix",
     "generate_csrf_token",
+    "generate_key",
     "generate_token",
+    "hash_key",
     "hash_password",
     "is_throttled",
+    "looks_like_key",
+    "parse_authorization",
     "read_session",
     "record_failure",
     "set_current_project",

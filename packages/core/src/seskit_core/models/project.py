@@ -17,6 +17,7 @@ from seskit_core.ids import IDPrefix, generate_id
 from seskit_core.models.base import TimestampMixin
 
 if TYPE_CHECKING:
+    from seskit_core.models.api_key import APIKey
     from seskit_core.models.user import User
 
 DEFAULT_PROJECT_NAME = "Default"
@@ -42,6 +43,9 @@ class Project(Base, TimestampMixin):
     name: Mapped[str] = mapped_column(String(255), nullable=False)
 
     user: Mapped[User] = relationship(back_populates="projects")
+    api_keys: Mapped[list[APIKey]] = relationship(
+        back_populates="project", cascade="all, delete-orphan"
+    )
 
     def __repr__(self) -> str:
         return f"<Project {self.id}>"
