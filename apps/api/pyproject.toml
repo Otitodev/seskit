@@ -9,6 +9,7 @@ dependencies = [
     "uvicorn[standard]>=0.30",
     "jinja2>=3.1",
     "python-multipart>=0.0.9",
+    "seskit-provider-aws-ses",
 ]
 
 [build-system]
@@ -17,3 +18,6 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/seskit_api"]
+
+[tool.uv.sources]
+seskit-provider-aws-ses = { workspace = true }
