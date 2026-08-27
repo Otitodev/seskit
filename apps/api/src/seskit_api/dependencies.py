@@ -23,12 +23,14 @@ from seskit_core.security.csrf import CSRF_FIELD, CSRF_HEADER, tokens_match
 from seskit_core.security.ratelimit import RateLimitStatus, check_rate_limit
 from seskit_core.security.sessions import SessionData, read_session
 from seskit_core.services import (
+    ProviderFactory,
     get_default_project,
     get_owned_project,
     get_user_by_id,
     touch_last_used,
     verify_api_key,
 )
+from seskit_provider_aws_ses import SESProvider
 from sqlalchemy.ext.asyncio import AsyncSession
 
 
@@ -62,6 +64,17 @@ def get_app_settings(request: Request) -> Settings:
     """Settings from app state, so tests can build an app with their own."""
     settings: Settings = request.app.state.settings
     return settings
+
+
+def get_provider_factory() -> ProviderFactory:
+    """How a route obtains a provider for a region.
+
+    A factory rather than a provider, because the region is not known until the
+    request supplies it. Injected as a dependency so a test can substitute a
+    fake without the service layer importing an adapter, and so Phase 6 can
+    choose between SES and SMTP per project (§8) at this one seam.
+    """
+    return SESProvider
 
 
 async def get_optional_user(

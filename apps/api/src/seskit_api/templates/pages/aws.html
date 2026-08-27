@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% from "components/ui.html" import button, card_open, card_close, empty, badge, metric %}
+
+{% block title %}AWS · SESKit{% endblock %}
+
+{% block content %}
+  <div class="page-header">
+    <h1>AWS</h1>
+    <p class="page-header__subtitle">
+      The Amazon SES account <code>{{ project.name }}</code> sends through.
+    </p>
+  </div>
+
+  {% if error %}
+    {# Already normalised (§19) - the adapter strips botocore detail before it
+       reaches here, so this is safe to show a user. #}
+    <div class="alert alert--danger" role="alert">
+      <p>{{ error }}</p>
+    </div>
+  {% endif %}
+
+  {% include "partials/aws_status.html" %}
+{% endblock %}

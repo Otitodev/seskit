@@ -13,6 +13,15 @@ from seskit_core.services.api_keys import (
     touch_last_used,
     verify_api_key,
 )
+from seskit_core.services.aws import (
+    ProviderFactory,
+    check_is_allowed,
+    clear_check_marker,
+    connect_aws,
+    disconnect_aws,
+    get_connection,
+    refresh_connection,
+)
 from seskit_core.services.projects import (
     create_project,
     get_default_project,
@@ -33,11 +42,17 @@ from seskit_core.services.users import (
 __all__ = [
     "EmailAlreadyRegistered",
     "IssuedKey",
+    "ProviderFactory",
     "SignupClosed",
     "authenticate",
+    "check_is_allowed",
+    "clear_check_marker",
+    "connect_aws",
     "count_users",
     "create_api_key",
     "create_project",
+    "disconnect_aws",
+    "get_connection",
     "get_default_project",
     "get_owned_api_key",
     "get_owned_project",
@@ -45,6 +60,7 @@ __all__ = [
     "get_user_by_id",
     "list_api_keys",
     "list_projects",
+    "refresh_connection",
     "register_user",
     "revoke_api_key",
     "signup_allowed",

@@ -1,0 +1,142 @@
+{# The connection panel.
+
+   A partial so Refresh can swap just this fragment over HTMX rather than
+   reloading the page. Rendered standalone on those responses, so it carries
+   everything it needs and assumes no surrounding markup. #}
+{% from "components/ui.html" import button, card_open, card_close, empty, badge, metric %}
+
+<div id="aws-status">
+  {% if connection and connection.is_connected %}
+
+    {% if connection.sandbox %}
+      {# §8: the sandbox check is required, not optional, and the warning stays
+         up until the account graduates. A new account is limited to verified
+         recipients, and a user who is never told reads their first failed send
+         as a SESKit bug. #}
+      <div class="alert alert--warning" role="status">
+        <p class="alert__title">This account is in the Amazon SES sandbox</p>
+        <p>
+          Sending is limited to verified recipients, {{ connection.max_24_hour_send|int }}
+          messages per 24 hours, and {{ connection.max_send_rate }} per second.
+          Request production access to lift these limits.
+        </p>
+        <p>
+          <a class="link" href="{{ production_access_url }}"
+             target="_blank" rel="noopener noreferrer">
+            How to request production access
+          </a>
+        </p>
+      </div>
+    {% endif %}
+
+    {{ card_open("Connection") }}
+      <dl class="datalist">
+        <div class="datalist__row">
+          <dt>Account</dt>
+          <dd><code>{{ connection.aws_account_id }}</code></dd>
+        </div>
+        <div class="datalist__row">
+          <dt>Region</dt>
+          <dd><code>{{ connection.region }}</code></dd>
+        </div>
+        <div class="datalist__row">
+          <dt>Credentials</dt>
+          <dd>{{ connection.credential_mode }}</dd>
+        </div>
+        <div class="datalist__row">
+          <dt>SES status</dt>
+          <dd>
+            {% if connection.sending_enabled %}
+              {{ badge("Sending enabled", tone="success") }}
+            {% else %}
+              {{ badge("Sending disabled", tone="danger") }}
+            {% endif %}
+            {% if connection.sandbox %}
+              {{ badge("Sandbox", tone="warning") }}
+            {% else %}
+              {{ badge("Production access", tone="success") }}
+            {% endif %}
+          </dd>
+        </div>
+        <div class="datalist__row">
+          <dt>Last checked</dt>
+          <dd class="muted">
+            {% if connection.last_checked_at %}
+              {{ connection.last_checked_at.strftime("%Y-%m-%d %H:%M UTC") }}
+            {% else %}
+              Never
+            {% endif %}
+          </dd>
+        </div>
+      </dl>
+    {{ card_close() }}
+
+    {{ card_open("Sending quota") }}
+      <div class="grid-metrics">
+        {{ metric("Max per 24 hours", connection.max_24_hour_send|int) }}
+        {{ metric("Max send rate", connection.max_send_rate ~ "/sec") }}
+        {{ metric("Sent last 24 hours", connection.sent_last_24_hours|int) }}
+        {{ metric("Remaining today", connection.quota.remaining_today|int) }}
+      </div>
+      <p class="muted">
+        Reported by Amazon SES when this connection was last checked. Refresh to
+        ask again.
+      </p>
+    {{ card_close() }}
+
+    <div class="row row--end">
+      <form method="post" action="/aws/refresh">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        {{ button("Refresh", type="submit") }}
+      </form>
+      {# A form, not a link: disconnecting changes state, and a link would let
+         any page on the internet trigger it with an <img> tag. #}
+      <form method="post" action="/aws/disconnect">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        {{ button("Disconnect", variant="danger", type="submit") }}
+      </form>
+    </div>
+
+  {% else %}
+
+    {{ card_open("Connect an AWS account") }}
+      {% if connection and connection.last_error %}
+        <div class="alert alert--danger" role="alert">
+          <p class="alert__title">The last check failed</p>
+          <p>{{ connection.last_error }}</p>
+        </div>
+      {% endif %}
+
+      {{ empty(
+        "No AWS account connected",
+        "SESKit reads AWS credentials from the environment it runs in - an IAM
+         role, environment variables, or a shared credentials file. Choose the
+         region your SES account is in and SESKit will confirm what it can do.",
+        icon_name="cloud"
+      ) }}
+
+      <form class="row row--end" method="post" action="/aws/connect">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <div class="grow">
+          <div class="field">
+            <label class="field__label" for="region">Region</label>
+            <select class="input" id="region" name="region">
+              {% for code, label in regions %}
+                <option value="{{ code }}"
+                        {% if connection and connection.region == code %}selected{% endif %}>
+                  {{ label }} — {{ code }}
+                </option>
+              {% endfor %}
+            </select>
+            <p class="field__hint">
+              The region your Amazon SES identities live in. Verification and
+              quota are per region.
+            </p>
+          </div>
+        </div>
+        {{ button("Connect", variant="primary", type="submit") }}
+      </form>
+    {{ card_close() }}
+
+  {% endif %}
+</div>

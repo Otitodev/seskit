@@ -30,8 +30,10 @@ os.environ.setdefault("DATABASE_URL", "postgresql+asyncpg://seskit:seskit@localh
 os.environ.setdefault("REDIS_URL", "redis://localhost:56379/0")
 os.environ.setdefault("ENVIRONMENT", "local")
 
+from fakes.ses import FakeProviderFactory
 from httpx import ASGITransport, AsyncClient
 from redis.asyncio import Redis, from_url
+from seskit_api.dependencies import get_provider_factory
 from seskit_api.main import create_app
 from seskit_core.config import Settings, get_settings
 from seskit_core.db import Base, get_session
@@ -202,10 +204,21 @@ async def redis_client() -> AsyncIterator[Redis]:
 
 
 @pytest.fixture
+def provider_factory() -> FakeProviderFactory:
+    """The email provider every ``app_client`` test talks to.
+
+    Sandboxed by default, because that is the state a real new AWS account is
+    in - a test that assumes production access should have to say so.
+    """
+    return FakeProviderFactory()
+
+
+@pytest.fixture
 async def app_client(
     settings: Settings,
     db_session: AsyncSession,
     redis_client: Redis,
+    provider_factory: FakeProviderFactory,
 ) -> AsyncIterator[AsyncClient]:
     """An HTTP client backed by the real database and Redis.
 
@@ -219,6 +232,10 @@ async def app_client(
 
     application.dependency_overrides[get_session] = _session
     application.dependency_overrides[get_redis] = lambda: redis_client
+    # Every real-client test gets a fake provider, so no test can reach AWS by
+    # forgetting to override one. A test that wants a particular account state
+    # asks for the `provider_factory` fixture and configures it.
+    application.dependency_overrides[get_provider_factory] = lambda: provider_factory
 
     transport = ASGITransport(app=application)
     async with AsyncClient(transport=transport, base_url="http://test") as async_client:

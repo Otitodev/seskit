@@ -1089,3 +1089,73 @@ svg {
   color: var(--text);
   word-break: break-all;
 }
+
+/* Alert: warning tone and an optional heading ------------------------------ */
+/* The sandbox notice (§8) has to stay legible while it sits on the page
+   indefinitely, so it uses the same warning tokens as the badge rather than a
+   colour invented for it. */
+
+.alert--warning {
+  background: var(--warning-bg);
+  border-color: var(--warning-border);
+  color: var(--warning);
+}
+
+.alert__title {
+  margin-bottom: var(--space-1);
+  font-weight: 600;
+}
+
+.alert p + p {
+  margin-top: var(--space-2);
+}
+
+/* Description list --------------------------------------------------------- */
+/* Label/value pairs that are read, not scanned - an AWS account id, a region.
+   A table would imply rows worth comparing across; these are attributes of one
+   thing. */
+
+.datalist {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.datalist__row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-4);
+  align-items: baseline;
+}
+
+.datalist__row dt {
+  flex: 0 0 10rem;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+
+.datalist__row dd {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
+  min-width: 0;
+}
+
+@media (max-width: 40rem) {
+  .datalist__row dt {
+    flex-basis: 100%;
+  }
+}
+
+/* Inline link -------------------------------------------------------------- */
+
+.link {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
+.link:hover {
+  text-decoration-thickness: 2px;
+}
