@@ -80,6 +80,24 @@ class Settings(BaseSettings):
     API_RATE_LIMIT_PER_MINUTE: int = 100
     API_RATE_LIMIT_WINDOW_SECONDS: int = 60
 
+    # -- AWS (§8, §9) --------------------------------------------------------
+    #
+    # Deliberately no AWS_ACCESS_KEY_ID or AWS_SECRET_ACCESS_KEY here. §9 says
+    # credentials are resolved the standard boto3 way - instance role,
+    # environment, credential file, workload identity - and are never handled by
+    # SESKit as data. boto3 reads the conventional variables itself; naming them
+    # here would invite them into logs and into this object's repr.
+
+    #: Pre-selects the region in the connect form. Not a credential, and not
+    #: authoritative - the region actually in use is stored per connection.
+    AWS_DEFAULT_REGION: str = "us-east-1"
+
+    #: How long a rendered AWS connection stays cached. Longer than the API key
+    #: cache because sandbox state and quota change a handful of times in an
+    #: account's life, and the page has an explicit Refresh for the moment they
+    #: do.
+    AWS_STATUS_CACHE_TTL_SECONDS: int = 300
+
     # -- Local email provider (§25) -----------------------------------------
     # Points at Mailpit in local development. Production sending goes through
     # Amazon SES instead; see the provider-selection note on `smtp_configured`.
