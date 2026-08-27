@@ -41,15 +41,17 @@ toolchain to their stack to self-host their email infrastructure:
 
 ## Status
 
-**Phase 1 of 11 — project foundation.** The stack runs, but there is no email
-sending yet. See [`SESKit_MVP.md`](SESKit_MVP.md) §31 for the full build order.
+**Phase 4 of 11 — AWS SES provider.** The stack runs, accounts and API keys
+work, and an AWS account can be connected and inspected — but there is still no
+email sending. That is Phase 6. See [`SESKit_MVP.md`](SESKit_MVP.md) §31 for the
+full build order.
 
 | Phase | | |
 |---|---|---|
 | 1 | Project foundation | ✅ Done |
-| 2 | Authentication and projects | Not started |
-| 3 | API keys | Not started |
-| 4 | AWS SES provider | Not started |
+| 2 | Authentication and projects | ✅ Done |
+| 3 | API keys | ✅ Done |
+| 4 | AWS SES provider | ✅ Done |
 | 5 | Domain management | Not started |
 | 6 | Email API | Not started |
 | 7 | Event processing | Not started |
@@ -57,6 +59,59 @@ sending yet. See [`SESKit_MVP.md`](SESKit_MVP.md) §31 for the full build order.
 | 9 | Dashboard | Not started |
 | 10 | Python SDK | Not started |
 | 11 | Hardening | Not started |
+
+---
+
+## Connecting AWS
+
+SESKit never stores AWS credentials. It resolves them the standard boto3 way, in
+boto3's own order of precedence:
+
+1. an IAM role attached to the EC2 instance, ECS task, or EKS pod
+2. the `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` environment variables
+3. a shared credentials file (`~/.aws/credentials`)
+4. SSO or workload identity where configured
+
+Give the process credentials by whichever of those suits your deployment, then
+open **AWS** in the dashboard, choose your SES region, and connect. SESKit asks
+AWS who the identity is and what it may do, and records the answer. It creates
+nothing in your AWS account.
+
+### Minimum IAM policy
+
+§9 of the spec is explicit that SESKit must never ask for `AdministratorAccess`.
+For Phase 4 — connecting and inspecting an account — these two actions are
+enough:
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": ["sts:GetCallerIdentity", "ses:GetAccount"],
+      "Resource": "*"
+    }
+  ]
+}
+```
+
+Neither action can send mail or change anything, so this policy is safe to grant
+before you have decided to send through SESKit at all. Later phases need more —
+domain identities in Phase 5, sending in Phase 6 — and this section grows with
+them rather than asking for those permissions up front.
+
+### The SES sandbox
+
+Every new AWS account is in the SES sandbox: 200 messages per 24 hours, one per
+second, and **only to verified recipients**. SESKit detects this on connect and
+says so on the AWS page until the account graduates. If your first send fails
+with a rejected recipient, this is almost always why —
+[request production access](https://docs.aws.amazon.com/ses/latest/dg/request-production-access.html)
+to lift the limits.
+
+Sandbox status and quota are read from AWS when you connect and when you press
+Refresh, not on every page load. The page says when it last checked.
 
 ---
 
