@@ -1,0 +1,36 @@
+{# One row of the keys table.
+
+   Revoked keys stay listed rather than disappearing: a key that vanishes
+   leaves no record it ever existed, which is the opposite of what you want
+   when working out what happened. #}
+
+<tr class="{{ 'is-revoked' if not key.is_active else '' }}">
+  <td>{{ key.name }}</td>
+  <td><code class="subtle">{{ key.key_prefix }}…</code></td>
+  <td>
+    {% if key.last_used_at %}
+      <time datetime="{{ key.last_used_at.isoformat() }}">
+        {{ key.last_used_at.strftime("%d %b %Y, %H:%M") }}
+      </time>
+    {% else %}
+      <span class="subtle">Never</span>
+    {% endif %}
+  </td>
+  <td>
+    <time datetime="{{ key.created_at.isoformat() }}">
+      {{ key.created_at.strftime("%d %b %Y") }}
+    </time>
+  </td>
+  <td class="table__actions">
+    {% if key.is_active %}
+      {# A form, not a link: revoking changes state, so it must not be
+         reachable by a GET that a prefetch could fire. #}
+      <form method="post" action="/api-keys/{{ key.id }}/revoke">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <button class="btn btn--sm btn--danger" type="submit">Revoke</button>
+      </form>
+    {% else %}
+      <span class="badge badge--danger"><span class="badge__dot"></span>Revoked</span>
+    {% endif %}
+  </td>
+</tr>

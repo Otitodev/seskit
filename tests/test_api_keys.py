@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pytest
+from httpx import AsyncClient
 from redis.asyncio import Redis
 from seskit_core.models import APIKey
 from seskit_core.security.api_keys import (
@@ -357,3 +358,158 @@ async def test_deleting_a_project_takes_its_keys(db_session: AsyncSession) -> No
 
     remaining = await db_session.scalars(select(APIKey).where(APIKey.project_id == project_id))
     assert list(remaining) == []
+
+
+# ------------------------------------------------------- the dashboard page ---
+
+
+async def _sign_in(client: AsyncClient, email: str = "owner@example.com") -> None:
+    response = await client.post(
+        "/signup", data={"email": email, "password": PASSWORD}, follow_redirects=False
+    )
+    assert response.status_code == 303, response.text
+
+
+def _csrf(html: str) -> str:
+    marker = 'name="csrf_token" value="'
+    start = html.index(marker) + len(marker)
+    return html[start : html.index('"', start)]
+
+
+async def test_the_page_needs_a_session(app_client: AsyncClient) -> None:
+    response = await app_client.get("/api-keys", follow_redirects=False)
+
+    assert response.status_code == 303
+    assert response.headers["location"] == "/login"
+
+
+async def test_a_fresh_project_has_no_keys(app_client: AsyncClient) -> None:
+    await _sign_in(app_client)
+
+    response = await app_client.get("/api-keys")
+
+    assert response.status_code == 200
+    assert "No API keys yet" in response.text
+
+
+async def test_creating_a_key_shows_it_once(app_client: AsyncClient) -> None:
+    await _sign_in(app_client)
+    csrf = _csrf((await app_client.get("/api-keys")).text)
+
+    created = await app_client.post("/api-keys", data={"csrf_token": csrf, "name": "production"})
+
+    assert created.status_code == 200
+    assert "production" in created.text
+    # The raw key is on the page exactly once, in the reveal panel.
+    body = created.text
+    start = body.index(KEY_PREFIX)
+    raw = body[start : start + 46]
+    assert raw.startswith(KEY_PREFIX)
+
+    # ...and never again.
+    assert raw not in (await app_client.get("/api-keys")).text
+
+
+async def test_the_stored_key_is_not_rendered(app_client: AsyncClient) -> None:
+    """The list page must show the prefix, never anything usable."""
+    await _sign_in(app_client)
+    csrf = _csrf((await app_client.get("/api-keys")).text)
+    await app_client.post("/api-keys", data={"csrf_token": csrf, "name": "production"})
+
+    page = (await app_client.get("/api-keys")).text
+
+    assert "hashed_key" not in page
+    assert "production" in page
+
+
+async def test_an_unnamed_key_still_gets_a_name(app_client: AsyncClient) -> None:
+    """Every unnamed key looks alike in the list, which defeats naming them."""
+    await _sign_in(app_client)
+    csrf = _csrf((await app_client.get("/api-keys")).text)
+
+    created = await app_client.post("/api-keys", data={"csrf_token": csrf, "name": "   "})
+
+    assert "Untitled key" in created.text
+
+
+async def test_creating_a_key_without_csrf_is_refused(app_client: AsyncClient) -> None:
+    await _sign_in(app_client)
+
+    response = await app_client.post("/api-keys", data={"name": "production"})
+
+    assert response.status_code == 403
+
+
+async def test_revoking_marks_the_key_and_keeps_it_listed(
+    app_client: AsyncClient, db_session: AsyncSession
+) -> None:
+    await _sign_in(app_client)
+    csrf = _csrf((await app_client.get("/api-keys")).text)
+    await app_client.post("/api-keys", data={"csrf_token": csrf, "name": "production"})
+
+    key = (await db_session.scalars(select(APIKey))).one()
+    response = await app_client.post(f"/api-keys/{key.id}/revoke", data={"csrf_token": csrf})
+
+    assert response.status_code == 200
+    assert "Revoked" in response.text
+    assert "production" in response.text
+
+
+async def test_revoking_without_csrf_is_refused(
+    app_client: AsyncClient, db_session: AsyncSession
+) -> None:
+    await _sign_in(app_client)
+    csrf = _csrf((await app_client.get("/api-keys")).text)
+    await app_client.post("/api-keys", data={"csrf_token": csrf, "name": "production"})
+    key = (await db_session.scalars(select(APIKey))).one()
+
+    response = await app_client.post(f"/api-keys/{key.id}/revoke", data={})
+
+    assert response.status_code == 403
+
+
+async def test_revoking_an_unknown_key_does_not_error(app_client: AsyncClient) -> None:
+    """Already revoked, or never existed - either way the page shows the truth."""
+    await _sign_in(app_client)
+    csrf = _csrf((await app_client.get("/api-keys")).text)
+
+    response = await app_client.post(
+        "/api-keys/key_01DOESNOTEXIST/revoke", data={"csrf_token": csrf}
+    )
+
+    assert response.status_code == 200
+
+
+async def test_you_cannot_revoke_another_projects_key(
+    app_client: AsyncClient, db_session: AsyncSession
+) -> None:
+    """The tenancy boundary on the dashboard side.
+
+    Ownership is part of the lookup, so a key id belonging to someone else
+    resolves to nothing rather than to their key.
+    """
+    victim = await register_user(
+        db_session, email="victim@example.com", password=PASSWORD, allow_signup=True
+    )
+    victim_project = await create_project(db_session, user_id=victim.id, name="Theirs")
+    theirs = await create_api_key(db_session, project_id=victim_project.id, name="theirs")
+
+    await register_user(
+        db_session, email="intruder@example.com", password=PASSWORD, allow_signup=True
+    )
+    await app_client.post(
+        "/login",
+        data={"email": "intruder@example.com", "password": PASSWORD},
+        follow_redirects=False,
+    )
+    csrf = _csrf((await app_client.get("/api-keys")).text)
+
+    response = await app_client.post(
+        f"/api-keys/{theirs.api_key.id}/revoke", data={"csrf_token": csrf}
+    )
+
+    assert response.status_code == 200
+    # The decisive check: the key was not touched, and never appears.
+    await db_session.refresh(theirs.api_key)
+    assert theirs.api_key.revoked_at is None
+    assert "theirs" not in response.text

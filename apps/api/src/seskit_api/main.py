@@ -17,7 +17,7 @@ from seskit_core.redis import close_redis
 
 from seskit_api.dependencies import AuthenticationRequired
 from seskit_api.middleware import RequestContextMiddleware
-from seskit_api.routes import auth, dashboard, health
+from seskit_api.routes import api_keys, auth, dashboard, health
 from seskit_api.routes import v1 as v1_routes
 
 PACKAGE_DIR = Path(__file__).parent
@@ -122,6 +122,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(health.router)
     app.include_router(auth.router)
     app.include_router(dashboard.router)
+    app.include_router(api_keys.router)
     app.include_router(v1_routes.router)
 
     return app

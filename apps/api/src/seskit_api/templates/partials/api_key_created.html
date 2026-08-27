@@ -1,0 +1,24 @@
+{# The one and only time a raw key is displayed.
+
+   Deliberately loud. A user who closes this panel without copying the value
+   has lost it, and the only remedy is to revoke the key and create another -
+   so say that here, before they navigate away, rather than in the docs. #}
+
+<div class="keyreveal" role="alert">
+  <div class="keyreveal__header">
+    <span class="keyreveal__title">
+      {{ created_name }} created
+    </span>
+    <span class="badge badge--warning"><span class="badge__dot"></span>Copy it now</span>
+  </div>
+
+  <p class="keyreveal__note">
+    This is the only time this key is shown. It is stored hashed, so it cannot
+    be recovered - if you lose it, revoke the key and create another.
+  </p>
+
+  <div class="keyreveal__value">
+    <code class="keyreveal__key">{{ created_key }}</code>
+    <button class="btn btn--sm" type="button" data-copy="{{ created_key }}">Copy</button>
+  </div>
+</div>

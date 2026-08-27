@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% from "components/ui.html" import button, card_open, card_close, empty, field, badge %}
+
+{% block title %}API Keys · SESKit{% endblock %}
+
+{% block content %}
+  <div class="page-header">
+    <h1>API Keys</h1>
+    <p class="page-header__subtitle">
+      Keys authenticate your application against the
+      <code>{{ project.name }}</code> project.
+    </p>
+  </div>
+
+  {% if created_key %}
+    {% include "partials/api_key_created.html" %}
+  {% endif %}
+
+  {{ card_open("Create a key") }}
+    <form class="row row--end" method="post" action="/api-keys">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <div class="grow">
+        {{ field("name", "Name", placeholder="production",
+                 hint="What this key is for. Only you see it.",
+                 attrs='maxlength="64" autocomplete="off"') }}
+      </div>
+      {{ button("Create key", variant="primary", type="submit") }}
+    </form>
+  {{ card_close() }}
+
+  {{ card_open("Keys", flush=True) }}
+    {% if api_keys %}
+      {# Scrolls inside its own container: a narrow window must not push the
+         whole page sideways. #}
+      <div class="table-wrap">
+        <table class="table">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Key</th>
+              <th>Last used</th>
+              <th>Created</th>
+              <th><span class="visually-hidden">Actions</span></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for key in api_keys %}
+              {% include "partials/api_key_row.html" %}
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      {{ empty(
+        "No API keys yet",
+        "Create a key to send email from your application. The key is shown
+         once, at creation, and cannot be retrieved afterwards.",
+        icon_name="key"
+      ) }}
+    {% endif %}
+  {{ card_close() }}
+{% endblock %}

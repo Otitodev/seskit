@@ -1026,3 +1026,66 @@ svg {
 
   .content { padding: var(--space-6) var(--space-4) var(--space-12); }
 }
+
+/* --------------------------------------------------------------- api keys */
+
+/* Aligns a submit button with the bottom of the field beside it, rather than
+   with the middle of the label-plus-input stack. */
+.row--end { align-items: flex-end; }
+.row--end .field { margin: 0; }
+
+.grow { flex: 1 1 auto; min-width: 0; }
+
+.table__actions { text-align: right; white-space: nowrap; }
+.table__actions form { display: inline; }
+
+/* A revoked key stays in the table as a record, but must not read as usable. */
+.is-revoked td { color: var(--text-subtle); }
+.is-revoked code { opacity: 0.6; }
+
+/* The show-once panel. Warning-toned on purpose: this is the only moment the
+   raw key exists, and a user who scrolls past it has lost it. */
+.keyreveal {
+  margin-bottom: var(--space-5);
+  padding: var(--space-4) var(--space-5);
+  background: var(--warning-bg);
+  border: 1px solid var(--warning-border);
+  border-radius: var(--radius);
+}
+
+.keyreveal__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-2);
+}
+
+.keyreveal__title { font-weight: 600; color: var(--text); }
+
+.keyreveal__note {
+  margin: 0 0 var(--space-3);
+  font-size: var(--text-sm);
+  color: var(--warning);
+}
+
+.keyreveal__value {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  background: var(--surface);
+  border: 1px solid var(--warning-border);
+  border-radius: var(--radius-sm);
+}
+
+/* The key is long and must wrap rather than widen the page on a narrow
+   window. break-all because there is no word boundary to break on. */
+.keyreveal__key {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  color: var(--text);
+  word-break: break-all;
+}
