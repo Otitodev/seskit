@@ -114,6 +114,18 @@ class Settings(BaseSettings):
     #: holding the button cannot spend the project's SES quota.
     IDENTITY_REFRESH_INTERVAL_SECONDS: int = 60
 
+    # -- Sending (§11, §14) ---------------------------------------------------
+
+    #: SES rejects a raw message over 10 MB, so we refuse it first and say why
+    #: (§19 attachment_too_large) rather than passing a provider error through.
+    #: Checked against the *assembled* message: base64 inflates content by about
+    #: a third, so a 9 MB attachment is an over-limit message.
+    EMAIL_MAX_MESSAGE_BYTES: int = 10 * 1024 * 1024
+
+    #: How many times the worker will retry a send that failed for a reason
+    #: worth retrying. Terminal rejections are not retried at all.
+    EMAIL_SEND_MAX_ATTEMPTS: int = 3
+
     # -- Local email provider (§25) -----------------------------------------
     # Points at Mailpit in local development. Production sending goes through
     # Amazon SES instead; see the provider-selection note on `smtp_configured`.
