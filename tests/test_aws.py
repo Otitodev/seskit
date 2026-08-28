@@ -29,6 +29,9 @@ REGION = "us-east-1"
 OTHER_REGION = "eu-west-1"
 INTERVAL = 300
 DENIED_ACTION = "ses:GetAccount"
+#: A phrase that appears once per rendered message. The action name itself is
+#: no good for counting - the denial names it twice ("cannot call X. Add X").
+DENIED_PHRASE = "is not permitted to call"
 PRODUCTION_ACCESS_MARKER = "request-production-access"
 
 
@@ -460,6 +463,75 @@ async def test_disconnect_without_a_csrf_token_is_refused(app_client: AsyncClien
 
     assert page.status_code == 403
     assert "No AWS account connected" not in (await app_client.get("/aws")).text
+
+
+async def test_a_failed_action_shows_its_error_only_once(
+    app_client: AsyncClient, provider_factory: FakeProviderFactory
+) -> None:
+    """Found in the browser, not by a test.
+
+    A failed refresh rendered the same sentence twice - once as the action's
+    error and once as the connection's stored last_error - which reads as two
+    different problems rather than one.
+    """
+    await _sign_in(app_client)
+    token = await _csrf(app_client)
+    await app_client.post("/aws/connect", data={"csrf_token": token, "region": REGION})
+    provider_factory.provider.error = denied()
+
+    page = await app_client.post("/aws/refresh", data={"csrf_token": token})
+
+    assert page.text.count(DENIED_PHRASE) == 1
+
+
+async def test_the_stored_error_survives_a_reload(
+    app_client: AsyncClient, provider_factory: FakeProviderFactory
+) -> None:
+    """The other half of showing it once: suppressing the duplicate must not
+    lose the message on the next page load, when it is the only record of what
+    went wrong.
+    """
+    await _sign_in(app_client)
+    token = await _csrf(app_client)
+    await app_client.post("/aws/connect", data={"csrf_token": token, "region": REGION})
+    provider_factory.provider.error = denied()
+    await app_client.post("/aws/refresh", data={"csrf_token": token})
+
+    page = await app_client.get("/aws")
+
+    assert "The last check failed" in page.text
+    assert DENIED_ACTION in page.text
+
+
+async def test_a_broken_connection_is_not_described_as_absent(
+    app_client: AsyncClient, provider_factory: FakeProviderFactory
+) -> None:
+    """Also found in the browser. The page claimed "No AWS account connected"
+    directly above "The last check failed" - which contradicts itself, and
+    suggests the connection was lost rather than that it stopped working.
+    """
+    await _sign_in(app_client)
+    token = await _csrf(app_client)
+    await app_client.post("/aws/connect", data={"csrf_token": token, "region": REGION})
+    provider_factory.provider.error = denied()
+    await app_client.post("/aws/refresh", data={"csrf_token": token})
+
+    page = await app_client.get("/aws")
+
+    assert "No AWS account connected" not in page.text
+    assert "Connection is not working" in page.text
+
+
+async def test_a_project_that_never_connected_says_so(app_client: AsyncClient) -> None:
+    """The opposite case still reads correctly - "not working" would be wrong
+    for a project that has never had a connection at all.
+    """
+    await _sign_in(app_client)
+
+    page = await app_client.get("/aws")
+
+    assert "No AWS account connected" in page.text
+    assert "Connection is not working" not in page.text
 
 
 # ---------------------------------------------------------------- secrets ---

@@ -100,15 +100,22 @@
   {% else %}
 
     {{ card_open("Connect an AWS account") }}
-      {% if connection and connection.last_error %}
+      {# Only when the page is not already showing this same text above. A
+         failed action renders the error once at the top; repeating it verbatim
+         here reads as two different problems. On a later page load `error` is
+         gone and this is the only record of what went wrong. #}
+      {% if connection and connection.last_error and not error %}
         <div class="alert alert--danger" role="alert">
           <p class="alert__title">The last check failed</p>
           <p>{{ connection.last_error }}</p>
         </div>
       {% endif %}
 
+      {# A broken connection is not an absent one. Saying "No AWS account
+         connected" beside "the last check failed" contradicts itself and
+         suggests the connection was lost rather than that it stopped working. #}
       {{ empty(
-        "No AWS account connected",
+        "Connection is not working" if connection else "No AWS account connected",
         "SESKit reads AWS credentials from the environment it runs in - an IAM
          role, environment variables, or a shared credentials file. Choose the
          region your SES account is in and SESKit will confirm what it can do.",
