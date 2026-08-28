@@ -3,8 +3,12 @@ name = "seskit-worker"
 version = "0.1.0"
 description = "SESKit background worker (ARQ)"
 requires-python = ">=3.12"
+# The worker calls SES directly for the identity re-check, so it needs the
+# adapter. Core must not import one, so each app that needs a provider
+# depends on it itself.
 dependencies = [
     "seskit-core",
+    "seskit-provider-aws-ses",
     "arq>=0.26",
 ]
 
