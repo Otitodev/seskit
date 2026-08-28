@@ -25,6 +25,7 @@ FROM base AS builder
 COPY pyproject.toml uv.lock ./
 COPY packages/core/pyproject.toml packages/core/
 COPY packages/provider-aws-ses/pyproject.toml packages/provider-aws-ses/
+COPY packages/provider-smtp/pyproject.toml packages/provider-smtp/
 COPY packages/sdk-python/pyproject.toml packages/sdk-python/
 COPY apps/api/pyproject.toml apps/api/
 COPY apps/worker/pyproject.toml apps/worker/
@@ -33,11 +34,13 @@ COPY apps/worker/pyproject.toml apps/worker/
 # though their real sources arrive in the next step.
 RUN mkdir -p packages/core/src/seskit_core \
              packages/provider-aws-ses/src/seskit_provider_aws_ses \
+             packages/provider-smtp/src/seskit_provider_smtp \
              packages/sdk-python/src/seskit \
              apps/api/src/seskit_api \
              apps/worker/src/seskit_worker \
     && touch packages/core/src/seskit_core/__init__.py \
              packages/provider-aws-ses/src/seskit_provider_aws_ses/__init__.py \
+             packages/provider-smtp/src/seskit_provider_smtp/__init__.py \
              packages/sdk-python/src/seskit/__init__.py \
              apps/api/src/seskit_api/__init__.py \
              apps/worker/src/seskit_worker/__init__.py
