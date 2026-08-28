@@ -41,10 +41,10 @@ toolchain to their stack to self-host their email infrastructure:
 
 ## Status
 
-**Phase 5 of 11 — domain management.** The stack runs, accounts and API keys
-work, an AWS account can be connected, and sending identities can be verified —
-but there is still no email sending. That is Phase 6. See
-[`SESKit_MVP.md`](SESKit_MVP.md) §31 for the full build order.
+**Phase 6 of 11 — email sending.** SESKit sends email. Accounts, API keys, AWS
+connection, sender verification and the send pipeline all work; delivery events
+and webhooks are next. See [`SESKit_MVP.md`](SESKit_MVP.md) §31 for the full
+build order.
 
 | Phase | | |
 |---|---|---|
@@ -53,7 +53,7 @@ but there is still no email sending. That is Phase 6. See
 | 3 | API keys | ✅ Done |
 | 4 | AWS SES provider | ✅ Done |
 | 5 | Domain management | ✅ Done |
-| 6 | Email API | Not started |
+| 6 | Email API | ✅ Done |
 | 7 | Event processing | Not started |
 | 8 | Webhooks | Not started |
 | 9 | Dashboard | Not started |
@@ -80,7 +80,7 @@ nothing in your AWS account.
 ### Minimum IAM policy
 
 §9 of the spec is explicit that SESKit must never ask for `AdministratorAccess`.
-These five actions are everything it uses:
+These six actions are everything it uses:
 
 ```json
 {
@@ -93,7 +93,8 @@ These five actions are everything it uses:
         "ses:GetAccount",
         "ses:CreateEmailIdentity",
         "ses:GetEmailIdentity",
-        "ses:DeleteEmailIdentity"
+        "ses:DeleteEmailIdentity",
+        "ses:SendEmail"
       ],
       "Resource": "*"
     }
@@ -103,10 +104,11 @@ These five actions are everything it uses:
 
 The first two are read-only and are all that connecting an account needs, so you
 can grant just those to look around before committing to anything. The identity
-actions are the first writes SESKit performs — they create and remove the
-verified senders on the Domains page, and nothing else. None of them can send
-mail; sending permissions arrive in a later phase and this section will grow
-with them.
+actions create and remove the verified senders on the Domains page.
+
+`ses:SendEmail` is the one to grant deliberately: it is the only action here that
+can reach the outside world and appear on your AWS bill. You do not need it to
+try SESKit — without an AWS connection, sending goes to Mailpit locally.
 
 Removing an identity is the only destructive thing here, and it is guarded:
 SESKit deletes the identity in SES only when no other project is still using it.
@@ -168,6 +170,60 @@ standard ports. Machines with PostgreSQL installed frequently already have
 clusters on 5432 *and* 5433; those bind before Docker does, and the container
 then looks healthy while every connection quietly reaches the wrong database.
 Override with `POSTGRES_HOST_PORT` / `REDIS_HOST_PORT` if you prefer.
+
+### Send your first email
+
+Nothing above needed an AWS account, and neither does this. A project with no
+AWS connection sends through Mailpit, so you can watch a real message go through
+the whole pipeline before deciding whether SESKit is worth configuring.
+
+1. Open http://localhost:8000 and create the owner account. The first
+   registration claims the instance; signup closes behind you.
+2. Go to **API Keys**, create one, and copy it — it is shown once.
+3. Send:
+
+```bash
+curl -X POST http://localhost:8000/v1/emails \
+  -H "Authorization: Bearer sk_..." \
+  -H "Content-Type: application/json" \
+  -d '{
+    "from": "hello@example.com",
+    "to": ["you@example.com"],
+    "subject": "Hello from SESKit",
+    "html": "<h1>It works</h1>"
+  }'
+```
+
+```json
+{ "id": "email_01J8XQ...", "status": "queued" }
+```
+
+The message appears at http://localhost:8025 within a second or two, and under
+**Emails** in the dashboard with its status and provider message id.
+
+`queued` is literal: the request is validated and recorded synchronously, then
+the send itself runs in the worker. Anything you could have got wrong — an
+unverified sender, a malformed address, an oversized attachment — comes back
+immediately as an error rather than surfacing in a log later.
+
+Repeat the request with an `Idempotency-Key` header and you get the same email
+id back, and no second message.
+
+### Going to production
+
+Sending switches from Mailpit to Amazon SES for a project once two things are
+true: an AWS account is connected, and the `from` address is covered by a
+verified identity. Nothing changes in your code — same endpoint, same request.
+
+If a project has connected AWS but the sender is not verified, the send is
+**refused** rather than quietly delivered locally. That would report success
+while the message reached nobody.
+
+Bear in mind a new AWS account starts in the SES sandbox and can only mail
+verified addresses until AWS grants production access, which takes about a day.
+Verifying your own email address takes minutes and needs no DNS, so it is the
+fastest way to get a real send working — see
+[Verifying a sender](#verifying-a-sender) above.
 
 ### Working without Docker
 
@@ -265,7 +321,8 @@ apps/
   worker/     ARQ background worker
 packages/
   core/       Config, logging, persistence, shared domain logic
-  provider-aws-ses/   Amazon SES provider        (Phase 4)
+  provider-aws-ses/   Amazon SES provider
+  provider-smtp/      SMTP provider, for local delivery
   sdk-python/         Python SDK                 (Phase 10)
 migrations/   Alembic
 scripts/      Repository tooling (commit message check)
@@ -275,7 +332,13 @@ docs/         design-system.md and friends
 
 `apps/api` and `apps/worker` both depend on `packages/core`; neither depends on
 the other. Provider-specific code stays inside its own package and never leaks
-into the API or core.
+into the API or core — `core` defines the provider interface and chooses which
+one to use, but imports neither, so the dependency only ever points one way.
+
+Adding a workspace package means registering it in `docker/Dockerfile` too: the
+image copies each member's manifest by hand to keep the dependency layer cached,
+and a package missing from that list fails at container start rather than at
+build time.
 
 ### Stack
 
