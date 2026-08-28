@@ -6,6 +6,11 @@
 {% from "components/ui.html" import button, card_open, card_close, badge, code_block %}
 
 {{ card_open(identity.value) }}
+  {# One stack for the whole body, so the status list, any error, the DNS
+     records and the controls are separated evenly. Without it the setup
+     instructions sit flush against the last row of the list and read as part
+     of it. #}
+  <div class="stack">
   <dl class="datalist">
     <div class="datalist__row">
       <dt>Type</dt>
@@ -92,5 +97,6 @@
       <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
       {{ button("Remove", variant="danger", type="submit") }}
     </form>
+  </div>
   </div>
 {{ card_close() }}
