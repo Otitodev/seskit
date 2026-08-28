@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+{% from "components/ui.html" import card_open, card_close, badge, button, code_block %}
+
+{% block title %}{{ email.subject }} · SESKit{% endblock %}
+
+{% block content %}
+  <div class="page-header">
+    <h1>{{ email.subject }}</h1>
+    <p class="page-header__subtitle">
+      <a class="link" href="/emails">Back to emails</a>
+    </p>
+  </div>
+
+  {% if email.last_error %}
+    {# Normalised (§19) - the provider adapter strips its own detail long before
+       this reaches a page. #}
+    <div class="alert alert--danger" role="alert">
+      <p class="alert__title">This message was not sent</p>
+      <p>{{ email.last_error }}</p>
+    </div>
+  {% endif %}
+
+  {{ card_open("Delivery") }}
+    <dl class="datalist">
+      <div class="datalist__row">
+        <dt>Status</dt>
+        <dd>
+          {% if email.status == "sent" %}
+            {{ badge("Sent", tone="success") }}
+          {% elif email.status == "failed" %}
+            {{ badge("Failed", tone="danger") }}
+          {% else %}
+            {{ badge(email.status | capitalize, tone="warning") }}
+          {% endif %}
+        </dd>
+      </div>
+      <div class="datalist__row">
+        <dt>From</dt>
+        <dd class="table__mono">{{ email.from_address }}</dd>
+      </div>
+      <div class="datalist__row">
+        <dt>To</dt>
+        <dd class="table__mono">{{ email.to_addresses | join(", ") }}</dd>
+      </div>
+      {% if email.cc_addresses %}
+        <div class="datalist__row">
+          <dt>Cc</dt>
+          <dd class="table__mono">{{ email.cc_addresses | join(", ") }}</dd>
+        </div>
+      {% endif %}
+      {# Bcc is stored and deliberately not shown. A blind copy displayed
+         alongside the other recipients is not blind. #}
+      {% if email.reply_to %}
+        <div class="datalist__row">
+          <dt>Reply-To</dt>
+          <dd class="table__mono">{{ email.reply_to | join(", ") }}</dd>
+        </div>
+      {% endif %}
+      <div class="datalist__row">
+        <dt>Provider</dt>
+        <dd>{{ email.provider or "—" }}</dd>
+      </div>
+      {% if email.provider_message_id %}
+        <div class="datalist__row">
+          <dt>Message ID</dt>
+          <dd class="table__mono">{{ email.provider_message_id }}</dd>
+        </div>
+      {% endif %}
+      <div class="datalist__row">
+        <dt>Sent</dt>
+        <dd class="muted">
+          {% if email.sent_at %}
+            {{ email.sent_at.strftime("%Y-%m-%d %H:%M UTC") }}
+          {% else %}
+            Not yet
+          {% endif %}
+        </dd>
+      </div>
+    </dl>
+  {{ card_close() }}
+
+  {% if email.attachments %}
+    {{ card_open("Attachments") }}
+      <ul class="stack">
+        {% for attachment in email.attachments %}
+          <li>
+            <span class="table__mono">{{ attachment.filename }}</span>
+            <span class="muted">
+              {{ attachment.content_type }} · {{ (attachment.size_bytes / 1024) | round(1) }} KB
+            </span>
+          </li>
+        {% endfor %}
+      </ul>
+    {{ card_close() }}
+  {% endif %}
+
+  {% if email.text_body %}
+    {{ card_open("Text") }}
+      {{ code_block(email.text_body, language="text") }}
+    {{ card_close() }}
+  {% endif %}
+
+  {% if email.html_body %}
+    {{ card_open("HTML") }}
+      {# Shown as source, never rendered.
+
+         This is attacker-controlled content: whoever holds an API key chose it,
+         and rendering it here would execute their markup inside the account
+         owner's authenticated session - stored XSS with a session cookie
+         attached. Jinja escapes by default and there is deliberately no |safe
+         anywhere near this value. Previewing it properly needs a sandboxed
+         iframe, which belongs with the Phase 9 dashboard work. #}
+      {{ code_block(email.html_body, language="html") }}
+    {{ card_close() }}
+  {% endif %}
+{% endblock %}

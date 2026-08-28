@@ -11,23 +11,33 @@
     </p>
   </div>
 
-  {# Zeroes, not placeholder numbers. A new install genuinely has sent nothing,
-     and inventing sample data would misrepresent the product. #}
+  {# Real counts as of Phase 6 - these were hardcoded zeroes while nothing could
+     send. Delivered, bounced and complained still are: those come from SES
+     events, which is Phase 7, and inventing them would misreport delivery. #}
   <div class="grid-metrics">
-    {{ metric("Sent", "0") }}
-    {{ metric("Delivered", "0", meta="—") }}
-    {{ metric("Bounced", "0", meta="—") }}
-    {{ metric("Complaints", "0", meta="—") }}
+    {{ metric("Sent", counts.sent) }}
+    {{ metric("Queued", counts.queued) }}
+    {{ metric("Failed", counts.failed) }}
+    {{ metric("Delivered", "—", meta="Phase 7") }}
   </div>
 
   {{ card_open("Email activity") }}
-    {{ empty(
-      "No emails yet",
-      "Once you connect an AWS account and send your first email, delivery
-       activity will appear here. Until then, mail sent locally is captured by
-       Mailpit instead of Amazon SES.",
-      icon_name="inbox"
-    ) }}
+    {% if counts.total %}
+      <p>
+        {{ counts.total }} message{{ "" if counts.total == 1 else "s" }} recorded
+        for <code>{{ project.name }}</code>.
+        <a class="link" href="/emails">See them all</a>.
+      </p>
+    {% else %}
+      {{ empty(
+        "No emails yet",
+        "Send one and it appears here. With no AWS account connected it goes to
+         Mailpit rather than Amazon SES, so nothing needs verifying first.",
+        icon_name="inbox",
+        action_label="Create an API key",
+        action_href="/api-keys"
+      ) }}
+    {% endif %}
   {{ card_close() }}
 
   {{ card_open("Send your first email") }}

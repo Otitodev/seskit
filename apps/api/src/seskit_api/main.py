@@ -18,7 +18,7 @@ from seskit_core.redis import close_redis
 from seskit_api.dependencies import AuthenticationRequired
 from seskit_api.middleware import RequestContextMiddleware
 from seskit_api.queue import create_queue
-from seskit_api.routes import api_keys, auth, aws, dashboard, domains, health
+from seskit_api.routes import api_keys, auth, aws, dashboard, domains, emails, health
 from seskit_api.routes import v1 as v1_routes
 
 PACKAGE_DIR = Path(__file__).parent
@@ -131,6 +131,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(api_keys.router)
     app.include_router(aws.router)
     app.include_router(domains.router)
+    app.include_router(emails.router)
     app.include_router(v1_routes.router)
 
     return app

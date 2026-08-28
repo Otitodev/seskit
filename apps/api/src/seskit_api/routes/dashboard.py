@@ -19,6 +19,7 @@ from seskit_core.services import list_projects
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from seskit_api.dependencies import CurrentUser, require_project, require_user
+from seskit_api.routes.emails import status_counts
 from seskit_api.routes.health import readyz
 from seskit_api.templating import render
 
@@ -40,6 +41,7 @@ async def overview(
         nav_active="overview",
         project=project,
         projects=await list_projects(db, current.user.id),
+        counts=await status_counts(db, project.id),
     )
 
 

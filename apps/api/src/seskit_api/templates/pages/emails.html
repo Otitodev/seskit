@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% from "components/ui.html" import card_open, card_close, empty, badge, metric, code_block %}
+
+{% block title %}Emails · SESKit{% endblock %}
+
+{% block content %}
+  <div class="page-header">
+    <h1>Emails</h1>
+    <p class="page-header__subtitle">
+      Messages <code>{{ project.name }}</code> has sent, newest first.
+    </p>
+  </div>
+
+  {% if emails %}
+    <div class="grid-metrics">
+      {{ metric("Total", counts.total) }}
+      {{ metric("Sent", counts.sent) }}
+      {{ metric("Queued", counts.queued) }}
+      {{ metric("Failed", counts.failed) }}
+    </div>
+
+    {{ card_open("Recent", flush=True) }}
+      <div class="table-wrap">
+        <table class="table">
+          <thead>
+            <tr>
+              <th>Status</th>
+              <th>To</th>
+              <th>Subject</th>
+              <th>Sent</th>
+              <th><span class="visually-hidden">Actions</span></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for email in emails %}
+              <tr>
+                <td>
+                  {% if email.status == "sent" %}
+                    {{ badge("Sent", tone="success") }}
+                  {% elif email.status == "failed" %}
+                    {{ badge("Failed", tone="danger") }}
+                  {% elif email.status == "sending" %}
+                    {{ badge("Sending", tone="warning") }}
+                  {% else %}
+                    {{ badge("Queued", tone="warning") }}
+                  {% endif %}
+                </td>
+                {# Bcc is deliberately not here. It is recorded, but a blind
+                   copy listed beside the other recipients is not blind. #}
+                <td class="table__mono">{{ email.to_addresses | join(", ") }}</td>
+                <td>{{ email.subject }}</td>
+                <td class="muted">
+                  {% if email.sent_at %}
+                    {{ email.sent_at.strftime("%Y-%m-%d %H:%M UTC") }}
+                  {% else %}
+                    —
+                  {% endif %}
+                </td>
+                <td class="table__actions">
+                  <a class="link" href="/emails/{{ email.id }}">View</a>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {{ card_close() }}
+  {% else %}
+    {{ card_open("Emails") }}
+      {{ empty(
+        "Nothing sent yet",
+        "Create an API key and post to /v1/emails. With no AWS account connected
+         this delivers to Mailpit, so you can see a real message without
+         verifying anything first.",
+        icon_name="mail",
+        action_label="Create an API key",
+        action_href="/api-keys"
+      ) }}
+
+      {{ code_block(
+        'curl -X POST http://localhost:8000/v1/emails \\\n'
+        '  -H "Authorization: Bearer sk_..." \\\n'
+        '  -H "Content-Type: application/json" \\\n'
+        '  -d \'{"from":"hello@example.com","to":["you@example.com"],'
+        '"subject":"Hello","html":"<h1>Hello from SESKit</h1>"}\'',
+        language="cURL"
+      ) }}
+    {{ card_close() }}
+  {% endif %}
+{% endblock %}
