@@ -1588,6 +1588,7 @@ name = "seskit-api"
 version = "0.1.0"
 source = { editable = "apps/api" }
 dependencies = [
+    { name = "arq" },
     { name = "fastapi" },
     { name = "jinja2" },
     { name = "python-multipart" },
@@ -1599,6 +1600,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
+    { name = "arq", specifier = ">=0.26" },
     { name = "fastapi", specifier = ">=0.115" },
     { name = "jinja2", specifier = ">=3.1" },
     { name = "python-multipart", specifier = ">=0.0.9" },

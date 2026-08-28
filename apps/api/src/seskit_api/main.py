@@ -17,6 +17,7 @@ from seskit_core.redis import close_redis
 
 from seskit_api.dependencies import AuthenticationRequired
 from seskit_api.middleware import RequestContextMiddleware
+from seskit_api.queue import create_queue
 from seskit_api.routes import api_keys, auth, aws, dashboard, domains, health
 from seskit_api.routes import v1 as v1_routes
 
@@ -35,9 +36,14 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         environment=settings.ENVIRONMENT.value,
         project=settings.PROJECT_NAME,
     )
+    # Opened once here rather than per request: building a pool would spend a
+    # connection handshake on every send.
+    app.state.queue = await create_queue(settings)
+
     try:
         yield
     finally:
+        await app.state.queue.aclose()
         await dispose_engine()
         await close_redis()
         logger.info("application_stopped")

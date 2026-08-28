@@ -11,6 +11,7 @@ dependencies = [
     "python-multipart>=0.0.9",
     "seskit-provider-aws-ses",
     "seskit-provider-smtp",
+    "arq>=0.26",
 ]
 
 [build-system]

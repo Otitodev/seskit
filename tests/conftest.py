@@ -30,11 +30,13 @@ os.environ.setdefault("DATABASE_URL", "postgresql+asyncpg://seskit:seskit@localh
 os.environ.setdefault("REDIS_URL", "redis://localhost:56379/0")
 os.environ.setdefault("ENVIRONMENT", "local")
 
+from fakes.queue import FakeQueue
 from fakes.ses import FakeProviderFactory
 from httpx import ASGITransport, AsyncClient
 from redis.asyncio import Redis, from_url
 from seskit_api.dependencies import get_provider_factory
 from seskit_api.main import create_app
+from seskit_api.queue import get_queue
 from seskit_core.config import Settings, get_settings
 from seskit_core.db import Base, get_session
 from seskit_core.redis import get_redis
@@ -204,6 +206,16 @@ async def redis_client() -> AsyncIterator[Redis]:
 
 
 @pytest.fixture
+def queue() -> FakeQueue:
+    """The queue every ``app_client`` test enqueues into.
+
+    Recording rather than enqueuing: whether the worker does the right thing has
+    its own tests, and a real pool here would make every send depend on one.
+    """
+    return FakeQueue()
+
+
+@pytest.fixture
 def provider_factory() -> FakeProviderFactory:
     """The email provider every ``app_client`` test talks to.
 
@@ -219,6 +231,7 @@ async def app_client(
     db_session: AsyncSession,
     redis_client: Redis,
     provider_factory: FakeProviderFactory,
+    queue: FakeQueue,
 ) -> AsyncIterator[AsyncClient]:
     """An HTTP client backed by the real database and Redis.
 
@@ -236,6 +249,9 @@ async def app_client(
     # forgetting to override one. A test that wants a particular account state
     # asks for the `provider_factory` fixture and configures it.
     application.dependency_overrides[get_provider_factory] = lambda: provider_factory
+    # The ASGI transport does not run lifespan, so app.state.queue is never
+    # built - and a real pool would make every send need one anyway.
+    application.dependency_overrides[get_queue] = lambda: queue
 
     transport = ASGITransport(app=application)
     async with AsyncClient(transport=transport, base_url="http://test") as async_client:
