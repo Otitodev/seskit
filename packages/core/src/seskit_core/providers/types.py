@@ -80,17 +80,42 @@ class AccountStatus:
     credential_mode: CredentialMode = CredentialMode.UNKNOWN
 
 
-# ------------------------------------------------- declared for Phase 5 ---
+# ------------------------------------------------------------ identities ---
+
+
+class IdentityType(StrEnum):
+    """What kind of thing SES has been asked to verify.
+
+    A domain and a single email address are both "identities" to SES, but they
+    behave differently enough that the distinction has to be carried: a domain
+    is proved by DNS records and can sign with DKIM, an address is proved by
+    clicking a link in an email and cannot.
+
+    The address form matters out of proportion to its size. It needs no DNS and
+    no registrar access, so it is the only way a new user reaches a real send in
+    minutes rather than days (see docs/prior-art.md).
+    """
+
+    DOMAIN = "domain"
+    EMAIL_ADDRESS = "email_address"
 
 
 class VerificationStatus(StrEnum):
-    """Where a domain identity has got to (§6, §10)."""
+    """Where an identity has got to (§6, §10).
+
+    SES's own vocabulary, kept verbatim so a status never has to be translated
+    twice.
+    """
 
     PENDING = "pending"
     SUCCESS = "success"
     FAILED = "failed"
     TEMPORARY_FAILURE = "temporary_failure"
     NOT_STARTED = "not_started"
+
+
+#: Statuses that mean the identity is usable as a sender right now.
+VERIFIED_STATUSES = frozenset({VerificationStatus.SUCCESS})
 
 
 @dataclass(frozen=True, slots=True)
@@ -103,14 +128,32 @@ class DnsRecord:
 
 
 @dataclass(frozen=True, slots=True)
-class DomainStatus:
-    """A domain identity's state, per §6's Domain model."""
+class IdentityStatus:
+    """An identity's state as the provider reports it.
 
-    domain: str
+    ``dkim_status`` and ``mail_from_status`` are optional because they are
+    *inapplicable* to an email address, which is a different fact from "not
+    started yet". Collapsing the two would put a forever-pending DKIM row on the
+    screen for an address that can never have one.
+    """
+
+    value: str
+    identity_type: IdentityType
     verification_status: VerificationStatus
-    dkim_status: VerificationStatus
-    mail_from_status: VerificationStatus
+    dkim_status: VerificationStatus | None = None
+    mail_from_status: VerificationStatus | None = None
+    #: The three DKIM tokens, for a domain. The CNAMEs are built from these.
+    dkim_tokens: list[str] = field(default_factory=list)
     records: list[DnsRecord] = field(default_factory=list)
+
+    @property
+    def is_verified(self) -> bool:
+        """Whether SES will accept this as a ``From:`` address.
+
+        DKIM is not required to send - an unsigned message still goes out - so
+        verification alone is the question a send path has to ask.
+        """
+        return self.verification_status in VERIFIED_STATUSES
 
 
 # ------------------------------------------------- declared for Phase 6 ---

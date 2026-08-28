@@ -27,7 +27,8 @@ from seskit_core.logging import get_logger
 from seskit_core.providers.types import (
     AccountStatus,
     CredentialMode,
-    DomainStatus,
+    IdentityStatus,
+    IdentityType,
     OutboundEmail,
     SendingQuota,
     SentMessage,
@@ -109,10 +110,16 @@ class SESProvider:
     def credential_mode(self) -> CredentialMode:
         return resolve_credential_mode(self._session)
 
-    # ------------------------------------------------------------- Phase 5 ---
+    # ----------------------------------------------------------- identities ---
 
-    async def get_domain_status(self, domain: str) -> DomainStatus:
-        raise NotImplementedError("Domain identities arrive in Phase 5.")
+    async def create_identity(self, value: str, identity_type: IdentityType) -> IdentityStatus:
+        raise NotImplementedError("Implemented next, with the SES identity calls.")
+
+    async def get_identity_status(self, value: str) -> IdentityStatus:
+        raise NotImplementedError("Implemented next, with the SES identity calls.")
+
+    async def delete_identity(self, value: str) -> None:
+        raise NotImplementedError("Implemented next, with the SES identity calls.")
 
     # ------------------------------------------------------------- Phase 6 ---
 

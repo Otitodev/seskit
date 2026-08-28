@@ -19,6 +19,7 @@ from seskit_core.models.base import TimestampMixin
 if TYPE_CHECKING:
     from seskit_core.models.api_key import APIKey
     from seskit_core.models.aws_connection import AWSConnection
+    from seskit_core.models.identity import Identity
     from seskit_core.models.user import User
 
 DEFAULT_PROJECT_NAME = "Default"
@@ -50,6 +51,9 @@ class Project(Base, TimestampMixin):
     # One connection at most, so this side is scalar rather than a list.
     aws_connection: Mapped[AWSConnection | None] = relationship(
         back_populates="project", cascade="all, delete-orphan", uselist=False
+    )
+    identities: Mapped[list[Identity]] = relationship(
+        back_populates="project", cascade="all, delete-orphan"
     )
 
     def __repr__(self) -> str:

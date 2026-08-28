@@ -8,6 +8,7 @@ invisible to autogenerate, and the migration comes out empty.
 from seskit_core.models.api_key import APIKey
 from seskit_core.models.aws_connection import AWSConnection, ConnectionStatus
 from seskit_core.models.base import TimestampMixin, utcnow
+from seskit_core.models.identity import Identity
 from seskit_core.models.project import DEFAULT_PROJECT_NAME, Project
 from seskit_core.models.user import User, normalise_email
 
@@ -16,6 +17,7 @@ __all__ = [
     "APIKey",
     "AWSConnection",
     "ConnectionStatus",
+    "Identity",
     "Project",
     "TimestampMixin",
     "User",

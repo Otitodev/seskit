@@ -15,7 +15,8 @@ from seskit_core.errors import APIError, ErrorType
 from seskit_core.providers import (
     AccountStatus,
     CredentialMode,
-    DomainStatus,
+    IdentityStatus,
+    IdentityType,
     OutboundEmail,
     SendingQuota,
     SentMessage,
@@ -67,8 +68,14 @@ class FakeProvider:
     async def get_sending_quota(self) -> SendingQuota:
         return (await self.verify_account()).quota
 
-    async def get_domain_status(self, domain: str) -> DomainStatus:
-        raise NotImplementedError("Phase 5.")
+    async def create_identity(self, value: str, identity_type: IdentityType) -> IdentityStatus:
+        raise NotImplementedError("Identity support lands with the SES calls.")
+
+    async def get_identity_status(self, value: str) -> IdentityStatus:
+        raise NotImplementedError("Identity support lands with the SES calls.")
+
+    async def delete_identity(self, value: str) -> None:
+        raise NotImplementedError("Identity support lands with the SES calls.")
 
     async def send_email(self, message: OutboundEmail) -> SentMessage:
         raise NotImplementedError("Phase 6.")

@@ -7,11 +7,13 @@ and are never imported from here.
 from seskit_core.providers.base import EmailProvider
 from seskit_core.providers.types import (
     SANDBOX_DAILY_LIMIT,
+    VERIFIED_STATUSES,
     AccountStatus,
     Attachment,
     CredentialMode,
     DnsRecord,
-    DomainStatus,
+    IdentityStatus,
+    IdentityType,
     OutboundEmail,
     SendingQuota,
     SentMessage,
@@ -20,12 +22,14 @@ from seskit_core.providers.types import (
 
 __all__ = [
     "SANDBOX_DAILY_LIMIT",
+    "VERIFIED_STATUSES",
     "AccountStatus",
     "Attachment",
     "CredentialMode",
     "DnsRecord",
-    "DomainStatus",
     "EmailProvider",
+    "IdentityStatus",
+    "IdentityType",
     "OutboundEmail",
     "SendingQuota",
     "SentMessage",

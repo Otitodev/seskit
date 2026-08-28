@@ -98,6 +98,22 @@ class Settings(BaseSettings):
     #: do.
     AWS_STATUS_CACHE_TTL_SECONDS: int = 300
 
+    # -- Identity verification (§10) -----------------------------------------
+
+    #: How long before an unverified identity is re-checked against SES. DNS can
+    #: take hours to propagate, so checking more often mostly spends API quota
+    #: to be told the same thing.
+    IDENTITY_RECHECK_UNVERIFIED_SECONDS: int = 6 * 60 * 60
+
+    #: And a verified one. Far less frequent, but not never: this is what
+    #: catches a DKIM record deleted months after setup, which otherwise looks
+    #: healthy right up until a send fails.
+    IDENTITY_RECHECK_VERIFIED_SECONDS: int = 30 * 24 * 60 * 60
+
+    #: Floor on how often a user may force a re-check from the dashboard, so
+    #: holding the button cannot spend the project's SES quota.
+    IDENTITY_REFRESH_INTERVAL_SECONDS: int = 60
+
     # -- Local email provider (§25) -----------------------------------------
     # Points at Mailpit in local development. Production sending goes through
     # Amazon SES instead; see the provider-selection note on `smtp_configured`.

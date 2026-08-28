@@ -22,7 +22,8 @@ from typing import Protocol, runtime_checkable
 
 from seskit_core.providers.types import (
     AccountStatus,
-    DomainStatus,
+    IdentityStatus,
+    IdentityType,
     OutboundEmail,
     SendingQuota,
     SentMessage,
@@ -57,8 +58,25 @@ class EmailProvider(Protocol):
         """The current sending allowance."""
         ...
 
-    async def get_domain_status(self, domain: str) -> DomainStatus:
-        """Phase 5. Verification, DKIM and MAIL FROM state for one domain."""
+    async def create_identity(self, value: str, identity_type: IdentityType) -> IdentityStatus:
+        """Ask the provider to start verifying a domain or an email address.
+
+        Idempotent by nature: an identity that already exists comes back with
+        its current state rather than being reset, which is what lets a second
+        project adopt a domain the first has already verified.
+        """
+        ...
+
+    async def get_identity_status(self, value: str) -> IdentityStatus:
+        """Current verification, DKIM and MAIL FROM state for one identity."""
+        ...
+
+    async def delete_identity(self, value: str) -> None:
+        """Remove the identity at the provider.
+
+        Callers must be sure nothing else is relying on it - see the refcount
+        in ``services.identities``.
+        """
         ...
 
     async def send_email(self, message: OutboundEmail) -> SentMessage:
