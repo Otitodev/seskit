@@ -1,0 +1,58 @@
+{# The CNAMEs a domain needs before SES will verify it.
+
+   Shown only while a domain is unverified. Once it is done these are still
+   required to stay in DNS, but repeating them on a working domain turns a
+   settled thing back into a task list. #}
+{% from "components/ui.html" import code_block %}
+
+{% if identity.dns_records %}
+  <div class="stack">
+    <p>
+      Add these three CNAME records at your DNS provider. SESKit re-checks
+      automatically, so there is nothing to press once they are in place.
+    </p>
+
+    <div class="table-wrap">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Type</th>
+            <th>Name</th>
+            <th>Value</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for record in identity.dns_records %}
+            <tr>
+              <td>{{ record.record_type }}</td>
+              <td class="table__mono">{{ record.name }}</td>
+              <td class="table__mono">{{ record.value }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    {# Also as text, because copying three values out of a table one cell at a
+       time is exactly the tedium that makes people give up half way. #}
+    {%- set lines = [] %}
+    {%- for record in identity.dns_records %}
+      {%- set _ = lines.append(record.name ~ "  CNAME  " ~ record.value) %}
+    {%- endfor %}
+    {{ code_block(lines | join("
+"), language="DNS") }}
+
+    <p class="muted">
+      DNS changes can take up to 72 hours to propagate, though most providers
+      are far quicker. Verification usually completes within minutes of the
+      records going live.
+    </p>
+  </div>
+{% else %}
+  <div class="alert" role="status">
+    <p>
+      Amazon SES has not returned the DKIM records yet. Press Refresh in a
+      moment.
+    </p>
+  </div>
+{% endif %}

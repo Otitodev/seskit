@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% from "components/ui.html" import button, card_open, card_close, empty, field %}
+
+{% block title %}Domains · SESKit{% endblock %}
+
+{% block content %}
+  <div class="page-header">
+    <h1>Domains</h1>
+    <p class="page-header__subtitle">
+      Addresses and domains <code>{{ project.name }}</code> is allowed to send
+      from. Amazon SES will not send from anything unverified.
+    </p>
+  </div>
+
+  {% if error %}
+    {# Already normalised (§19) - the adapter strips botocore detail long before
+       it reaches here. #}
+    <div class="alert alert--danger" role="alert">
+      <p>{{ error }}</p>
+    </div>
+  {% endif %}
+
+  {% if not connection or not connection.is_connected %}
+
+    {{ card_open("Sending identities") }}
+      {{ empty(
+        "Connect AWS first",
+        "A sending identity is created in your Amazon SES account, so SESKit
+         needs to know which account and region to use before it can add one.",
+        icon_name="cloud",
+        action_label="Go to AWS",
+        action_href="/aws"
+      ) }}
+    {{ card_close() }}
+
+  {% else %}
+
+    {{ card_open("Add an identity") }}
+      <form class="row row--end" method="post" action="/domains">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <div class="grow">
+          {{ field("value", "Domain or email address",
+                   placeholder="example.com",
+                   hint="An email address verifies in minutes with no DNS
+                         changes - the fastest way to send something real. A
+                         domain lets you send from any address on it.",
+                   attrs='maxlength="255" autocomplete="off" autocapitalize="off" spellcheck="false"') }}
+        </div>
+        {{ button("Add", variant="primary", type="submit") }}
+      </form>
+      <p class="muted">
+        Identities live in <code>{{ connection.region }}</code>, the region this
+        project is connected to.
+      </p>
+    {{ card_close() }}
+
+    {% if identities %}
+      {% for identity in identities %}
+        {% include "partials/identity_row.html" %}
+      {% endfor %}
+    {% else %}
+      {{ card_open("Identities") }}
+        {{ empty(
+          "Nothing verified yet",
+          "Add the email address you want to send from. Amazon SES will mail you
+           a link, and once you click it you can send for real - no DNS records,
+           no waiting.",
+          icon_name="globe"
+        ) }}
+      {{ card_close() }}
+    {% endif %}
+
+  {% endif %}
+{% endblock %}

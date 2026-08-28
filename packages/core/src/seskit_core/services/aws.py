@@ -57,6 +57,12 @@ async def check_is_allowed(redis: Redis, project_id: str, *, interval_seconds: i
     interval gets through even if several refreshes arrive at once. A user who
     holds down Refresh gets the stored answer rather than a throttled account.
     """
+    if interval_seconds <= 0:
+        # A configured interval of zero means "do not throttle". Passing it to
+        # Redis would raise - EX must be positive - so a setting a user is
+        # entitled to choose would break refresh entirely.
+        return True
+
     allowed = await redis.set(_marker_key(project_id), "1", ex=interval_seconds, nx=True)
     return bool(allowed)
 

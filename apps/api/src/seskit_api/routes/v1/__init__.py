@@ -10,9 +10,10 @@ either breaking every caller or serving two shapes for ever.
 
 from fastapi import APIRouter
 
-from seskit_api.routes.v1 import api_keys
+from seskit_api.routes.v1 import api_keys, domains
 
 router = APIRouter(prefix="/v1")
 router.include_router(api_keys.router)
+router.include_router(domains.router)
 
 __all__ = ["router"]

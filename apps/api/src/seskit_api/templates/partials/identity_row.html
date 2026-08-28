@@ -1,0 +1,96 @@
+{# One identity, as a card rather than a table row.
+
+   A domain that is still pending has to show three DNS records, which a table
+   cell cannot hold legibly. Users have a handful of identities, not hundreds,
+   so the space is affordable and the records sit where they are needed. #}
+{% from "components/ui.html" import button, card_open, card_close, badge, code_block %}
+
+{{ card_open(identity.value) }}
+  <dl class="datalist">
+    <div class="datalist__row">
+      <dt>Type</dt>
+      <dd>
+        {% if identity.is_domain %}
+          {{ badge("Domain", dot=False) }}
+        {% else %}
+          {{ badge("Email address", dot=False) }}
+        {% endif %}
+      </dd>
+    </div>
+    <div class="datalist__row">
+      <dt>Verification</dt>
+      <dd>
+        {% if identity.verification_status == "success" %}
+          {{ badge("Verified", tone="success") }}
+        {% elif identity.verification_status in ("failed", "temporary_failure") %}
+          {{ badge("Failed", tone="danger") }}
+        {% else %}
+          {{ badge("Pending", tone="warning") }}
+        {% endif %}
+      </dd>
+    </div>
+    {% if identity.dkim_status %}
+      {# Only for a domain. An address can never have DKIM, and NULL says so -
+         rendering a forever-pending row here would be a puzzle, not a status. #}
+      <div class="datalist__row">
+        <dt>DKIM</dt>
+        <dd>
+          {% if identity.dkim_status == "success" %}
+            {{ badge("Signing", tone="success") }}
+          {% else %}
+            {{ badge("Pending", tone="warning") }}
+          {% endif %}
+        </dd>
+      </div>
+    {% endif %}
+    <div class="datalist__row">
+      <dt>Region</dt>
+      <dd><code>{{ identity.region }}</code></dd>
+    </div>
+    <div class="datalist__row">
+      <dt>Last checked</dt>
+      <dd class="muted">
+        {% if identity.last_checked_at %}
+          {{ identity.last_checked_at.strftime("%Y-%m-%d %H:%M UTC") }}
+        {% else %}
+          Never
+        {% endif %}
+      </dd>
+    </div>
+  </dl>
+
+  {% if identity.last_error %}
+    <div class="alert alert--danger" role="alert">
+      <p class="alert__title">The last check failed</p>
+      <p>{{ identity.last_error }}</p>
+    </div>
+  {% endif %}
+
+  {% if not identity.is_verified %}
+    {% if identity.is_domain %}
+      {% include "partials/dns_records.html" %}
+    {% else %}
+      <div class="alert" role="status">
+        <p class="alert__title">Check your inbox</p>
+        <p>
+          Amazon SES has emailed <code>{{ identity.value }}</code> a verification
+          link. Click it, then press Refresh here. Nothing needs to change in
+          your DNS.
+        </p>
+      </div>
+    {% endif %}
+  {% endif %}
+
+  <div class="row row--end">
+    <form method="post" action="/domains/{{ identity.id }}/refresh">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      {{ button("Refresh", type="submit") }}
+    </form>
+    {# A form, not a link: removing an identity changes state, and a link would
+       let any page on the internet trigger it with an <img> tag. #}
+    <form method="post" action="/domains/{{ identity.id }}/delete">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      {{ button("Remove", variant="danger", type="submit") }}
+    </form>
+  </div>
+{{ card_close() }}
