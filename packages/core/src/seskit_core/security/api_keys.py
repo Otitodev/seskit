@@ -8,10 +8,21 @@ deliberate:
   buys no security.
 - It would be charged on *every* API request. At 46 MiB and tens of
   milliseconds a call, that is a denial of service we inflict on ourselves.
-- Argon2 salts each hash, so the same key hashes differently every time. A key
-  could not be looked up *by* its hash; verification would mean loading every
-  key in the table and verifying each in turn. SHA-256 is deterministic, so
+- Argon2 salts each hash, so the same key hashes differently every time and a
+  key cannot be looked up *by* its hash. SHA-256 is deterministic, so
   ``WHERE hashed_key = :h`` hits a unique index and returns one row.
+
+That last point is a convenience, not the argument, and it is worth being
+precise about because there is a well-known design that defeats it: issue the
+key as ``prefix_lookupid_secret``, index the lookup id, and verify the secret
+with a salted KDF against that one row. It works, and other projects in this
+space use it.
+
+We still do not, because the *first* reason is the real one. A KDF is machinery
+for making a low-entropy secret expensive to guess. There is no guessing to
+frustrate here, so the only thing a KDF adds to a 256-bit random token is
+latency on every authenticated request - and the extra column and split-parsing
+to go with it.
 
 The lookup is not constant-time, but what leaks is information about a 256-bit
 secret the caller must already know to make the query at all.

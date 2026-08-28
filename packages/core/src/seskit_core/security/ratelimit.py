@@ -13,6 +13,11 @@ rediscovered later.
 
 Counted **per project, not per key**, so minting a second key cannot be used to
 buy more quota.
+
+**Fails open.** If Redis cannot be reached the request is allowed. A limiter is
+a guard on a working service, not a dependency of it - refusing every send
+because the counter is unavailable turns a Redis blip into a full outage, which
+is a far worse failure than briefly not enforcing a quota.
 """
 
 from __future__ import annotations
@@ -21,6 +26,11 @@ import time
 from dataclasses import dataclass
 
 from redis.asyncio import Redis
+from redis.exceptions import RedisError
+
+from seskit_core.logging import get_logger
+
+logger = get_logger(__name__)
 
 RATE_LIMIT_KEY_PREFIX = "ratelimit:"
 
@@ -75,7 +85,15 @@ async def check_rate_limit(
     # Only on creation: refreshing the TTL on every request would keep pushing
     # the window's end away and the counter would never reset.
     pipeline.expire(_key(project_id, start), window_seconds, nx=True)
-    results = await pipeline.execute()
+
+    try:
+        results = await pipeline.execute()
+    except RedisError:
+        # See the module docstring: an unavailable counter must not become an
+        # unavailable API. Logged at warning because a limiter that has quietly
+        # stopped limiting is something an operator needs to know about.
+        logger.warning("rate_limit_unavailable", project_id=project_id, exc_info=True)
+        return RateLimitStatus(allowed=True, limit=limit, remaining=limit, reset_at=reset_at)
 
     used = int(results[0])
 

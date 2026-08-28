@@ -5,6 +5,7 @@ from __future__ import annotations
 import time
 
 from redis.asyncio import Redis
+from redis.exceptions import ConnectionError as RedisConnectionError
 from seskit_core.security.ratelimit import check_rate_limit, reset_rate_limit
 
 LIMIT = 5
@@ -113,4 +114,56 @@ async def test_retry_after_is_never_zero(redis_client: Redis) -> None:
     """A Retry-After of 0 invites an immediate retry that is certain to fail."""
     status = await _hit(redis_client)
 
+    assert status.retry_after >= 1
+
+
+# ------------------------------------------------------------ degradation ---
+
+
+class BrokenRedis:
+    """A Redis whose every pipeline execution fails."""
+
+    def pipeline(self) -> BrokenRedis:
+        return self
+
+    def incr(self, *args: object, **kwargs: object) -> None:
+        return None
+
+    def expire(self, *args: object, **kwargs: object) -> None:
+        return None
+
+    async def execute(self) -> object:
+        raise RedisConnectionError("redis is down")
+
+
+async def test_an_unreachable_redis_allows_the_request() -> None:
+    """A limiter is a guard on a working service, not a dependency of it.
+
+    Refusing every send because the counter is unavailable turns a Redis blip
+    into a full API outage - a much worse failure than briefly not enforcing a
+    quota.
+    """
+    status = await check_rate_limit(
+        BrokenRedis(),  # type: ignore[arg-type]
+        PROJECT,
+        limit=LIMIT,
+        window_seconds=WINDOW,
+    )
+
+    assert status.allowed is True
+
+
+async def test_failing_open_still_reports_a_usable_budget() -> None:
+    """The headers are rendered from this either way, so the numbers have to be
+    coherent rather than zero or negative.
+    """
+    status = await check_rate_limit(
+        BrokenRedis(),  # type: ignore[arg-type]
+        PROJECT,
+        limit=LIMIT,
+        window_seconds=WINDOW,
+    )
+
+    assert status.limit == LIMIT
+    assert status.remaining == LIMIT
     assert status.retry_after >= 1

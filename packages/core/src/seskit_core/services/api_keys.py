@@ -3,6 +3,10 @@
 The verification path runs on every request a customer application makes, so it
 is written to cost one Redis round trip in the common case rather than a
 database query.
+
+Redis is a cache here, never the source of truth, and every use of it below
+degrades rather than fails. The database can answer every question Redis is
+asked; losing the cache should cost latency, not availability.
 """
 
 from __future__ import annotations
@@ -10,11 +14,15 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from redis.asyncio import Redis
+from redis.exceptions import RedisError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from seskit_core.logging import get_logger
 from seskit_core.models import APIKey, utcnow
 from seskit_core.security.api_keys import display_prefix, generate_key, hash_key
+
+logger = get_logger(__name__)
 
 #: Resolved key hash -> project id. Short-lived; revocation deletes the entry
 #: rather than waiting for it to expire.
@@ -105,7 +113,15 @@ async def verify_api_key(
     """
     hashed = hash_key(raw_key)
 
-    cached = await redis.get(_cache_key(hashed))
+    try:
+        cached = await redis.get(_cache_key(hashed))
+    except RedisError:
+        # Fall through to the database. Refusing a valid key because the cache
+        # is unreachable would turn a Redis outage into an authentication
+        # outage, and the row below is the authoritative answer anyway.
+        logger.warning("api_key_cache_unavailable", exc_info=True)
+        cached = None
+
     if cached is not None:
         return str(cached)
 
@@ -117,7 +133,13 @@ async def verify_api_key(
         # with entries by presenting made-up keys.
         return None
 
-    await redis.set(_cache_key(hashed), api_key.project_id, ex=cache_ttl_seconds)
+    try:
+        await redis.set(_cache_key(hashed), api_key.project_id, ex=cache_ttl_seconds)
+    except RedisError:
+        # The key is valid; not being able to remember that is not a reason to
+        # reject it. The next request simply pays for the query again.
+        logger.warning("api_key_cache_write_failed", key_id=api_key.id, exc_info=True)
+
     return api_key.project_id
 
 
@@ -139,9 +161,16 @@ async def touch_last_used(
 
     # SET NX succeeds only when no marker exists, so exactly one caller in the
     # interval performs the write even under concurrent requests.
-    first_in_interval = await redis.set(
-        _last_used_key(api_key.id), "1", ex=interval_seconds, nx=True
-    )
+    try:
+        first_in_interval = await redis.set(
+            _last_used_key(api_key.id), "1", ex=interval_seconds, nx=True
+        )
+    except RedisError:
+        # Skip the write rather than fail the request. This column is a
+        # convenience for the dashboard; nothing depends on it being current.
+        logger.warning("api_key_last_used_skipped", key_id=api_key.id, exc_info=True)
+        return
+
     if not first_in_interval:
         return
 
@@ -163,4 +192,12 @@ async def revoke_api_key(session: AsyncSession, redis: Redis, api_key: APIKey) -
         api_key.revoked_at = utcnow()
         await session.flush()
 
-    await redis.delete(_cache_key(api_key.hashed_key))
+    try:
+        await redis.delete(_cache_key(api_key.hashed_key))
+    except RedisError:
+        # The revocation is already committed to the database, which is what
+        # makes it real. Losing the cache eviction means the key may keep
+        # authenticating until the entry expires - which is precisely the
+        # backstop the short TTL exists to provide. Raising here would instead
+        # abandon the revocation altogether, which is far worse.
+        logger.warning("api_key_cache_evict_failed", key_id=api_key.id, exc_info=True)

@@ -5,6 +5,7 @@ from __future__ import annotations
 import pytest
 from httpx import AsyncClient
 from redis.asyncio import Redis
+from redis.exceptions import ConnectionError as RedisConnectionError
 from seskit_core.models import APIKey
 from seskit_core.security.api_keys import (
     KEY_PREFIX,
@@ -513,3 +514,73 @@ async def test_you_cannot_revoke_another_projects_key(
     await db_session.refresh(theirs.api_key)
     assert theirs.api_key.revoked_at is None
     assert "theirs" not in response.text
+
+
+# ------------------------------------------------------------ degradation ---
+#
+# Redis is a cache on this path, never the source of truth. Losing it should
+# cost latency, not availability - the database can answer every question the
+# cache is asked.
+
+
+class BrokenRedis:
+    """Raises on every operation, like a Redis that has gone away."""
+
+    async def get(self, *args: object, **kwargs: object) -> object:
+        raise RedisConnectionError("redis is down")
+
+    async def set(self, *args: object, **kwargs: object) -> object:
+        raise RedisConnectionError("redis is down")
+
+    async def delete(self, *args: object, **kwargs: object) -> object:
+        raise RedisConnectionError("redis is down")
+
+
+async def test_a_valid_key_still_verifies_without_redis(db_session: AsyncSession) -> None:
+    """The row in Postgres is the authoritative answer. Rejecting a valid key
+    because the cache is unreachable would turn a Redis outage into an
+    authentication outage.
+    """
+    project_id = await _project(db_session)
+    issued = await create_api_key(db_session, project_id=project_id, name="prod")
+
+    resolved = await verify_api_key(
+        db_session,
+        BrokenRedis(),  # type: ignore[arg-type]
+        raw_key=issued.raw_key,
+        cache_ttl_seconds=60,
+    )
+
+    assert resolved == project_id
+
+
+async def test_an_unknown_key_is_still_refused_without_redis(
+    db_session: AsyncSession,
+) -> None:
+    """Degrading must not become failing open on authentication - that is the
+    opposite trade from the rate limiter, and deliberately so.
+    """
+    await _project(db_session)
+
+    resolved = await verify_api_key(
+        db_session,
+        BrokenRedis(),  # type: ignore[arg-type]
+        raw_key=generate_key(),
+        cache_ttl_seconds=60,
+    )
+
+    assert resolved is None
+
+
+async def test_revocation_persists_even_if_the_cache_cannot_be_evicted(
+    db_session: AsyncSession,
+) -> None:
+    """The database write is what makes a revocation real. Raising on the failed
+    eviction would abandon it altogether; the short cache TTL is the backstop.
+    """
+    project_id = await _project(db_session)
+    issued = await create_api_key(db_session, project_id=project_id, name="leaked")
+
+    await revoke_api_key(db_session, BrokenRedis(), issued.api_key)  # type: ignore[arg-type]
+
+    assert issued.api_key.revoked_at is not None
