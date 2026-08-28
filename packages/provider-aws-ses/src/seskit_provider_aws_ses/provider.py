@@ -22,6 +22,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from botocore.exceptions import ClientError
 from seskit_core.errors import APIError, ErrorType
 from seskit_core.logging import get_logger
 from seskit_core.providers.types import (
@@ -40,7 +41,8 @@ from seskit_provider_aws_ses.client import (
     call,
     resolve_credential_mode,
 )
-from seskit_provider_aws_ses.errors import normalise_boto_error
+from seskit_provider_aws_ses.errors import error_code, normalise_boto_error
+from seskit_provider_aws_ses.identities import to_identity_status
 
 if TYPE_CHECKING:
     # Types only, from boto3-stubs. Importing these at runtime would make a
@@ -51,6 +53,15 @@ logger = get_logger(__name__)
 
 STS_IDENTITY_ACTION = "sts:GetCallerIdentity"
 SES_ACCOUNT_ACTION = "ses:GetAccount"
+SES_CREATE_IDENTITY_ACTION = "ses:CreateEmailIdentity"
+SES_GET_IDENTITY_ACTION = "ses:GetEmailIdentity"
+SES_DELETE_IDENTITY_ACTION = "ses:DeleteEmailIdentity"
+
+#: SES says the identity is already there. Not a failure - see create_identity.
+_ALREADY_EXISTS_CODES = frozenset({"AlreadyExistsException"})
+
+#: Already gone. Also not a failure - see delete_identity.
+_NOT_FOUND_CODES = frozenset({"NotFoundException"})
 
 
 class SESProvider:
@@ -113,13 +124,54 @@ class SESProvider:
     # ----------------------------------------------------------- identities ---
 
     async def create_identity(self, value: str, identity_type: IdentityType) -> IdentityStatus:
-        raise NotImplementedError("Implemented next, with the SES identity calls.")
+        """Start verifying a domain or an email address.
+
+        An identity that already exists is not an error. SES identities belong
+        to the account and region, so a second project adding a domain the first
+        already verified must adopt that state rather than being told no - and
+        must certainly not be shown DNS records that are already published.
+        """
+        client = self._session.client("sesv2", config=BOTO_CONFIG)
+
+        try:
+            response = await call(client.create_email_identity, EmailIdentity=value)
+        except ClientError as exc:
+            if error_code(exc) in _ALREADY_EXISTS_CODES:
+                return await self.get_identity_status(value)
+            raise normalise_boto_error(exc, action=SES_CREATE_IDENTITY_ACTION) from exc
+        except Exception as exc:
+            raise normalise_boto_error(exc, action=SES_CREATE_IDENTITY_ACTION) from exc
+
+        return to_identity_status(value, dict(response), fallback_type=identity_type)
 
     async def get_identity_status(self, value: str) -> IdentityStatus:
-        raise NotImplementedError("Implemented next, with the SES identity calls.")
+        """Current verification, DKIM and MAIL FROM state."""
+        client = self._session.client("sesv2", config=BOTO_CONFIG)
+
+        try:
+            response = await call(client.get_email_identity, EmailIdentity=value)
+        except Exception as exc:
+            raise normalise_boto_error(exc, action=SES_GET_IDENTITY_ACTION) from exc
+
+        return to_identity_status(value, dict(response), fallback_type=_guess_type(value))
 
     async def delete_identity(self, value: str) -> None:
-        raise NotImplementedError("Implemented next, with the SES identity calls.")
+        """Remove the identity at SES.
+
+        An identity that is already gone is a success, not a failure - the
+        caller wanted it absent and it is. Treating it as an error would leave
+        a SESKit row that can never be cleaned up.
+        """
+        client = self._session.client("sesv2", config=BOTO_CONFIG)
+
+        try:
+            await call(client.delete_email_identity, EmailIdentity=value)
+        except ClientError as exc:
+            if error_code(exc) in _NOT_FOUND_CODES:
+                return
+            raise normalise_boto_error(exc, action=SES_DELETE_IDENTITY_ACTION) from exc
+        except Exception as exc:
+            raise normalise_boto_error(exc, action=SES_DELETE_IDENTITY_ACTION) from exc
 
     # ------------------------------------------------------------- Phase 6 ---
 
@@ -152,3 +204,12 @@ class SESProvider:
         except Exception as exc:
             raise normalise_boto_error(exc, action=SES_ACCOUNT_ACTION) from exc
         return account
+
+
+def _guess_type(value: str) -> IdentityType:
+    """Fallback only, for a response that does not say what it is.
+
+    SES reports the real type and that is what wins; this exists so the
+    dataclass always has one.
+    """
+    return IdentityType.EMAIL_ADDRESS if "@" in value else IdentityType.DOMAIN

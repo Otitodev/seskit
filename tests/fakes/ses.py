@@ -11,6 +11,8 @@ Phase 5 or 6 breaks here too rather than only in production.
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 from seskit_core.errors import APIError, ErrorType
 from seskit_core.providers import (
     AccountStatus,
@@ -20,9 +22,13 @@ from seskit_core.providers import (
     OutboundEmail,
     SendingQuota,
     SentMessage,
+    VerificationStatus,
 )
 
 ACCOUNT_ID = "123456789012"
+
+#: Three tokens, like Easy DKIM returns.
+DKIM_TOKENS = ["faketok1", "faketok2", "faketok3"]
 
 SANDBOX_QUOTA = SendingQuota(max_24_hour_send=200.0, max_send_rate=1.0, sent_last_24_hours=0.0)
 PRODUCTION_QUOTA = SendingQuota(
@@ -51,6 +57,13 @@ class FakeProvider:
         #: meaningful if a test can see that a call did not happen.
         self.calls = 0
 
+        #: Identities SES holds, keyed by value. Shared across projects on
+        #: purpose: that is what makes the refcount necessary.
+        self.identities: dict[str, IdentityStatus] = {}
+        self.create_calls = 0
+        self.get_calls = 0
+        self.delete_calls = 0
+
     async def verify_account(self) -> AccountStatus:
         self.calls += 1
         if self.error is not None:
@@ -68,14 +81,61 @@ class FakeProvider:
     async def get_sending_quota(self) -> SendingQuota:
         return (await self.verify_account()).quota
 
+    # ----------------------------------------------------------- identities ---
+    #
+    # Behaves like SES: identities live in one shared store keyed by value, not
+    # per project, because that is the fact the refcount exists to handle.
+
     async def create_identity(self, value: str, identity_type: IdentityType) -> IdentityStatus:
-        raise NotImplementedError("Identity support lands with the SES calls.")
+        self.create_calls += 1
+        if self.error is not None:
+            raise self.error
+
+        existing = self.identities.get(value)
+        if existing is not None:
+            # Already there - adopt it, exactly as the adapter does when SES
+            # answers AlreadyExistsException.
+            return existing
+
+        status = IdentityStatus(
+            value=value,
+            identity_type=identity_type,
+            verification_status=VerificationStatus.PENDING,
+            dkim_status=(
+                VerificationStatus.PENDING if identity_type is IdentityType.DOMAIN else None
+            ),
+            mail_from_status=(
+                VerificationStatus.NOT_STARTED if identity_type is IdentityType.DOMAIN else None
+            ),
+            dkim_tokens=list(DKIM_TOKENS) if identity_type is IdentityType.DOMAIN else [],
+        )
+        self.identities[value] = status
+        return status
 
     async def get_identity_status(self, value: str) -> IdentityStatus:
-        raise NotImplementedError("Identity support lands with the SES calls.")
+        self.get_calls += 1
+        if self.error is not None:
+            raise self.error
+
+        status = self.identities.get(value)
+        if status is None:
+            raise APIError(ErrorType.NOT_FOUND, "The requested AWS resource was not found.")
+        return status
 
     async def delete_identity(self, value: str) -> None:
-        raise NotImplementedError("Identity support lands with the SES calls.")
+        self.delete_calls += 1
+        if self.error is not None:
+            raise self.error
+        self.identities.pop(value, None)
+
+    def mark_verified(self, value: str) -> None:
+        """Simulate SES noticing the DNS records, or the user clicking a link."""
+        current = self.identities[value]
+        self.identities[value] = replace(
+            current,
+            verification_status=VerificationStatus.SUCCESS,
+            dkim_status=(VerificationStatus.SUCCESS if current.dkim_status is not None else None),
+        )
 
     async def send_email(self, message: OutboundEmail) -> SentMessage:
         raise NotImplementedError("Phase 6.")
