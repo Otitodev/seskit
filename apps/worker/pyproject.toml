@@ -9,6 +9,7 @@ requires-python = ">=3.12"
 dependencies = [
     "seskit-core",
     "seskit-provider-aws-ses",
+    "seskit-provider-smtp",
     "arq>=0.26",
 ]
 

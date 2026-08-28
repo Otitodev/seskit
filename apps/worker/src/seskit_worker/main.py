@@ -15,6 +15,7 @@ from seskit_core.logging import configure_logging, get_logger
 
 from seskit_worker.identities import recheck_identities
 from seskit_worker.jobs import ping
+from seskit_worker.sending import send_email
 
 logger = get_logger(__name__)
 
@@ -44,7 +45,11 @@ class WorkerSettings:
     why ``redis_settings`` is evaluated here at import time.
     """
 
-    functions = [ping, recheck_identities]  # noqa: RUF012 - ARQ needs a plain attribute
+    functions = [  # noqa: RUF012 - ARQ needs a plain attribute
+        ping,
+        recheck_identities,
+        send_email,
+    ]
 
     #: Hourly, on the hour. The hour is not the interval - each identity has its
     #: own due check, so most passes find nothing to do. That is the intended

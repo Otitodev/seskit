@@ -1686,6 +1686,7 @@ dependencies = [
     { name = "arq" },
     { name = "seskit-core" },
     { name = "seskit-provider-aws-ses" },
+    { name = "seskit-provider-smtp" },
 ]
 
 [package.metadata]
@@ -1693,6 +1694,7 @@ requires-dist = [
     { name = "arq", specifier = ">=0.26" },
     { name = "seskit-core", editable = "packages/core" },
     { name = "seskit-provider-aws-ses", editable = "packages/provider-aws-ses" },
+    { name = "seskit-provider-smtp", editable = "packages/provider-smtp" },
 ]
 
 [[package]]

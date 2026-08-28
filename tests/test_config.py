@@ -7,20 +7,29 @@ from pydantic import ValidationError
 from seskit_core.config import Environment, Settings
 
 
-def _base_env() -> dict[str, str]:
+def _base_env() -> dict[str, str | None]:
     return {
         "SECRET_KEY": "a-real-secret",
         "DATABASE_URL": "postgresql+asyncpg://u:p@localhost:5432/db",
         "REDIS_URL": "redis://localhost:6379/0",
+        # Cleared explicitly. _env_file=None keeps a local .env out, but
+        # pydantic-settings still reads os.environ - and conftest sets these so
+        # the send tests can reach Mailpit on the host. Without this the SMTP
+        # cases below would silently test the ambient environment instead of
+        # their own arguments.
+        "SMTP_HOST": None,
+        "EMAILS_FROM_EMAIL": None,
     }
 
 
-def _settings(**overrides: str) -> Settings:
+def _settings(**overrides: str | None) -> Settings:
     """Build Settings from explicit values only.
 
-    ``_env_file=None`` is essential: without it a developer's local .env leaks
-    into these tests, so they would pass in CI (no .env) and fail on a machine
-    that has run the quickstart.
+    Two leaks to keep out, not one. ``_env_file=None`` stops a developer's local
+    .env being read - without it these pass in CI and fail on a machine that has
+    run the quickstart. ``_base_env`` then clears the variables the test session
+    itself sets, since init arguments beat os.environ but only for keys that are
+    actually passed.
     """
     return Settings(_env_file=None, **(_base_env() | overrides))  # type: ignore[arg-type]
 

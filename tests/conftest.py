@@ -29,6 +29,12 @@ os.environ.setdefault("SECRET_KEY", "test-secret-key")
 os.environ.setdefault("DATABASE_URL", "postgresql+asyncpg://seskit:seskit@localhost:55432/seskit")
 os.environ.setdefault("REDIS_URL", "redis://localhost:56379/0")
 os.environ.setdefault("ENVIRONMENT", "local")
+# Compose names these `mailpit`, `db` and `redis` on its own network, but the
+# test process runs on the host - so the same trap as running alembic from
+# outside the containers. Point them at the published host ports.
+os.environ["SMTP_HOST"] = os.environ.get("SESKIT_TEST_SMTP_HOST", "localhost")
+os.environ.setdefault("SMTP_PORT", "1025")
+os.environ.setdefault("EMAILS_FROM_EMAIL", "tests@seskit.local")
 
 from fakes.queue import FakeQueue
 from fakes.ses import FakeProviderFactory
