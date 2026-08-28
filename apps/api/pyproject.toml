@@ -10,6 +10,7 @@ dependencies = [
     "jinja2>=3.1",
     "python-multipart>=0.0.9",
     "seskit-provider-aws-ses",
+    "seskit-provider-smtp",
 ]
 
 [build-system]
@@ -21,3 +22,4 @@ packages = ["src/seskit_api"]
 
 [tool.uv.sources]
 seskit-provider-aws-ses = { workspace = true }
+seskit-provider-smtp = { workspace = true }

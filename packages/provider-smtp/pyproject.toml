@@ -1,0 +1,16 @@
+[project]
+name = "seskit-provider-smtp"
+version = "0.1.0"
+description = "SMTP provider for SESKit: local development via Mailpit (§25, §26)"
+requires-python = ">=3.12"
+dependencies = [
+    "seskit-core",
+    "aiosmtplib>=3.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/seskit_provider_smtp"]

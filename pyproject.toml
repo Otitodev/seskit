@@ -33,6 +33,7 @@ seskit-core = { workspace = true }
 seskit-api = { workspace = true }
 seskit-worker = { workspace = true }
 seskit-provider-aws-ses = { workspace = true }
+seskit-provider-smtp = { workspace = true }
 seskit-sdk = { workspace = true }
 
 # ---------------------------------------------------------------- tooling ---

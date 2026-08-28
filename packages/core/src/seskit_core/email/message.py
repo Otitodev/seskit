@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from email.headerregistry import Address
 from email.message import EmailMessage
-from email.utils import parseaddr
+from email.utils import make_msgid, parseaddr
 
 from seskit_core.errors import APIError, ErrorType
 from seskit_core.providers.types import Attachment, OutboundEmail
@@ -24,7 +24,17 @@ from seskit_core.providers.types import Attachment, OutboundEmail
 #: request's own fields; letting a custom header overwrite them would let a
 #: caller send as one address while the record says another.
 RESERVED_HEADERS = frozenset(
-    {"from", "to", "cc", "bcc", "reply-to", "subject", "mime-version", "content-type"}
+    {
+        "from",
+        "to",
+        "cc",
+        "bcc",
+        "reply-to",
+        "subject",
+        "mime-version",
+        "content-type",
+        "message-id",
+    }
 )
 
 #: Bcc is deliberately absent from the assembled message. A blind copy is blind
@@ -77,6 +87,13 @@ def build_message(outbound: OutboundEmail) -> EmailMessage:
     if outbound.reply_to:
         message["Reply-To"] = [_address(value) for value in outbound.reply_to]
     message["Subject"] = outbound.subject
+
+    # Set our own, rather than letting the first hop invent one. A sender is
+    # supposed to, and for SMTP it is the only stable handle we get back - SES
+    # returns an id of its own, SMTP returns whatever the server felt like
+    # saying. Correlating events in Phase 7 needs something we chose.
+    _, sender_addr = parseaddr(outbound.sender)
+    message["Message-ID"] = make_msgid(domain=sender_addr.rpartition("@")[2] or None)
 
     # Text first, then HTML as an alternative. The order is the specification,
     # not a preference: a client picks the *last* part it understands, so

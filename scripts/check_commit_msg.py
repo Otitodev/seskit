@@ -43,6 +43,7 @@ SCOPES: dict[str, str] = {
     "worker": "apps/worker - background jobs",
     "core": "packages/core - config, logging, persistence",
     "provider-ses": "packages/provider-aws-ses",
+    "provider-smtp": "packages/provider-smtp",
     "sdk": "packages/sdk-python",
     "migrations": "Alembic migrations",
     "docker": "Dockerfile, docker-compose",
