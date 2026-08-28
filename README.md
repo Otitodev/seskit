@@ -41,10 +41,10 @@ toolchain to their stack to self-host their email infrastructure:
 
 ## Status
 
-**Phase 4 of 11 — AWS SES provider.** The stack runs, accounts and API keys
-work, and an AWS account can be connected and inspected — but there is still no
-email sending. That is Phase 6. See [`SESKit_MVP.md`](SESKit_MVP.md) §31 for the
-full build order.
+**Phase 5 of 11 — domain management.** The stack runs, accounts and API keys
+work, an AWS account can be connected, and sending identities can be verified —
+but there is still no email sending. That is Phase 6. See
+[`SESKit_MVP.md`](SESKit_MVP.md) §31 for the full build order.
 
 | Phase | | |
 |---|---|---|
@@ -52,7 +52,7 @@ full build order.
 | 2 | Authentication and projects | ✅ Done |
 | 3 | API keys | ✅ Done |
 | 4 | AWS SES provider | ✅ Done |
-| 5 | Domain management | Not started |
+| 5 | Domain management | ✅ Done |
 | 6 | Email API | Not started |
 | 7 | Event processing | Not started |
 | 8 | Webhooks | Not started |
@@ -80,8 +80,7 @@ nothing in your AWS account.
 ### Minimum IAM policy
 
 §9 of the spec is explicit that SESKit must never ask for `AdministratorAccess`.
-For Phase 4 — connecting and inspecting an account — these two actions are
-enough:
+These five actions are everything it uses:
 
 ```json
 {
@@ -89,17 +88,48 @@ enough:
   "Statement": [
     {
       "Effect": "Allow",
-      "Action": ["sts:GetCallerIdentity", "ses:GetAccount"],
+      "Action": [
+        "sts:GetCallerIdentity",
+        "ses:GetAccount",
+        "ses:CreateEmailIdentity",
+        "ses:GetEmailIdentity",
+        "ses:DeleteEmailIdentity"
+      ],
       "Resource": "*"
     }
   ]
 }
 ```
 
-Neither action can send mail or change anything, so this policy is safe to grant
-before you have decided to send through SESKit at all. Later phases need more —
-domain identities in Phase 5, sending in Phase 6 — and this section grows with
-them rather than asking for those permissions up front.
+The first two are read-only and are all that connecting an account needs, so you
+can grant just those to look around before committing to anything. The identity
+actions are the first writes SESKit performs — they create and remove the
+verified senders on the Domains page, and nothing else. None of them can send
+mail; sending permissions arrive in a later phase and this section will grow
+with them.
+
+Removing an identity is the only destructive thing here, and it is guarded:
+SESKit deletes the identity in SES only when no other project is still using it.
+
+### Verifying a sender
+
+Amazon SES will not send from an address it has not verified, so before your
+first send you need at least one identity on the **Domains** page.
+
+There are two kinds, and the difference matters if you are in a hurry:
+
+- **An email address** verifies in minutes and needs no DNS at all. SES mails
+  the address a link; click it and you can send. This is the fastest way to get
+  something real working, and it is worth doing first even if you intend to use
+  a domain.
+- **A domain** lets you send from any address on it, and needs three CNAME
+  records at your DNS provider. SESKit shows them, and re-checks on its own —
+  there is nothing to press once they are live. DNS can take up to 72 hours to
+  propagate, though most providers are much quicker.
+
+SESKit re-checks unverified identities every few hours and verified ones monthly.
+That last one is deliberate: it notices if a DKIM record is removed long after
+setup, which would otherwise look fine until a send failed.
 
 ### The SES sandbox
 
