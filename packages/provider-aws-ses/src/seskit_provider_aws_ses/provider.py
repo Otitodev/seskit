@@ -20,9 +20,10 @@ client rather than by moto. Do not "fix" this by switching to v1.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from botocore.exceptions import ClientError
+from seskit_core.email import build_message
 from seskit_core.errors import APIError, ErrorType
 from seskit_core.logging import get_logger
 from seskit_core.providers.types import (
@@ -56,6 +57,7 @@ SES_ACCOUNT_ACTION = "ses:GetAccount"
 SES_CREATE_IDENTITY_ACTION = "ses:CreateEmailIdentity"
 SES_GET_IDENTITY_ACTION = "ses:GetEmailIdentity"
 SES_DELETE_IDENTITY_ACTION = "ses:DeleteEmailIdentity"
+SES_SEND_ACTION = "ses:SendEmail"
 
 #: SES says the identity is already there. Not a failure - see create_identity.
 _ALREADY_EXISTS_CODES = frozenset({"AlreadyExistsException"})
@@ -173,10 +175,39 @@ class SESProvider:
         except Exception as exc:
             raise normalise_boto_error(exc, action=SES_DELETE_IDENTITY_ACTION) from exc
 
-    # ------------------------------------------------------------- Phase 6 ---
+    # ----------------------------------------------------------------- send ---
 
     async def send_email(self, message: OutboundEmail) -> SentMessage:
-        raise NotImplementedError("Sending arrives in Phase 6.")
+        """Hand a message to SES.
+
+        Simple content when it will do, raw MIME when it will not. Simple lets
+        SES assemble the message from structured fields, which it handles better
+        than a blob - but it can only express what its own fields cover, so
+        attachments and custom headers force the raw path.
+
+        ``Destination`` is passed either way. With raw content SES would
+        otherwise take recipients from the headers, and blind copies are
+        deliberately not in the headers.
+        """
+        client = self._session.client("sesv2", config=BOTO_CONFIG)
+        request: dict[str, Any] = {
+            "FromEmailAddress": message.sender,
+            "Destination": {
+                "ToAddresses": list(message.to),
+                "CcAddresses": list(message.cc),
+                "BccAddresses": list(message.bcc),
+            },
+            "Content": _content(message),
+        }
+        if message.reply_to:
+            request["ReplyToAddresses"] = list(message.reply_to)
+
+        try:
+            response = await call(client.send_email, **request)
+        except Exception as exc:
+            raise normalise_boto_error(exc, action=SES_SEND_ACTION) from exc
+
+        return SentMessage(provider_message_id=str(response.get("MessageId", "")))
 
     # ------------------------------------------------------------ internal ---
 
@@ -213,3 +244,30 @@ def _guess_type(value: str) -> IdentityType:
     dataclass always has one.
     """
     return IdentityType.EMAIL_ADDRESS if "@" in value else IdentityType.DOMAIN
+
+
+def _needs_raw(message: OutboundEmail) -> bool:
+    """Whether SES has to be given the assembled MIME rather than fields.
+
+    Simple content is built by SES from what we pass, so anything it has no
+    field for - an attachment, a custom header - cannot survive that path.
+    """
+    return bool(message.attachments or message.headers)
+
+
+def _content(message: OutboundEmail) -> dict[str, Any]:
+    if _needs_raw(message):
+        return {"Raw": {"Data": build_message(message).as_bytes()}}
+
+    body: dict[str, Any] = {}
+    if message.text is not None:
+        body["Text"] = {"Data": message.text, "Charset": "UTF-8"}
+    if message.html is not None:
+        body["Html"] = {"Data": message.html, "Charset": "UTF-8"}
+
+    return {
+        "Simple": {
+            "Subject": {"Data": message.subject, "Charset": "UTF-8"},
+            "Body": body,
+        }
+    }

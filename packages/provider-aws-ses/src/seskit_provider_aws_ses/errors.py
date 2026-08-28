@@ -60,6 +60,16 @@ _AUTHENTICATION_CODES = frozenset(
 
 _NOT_FOUND_CODES = frozenset({"NotFoundException", "ResourceNotFoundException"})
 
+#: The message itself was refused. Terminal - retrying sends the same thing
+#: to the same place and gets the same answer.
+_REJECTED_CODES = frozenset({"MessageRejected", "MailFromDomainNotVerifiedException"})
+
+#: Sending is switched off for the account, usually after a reputation
+#: review. Nothing the caller can fix by retrying.
+_SENDING_PAUSED_CODES = frozenset(
+    {"AccountSuspendedException", "SendingPausedException", "LimitExceededException"}
+)
+
 _THROTTLING_CODES = frozenset(
     {"Throttling", "ThrottlingException", "TooManyRequestsException", "RequestThrottled"}
 )
@@ -101,6 +111,18 @@ def normalise_boto_error(exc: Exception, *, action: str) -> APIError:
             )
         if code in _NOT_FOUND_CODES:
             return APIError(ErrorType.NOT_FOUND, "The requested AWS resource was not found.")
+        if code in _REJECTED_CODES:
+            return APIError(
+                ErrorType.EMAIL_REJECTED,
+                "Amazon SES refused the message. Check the sender is verified and "
+                "that the recipients are permitted - a sandboxed account may only "
+                "send to verified addresses.",
+            )
+        if code in _SENDING_PAUSED_CODES:
+            return APIError(
+                ErrorType.SENDING_LIMIT_EXCEEDED,
+                "Sending is currently not permitted for this AWS account.",
+            )
         if code in _THROTTLING_CODES:
             return APIError(
                 ErrorType.PROVIDER_ERROR,
