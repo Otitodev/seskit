@@ -275,6 +275,12 @@ wheels = [
 sesv2 = [
     { name = "mypy-boto3-sesv2" },
 ]
+sns = [
+    { name = "mypy-boto3-sns" },
+]
+sqs = [
+    { name = "mypy-boto3-sqs" },
+]
 sts = [
     { name = "mypy-boto3-sts" },
 ]
@@ -1151,6 +1157,24 @@ wheels = [
 ]
 
 [[package]]
+name = "mypy-boto3-sns"
+version = "1.43.23"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/41/8d/21ec0b76b6097d49635a20b4d6ebc7cc66a5da1421220dac191f1cbd98db/mypy_boto3_sns-1.43.23.tar.gz", hash = "sha256:6f8a19b64c6abf1bd623ad91be7e76ce27f2396da1f1083058921d0de4176ad1", size = 32716, upload-time = "2026-06-04T21:04:42.802Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/99/60/6d827ba2a569fccd535b72af50966d1d2c34cd02368774c8bf119d46ad51/mypy_boto3_sns-1.43.23-py3-none-any.whl", hash = "sha256:9144245c5fecf865f3fb1b73bbb750d5284ec63c7dbfea9d270d35205eab0aa2", size = 40038, upload-time = "2026-06-04T21:04:40.8Z" },
+]
+
+[[package]]
+name = "mypy-boto3-sqs"
+version = "1.43.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/42/1e/226725696a99c7dadfe8ebfba01575107fa15146029a7fb0082c650d8689/mypy_boto3_sqs-1.43.0.tar.gz", hash = "sha256:3ec8e1e651e830affcf7fe151b2e3090b8ea98d73cb069053b09ca4c7f4c8636", size = 23318, upload-time = "2026-04-29T23:06:17.614Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/f2/5e/5d4deb1ee7aec7fcdddbca616c623f07bfc72a1cd3e80b0e2a0c39904fae/mypy_boto3_sqs-1.43.0-py3-none-any.whl", hash = "sha256:f90225486756a4041db9f056967cb3cee202264bbe57682031c1e94d83e8ca39", size = 33604, upload-time = "2026-04-29T23:06:15.339Z" },
+]
+
+[[package]]
 name = "mypy-boto3-sts"
 version = "1.43.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1710,7 +1734,7 @@ dependencies = [
 [package.dev-dependencies]
 dev = [
     { name = "alembic" },
-    { name = "boto3-stubs", extra = ["sesv2", "sts"] },
+    { name = "boto3-stubs", extra = ["sesv2", "sns", "sqs", "sts"] },
     { name = "httpx" },
     { name = "moto" },
     { name = "mypy" },
@@ -1730,7 +1754,7 @@ requires-dist = [
 [package.metadata.requires-dev]
 dev = [
     { name = "alembic", specifier = ">=1.13" },
-    { name = "boto3-stubs", extras = ["sesv2", "sts"], specifier = ">=1.43.81" },
+    { name = "boto3-stubs", extras = ["sesv2", "sns", "sqs", "sts"], specifier = ">=1.43.81" },
     { name = "httpx", specifier = ">=0.27" },
     { name = "moto", extras = ["ses"], specifier = ">=5.2.3" },
     { name = "mypy", specifier = ">=1.11" },

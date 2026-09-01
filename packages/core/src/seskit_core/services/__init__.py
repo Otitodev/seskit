@@ -22,6 +22,15 @@ from seskit_core.services.aws import (
     get_connection,
     refresh_connection,
 )
+from seskit_core.services.events import (
+    ProvisionerFactory,
+    count_other_users,
+    queue_name_for,
+    set_open_click_tracking,
+    setup_events,
+    teardown_events,
+    topic_name_for,
+)
 from seskit_core.services.identities import (
     add_identity,
     check_identity,
@@ -44,6 +53,7 @@ from seskit_core.services.projects import (
 from seskit_core.services.sending import (
     attachment_rows,
     choose_provider,
+    configuration_set_for,
     find_by_idempotency_key,
     is_retryable,
     record_failure,
@@ -66,6 +76,7 @@ __all__ = [
     "EmailAlreadyRegistered",
     "IssuedKey",
     "ProviderFactory",
+    "ProvisionerFactory",
     "SignupClosed",
     "add_identity",
     "attachment_rows",
@@ -75,8 +86,10 @@ __all__ = [
     "choose_provider",
     "classify",
     "clear_check_marker",
+    "configuration_set_for",
     "connect_aws",
     "count_other_references",
+    "count_other_users",
     "count_users",
     "create_api_key",
     "create_project",
@@ -96,6 +109,7 @@ __all__ = [
     "list_api_keys",
     "list_identities",
     "list_projects",
+    "queue_name_for",
     "record_failure",
     "record_sent",
     "refresh_connection",
@@ -104,8 +118,12 @@ __all__ = [
     "remove_identity",
     "revoke_api_key",
     "sender_is_verified",
+    "set_open_click_tracking",
+    "setup_events",
     "signup_allowed",
+    "teardown_events",
     "to_outbound",
+    "topic_name_for",
     "touch_last_used",
     "verify_api_key",
 ]

@@ -201,6 +201,11 @@ class SESProvider:
         }
         if message.reply_to:
             request["ReplyToAddresses"] = list(message.reply_to)
+        if message.configuration_set:
+            # Without this SES publishes no events for the message at all - no
+            # delivery, no bounce, nothing. The infrastructure can be perfectly
+            # provisioned and the queue stays empty.
+            request["ConfigurationSetName"] = message.configuration_set
 
         try:
             response = await call(client.send_email, **request)

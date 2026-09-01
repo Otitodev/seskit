@@ -27,6 +27,7 @@ from seskit_core.errors import APIError
 from seskit_core.logging import get_logger
 from seskit_core.models import AWSConnection, ConnectionStatus, utcnow
 from seskit_core.providers import AccountStatus, EmailProvider
+from seskit_core.services.events import ProvisionerFactory, teardown_events
 
 logger = get_logger(__name__)
 
@@ -161,14 +162,36 @@ async def refresh_connection(
     return connection
 
 
-async def disconnect_aws(session: AsyncSession, redis: Redis, connection: AWSConnection) -> None:
-    """Forget the connection.
+async def disconnect_aws(
+    session: AsyncSession,
+    redis: Redis,
+    connection: AWSConnection,
+    *,
+    provisioner_factory: ProvisionerFactory | None = None,
+) -> None:
+    """Forget the connection, and remove what SESKit built in AWS.
 
-    Local only. Nothing was created in AWS, so there is nothing there to remove
-    - and deleting SES identities on a user's behalf is not something a
-    "disconnect" button should be able to do.
+    Identities are still left alone - deleting a user's verified domain is not
+    something a "disconnect" button should be able to do, and Phase 5's refcount
+    governs those. What *is* removed is the event infrastructure from §15, which
+    SESKit created unprompted and which the user would otherwise be left to
+    find and identify in three different consoles.
+
+    ``provisioner_factory`` is required only when there is something to remove.
+    Refusing without it is deliberate: silently dropping the row would strand a
+    queue, a topic and a configuration set in someone's account with nothing
+    left to say where they came from.
     """
     project_id = connection.project_id
+
+    if connection.events_enabled:
+        if provisioner_factory is None:
+            raise ValueError(
+                "This connection has event infrastructure in AWS. Disconnecting needs a "
+                "provisioner factory so it can be removed rather than abandoned."
+            )
+        await teardown_events(session, provisioner_factory, connection)
+
     await session.delete(connection)
     await session.flush()
     await clear_check_marker(redis, project_id)

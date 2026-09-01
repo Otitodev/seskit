@@ -25,6 +25,7 @@ from seskit_core.models import Project
 from seskit_core.redis import get_redis
 from seskit_core.services import (
     ProviderFactory,
+    ProvisionerFactory,
     connect_aws,
     disconnect_aws,
     get_connection,
@@ -38,6 +39,7 @@ from seskit_api.dependencies import (
     CurrentUser,
     get_app_settings,
     get_provider_factory,
+    get_provisioner_factory,
     require_project,
     require_user,
     verify_csrf,
@@ -188,6 +190,7 @@ async def disconnect(
     redis: Annotated[Redis, Depends(get_redis)],
     current: Annotated[CurrentUser, Depends(require_user)],
     project: Annotated[Project, Depends(require_project)],
+    provisioners: Annotated[ProvisionerFactory, Depends(get_provisioner_factory)],
 ) -> HTMLResponse:
     """Forget the connection.
 
@@ -198,7 +201,7 @@ async def disconnect(
     connection = await get_connection(db, project.id)
 
     if connection is not None:
-        await disconnect_aws(db, redis, connection)
+        await disconnect_aws(db, redis, connection, provisioner_factory=provisioners)
         await db.commit()
 
     return await _page(request, db, current, project)

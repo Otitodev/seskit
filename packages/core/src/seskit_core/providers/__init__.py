@@ -4,7 +4,7 @@ The interface and its vocabulary. Implementations live in their own packages
 and are never imported from here.
 """
 
-from seskit_core.providers.base import EmailProvider
+from seskit_core.providers.base import EmailProvider, EventProvisioner
 from seskit_core.providers.types import (
     SANDBOX_DAILY_LIMIT,
     VERIFIED_STATUSES,
@@ -12,6 +12,7 @@ from seskit_core.providers.types import (
     Attachment,
     CredentialMode,
     DnsRecord,
+    EventInfrastructure,
     IdentityStatus,
     IdentityType,
     OutboundEmail,
@@ -28,6 +29,8 @@ __all__ = [
     "CredentialMode",
     "DnsRecord",
     "EmailProvider",
+    "EventInfrastructure",
+    "EventProvisioner",
     "IdentityStatus",
     "IdentityType",
     "OutboundEmail",

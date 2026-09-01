@@ -22,6 +22,7 @@ from typing import Protocol, runtime_checkable
 
 from seskit_core.providers.types import (
     AccountStatus,
+    EventInfrastructure,
     IdentityStatus,
     IdentityType,
     OutboundEmail,
@@ -81,4 +82,52 @@ class EmailProvider(Protocol):
 
     async def send_email(self, message: OutboundEmail) -> SentMessage:
         """Phase 6. Hand one message to the provider."""
+        ...
+
+
+@runtime_checkable
+class EventProvisioner(Protocol):
+    """Creating and removing the plumbing that carries events back (§15).
+
+    Separate from :class:`EmailProvider` on purpose. Sending and provisioning
+    are different capabilities: SMTP can send and has no notion of a topic or a
+    queue, and folding these methods into the sending interface would make the
+    local development provider implement three no-ops to satisfy a shape it can
+    never honour.
+
+    Provisioning is what makes SESKit's thesis true. A user should not have to
+    learn what a configuration set is to find out that their mail bounced.
+    """
+
+    async def provision_events(
+        self,
+        *,
+        queue_name: str,
+        topic_name: str,
+        configuration_set: str,
+        https_endpoint: str | None = None,
+        track_opens_and_clicks: bool = False,
+    ) -> EventInfrastructure:
+        """Create everything needed for events to reach SESKit.
+
+        Idempotent. Running it twice must converge on the same infrastructure
+        rather than creating a second copy - a user who clicks the button again
+        because nothing seemed to happen should not end up with two topics.
+        """
+        ...
+
+    async def remove_events(self, infrastructure: EventInfrastructure) -> None:
+        """Remove exactly what :meth:`provision_events` created.
+
+        Only what is named in ``infrastructure``. Callers must have checked
+        that no other project still depends on it - see the refcount in
+        ``services.events``, which exists for the same reason as the one in
+        ``services.identities``.
+        """
+        ...
+
+    async def set_open_click_tracking(
+        self, infrastructure: EventInfrastructure, *, enabled: bool
+    ) -> EventInfrastructure:
+        """Turn open and click reporting on or off for the configuration set."""
         ...

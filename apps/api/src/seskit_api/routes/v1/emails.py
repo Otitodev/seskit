@@ -23,6 +23,7 @@ from seskit_core.providers.types import Attachment, OutboundEmail
 from seskit_core.services import (
     attachment_rows,
     choose_provider,
+    configuration_set_for,
     find_by_idempotency_key,
 )
 from sqlalchemy import select
@@ -117,6 +118,10 @@ async def send_email(
         status=EmailStatus.QUEUED.value,
         idempotency_key=idempotency_key,
         provider=provider.value,
+        # Without this SES publishes no events for the message and its delivery
+        # history stays permanently empty - so it is settled here, where the
+        # project's setup is known, rather than in the worker.
+        configuration_set=await configuration_set_for(db, project_id=project_id, provider=provider),
     )
     email.attachments.extend(attachment_rows(attachments))
     db.add(email)

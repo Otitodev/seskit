@@ -22,7 +22,7 @@ dev = [
     "pre-commit>=3.8",
     "alembic>=1.13",
     "moto[ses]>=5.2.3",
-    "boto3-stubs[sesv2,sts]>=1.43.81",
+    "boto3-stubs[sesv2,sns,sqs,sts]>=1.43.81",
 ]
 
 [tool.uv.workspace]

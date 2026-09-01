@@ -98,6 +98,20 @@ class Settings(BaseSettings):
     #: do.
     AWS_STATUS_CACHE_TTL_SECONDS: int = 300
 
+    # -- Delivery events (§15) -----------------------------------------------
+
+    #: Names the SQS queue and SNS topic SESKit creates, so a shared AWS account
+    #: can host more than one instance without them fighting over one queue.
+    #: Changing it after setup orphans the previous resources - teardown removes
+    #: what was recorded, not what the current setting would name.
+    EVENT_RESOURCE_PREFIX: str = "seskit"
+
+    #: The SES configuration set sends go through. Without one SES publishes no
+    #: events at all, which is why it is recorded per message rather than
+    #: assumed: a message sent before setup genuinely has no delivery history,
+    #: and that is different from one whose events were lost.
+    EVENT_CONFIGURATION_SET: str = "seskit"
+
     # -- Identity verification (§10) -----------------------------------------
 
     #: How long before an unverified identity is re-checked against SES. DNS can

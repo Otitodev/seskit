@@ -105,6 +105,26 @@ async def choose_provider(
     raise APIError(ErrorType.INVALID_REQUEST, NO_PROVIDER_MESSAGE)
 
 
+async def configuration_set_for(
+    session: AsyncSession, *, project_id: str, provider: EmailProvider
+) -> str | None:
+    """Which SES configuration set this message should be sent through (§15).
+
+    ``None`` for SMTP, which has no such concept, and ``None`` for a project
+    that has not set events up. Resolved once, at accept time, and stored on the
+    row: a message must always report the set it was actually sent through, and
+    looking it up again at send time would answer for the project's *current*
+    setup rather than the one in force when the message was accepted.
+    """
+    if provider is not EmailProvider.SES:
+        return None
+
+    connection = await session.scalar(
+        select(AWSConnection).where(AWSConnection.project_id == project_id)
+    )
+    return connection.configuration_set if connection else None
+
+
 def to_outbound(email: Email) -> OutboundEmail:
     """The stored row as the vocabulary a provider speaks.
 
@@ -131,6 +151,11 @@ def to_outbound(email: Email) -> OutboundEmail:
             )
             for item in email.attachments
         ],
+        # Recorded on the row at accept time rather than looked up now, so a
+        # message always reports the configuration set it was actually sent
+        # through - even after the project's events are torn down and set up
+        # again under a different name.
+        configuration_set=email.configuration_set,
     )
 
 

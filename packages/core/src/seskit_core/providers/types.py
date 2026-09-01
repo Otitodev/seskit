@@ -180,6 +180,11 @@ class OutboundEmail:
     reply_to: list[str] = field(default_factory=list)
     headers: dict[str, str] = field(default_factory=dict)
     attachments: list[Attachment] = field(default_factory=list)
+    #: Which configuration set to send through, when the project has event
+    #: infrastructure. Without one SES publishes no events at all, so this is
+    #: the difference between a delivery receipt and permanent silence. A
+    #: provider with no such concept ignores it.
+    configuration_set: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -187,3 +192,38 @@ class SentMessage:
     """What the provider gave back - its own id, which later events refer to."""
 
     provider_message_id: str
+
+
+# ------------------------------------------------- event infrastructure ---
+
+
+@dataclass(frozen=True, slots=True)
+class EventInfrastructure:
+    """What a provider created in the user's account so events can flow back.
+
+    Recorded rather than re-derived from names, because teardown must remove
+    *what was created* and nothing else. SESKit now owns resources in someone
+    else's AWS account; deleting by guessing at a name is how a disconnect
+    reaches something the user made themselves and cared about.
+
+    Every field is a string and empty means "not created". A deployment polling
+    SQS has no ``https_subscription_arn``; one using only the HTTPS receiver has
+    no queue.
+    """
+
+    configuration_set: str = ""
+    topic_arn: str = ""
+    queue_url: str = ""
+    queue_arn: str = ""
+    subscription_arn: str = ""
+    https_subscription_arn: str = ""
+    #: Whether the event destination is currently asking for OPEN and CLICK.
+    #: Off unless a project turned it on: enabling it rewrites every link in
+    #: mail the *customer* sends and adds a tracking pixel, which is a visible
+    #: change to their product and should be agreed to knowingly.
+    tracks_opens_and_clicks: bool = False
+
+    @property
+    def exists(self) -> bool:
+        """Whether anything was provisioned at all."""
+        return bool(self.configuration_set or self.topic_arn or self.queue_url)

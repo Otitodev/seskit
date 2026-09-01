@@ -24,13 +24,14 @@ from seskit_core.security.ratelimit import RateLimitStatus, check_rate_limit
 from seskit_core.security.sessions import SessionData, read_session
 from seskit_core.services import (
     ProviderFactory,
+    ProvisionerFactory,
     get_default_project,
     get_owned_project,
     get_user_by_id,
     touch_last_used,
     verify_api_key,
 )
-from seskit_provider_aws_ses import SESProvider
+from seskit_provider_aws_ses import SESEventProvisioner, SESProvider
 from sqlalchemy.ext.asyncio import AsyncSession
 
 
@@ -75,6 +76,17 @@ def get_provider_factory() -> ProviderFactory:
     choose between SES and SMTP per project (§8) at this one seam.
     """
     return SESProvider
+
+
+def get_provisioner_factory() -> ProvisionerFactory:
+    """How a route obtains an event provisioner for a region (§15).
+
+    Separate from the provider factory because they are separate capabilities:
+    the SMTP provider can send and cannot create a topic, so folding the two
+    together would mean a local-development backend implementing no-ops for
+    things it can never do.
+    """
+    return SESEventProvisioner
 
 
 async def get_optional_user(

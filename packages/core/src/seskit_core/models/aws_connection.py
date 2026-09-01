@@ -27,7 +27,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from seskit_core.db import Base
 from seskit_core.ids import IDPrefix, generate_id
 from seskit_core.models.base import TimestampMixin
-from seskit_core.providers.types import CredentialMode, SendingQuota
+from seskit_core.providers.types import CredentialMode, EventInfrastructure, SendingQuota
 
 if TYPE_CHECKING:
     from seskit_core.models.project import Project
@@ -95,11 +95,68 @@ class AWSConnection(Base, TimestampMixin):
     #: into a page, and an AWS exception string can carry an ARN or a principal.
     last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
 
+    # ---------------------------------------------- event infrastructure ---
+    #
+    # What SESKit created in the user's AWS account so delivery events can come
+    # back (§15). Recorded rather than re-derived from names, because teardown
+    # must remove exactly what was created: SESKit now owns resources in
+    # someone else's account, and deleting by guessing at a name is how a
+    # disconnect reaches something the user made themselves.
+
+    configuration_set: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    event_topic_arn: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    event_queue_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    event_queue_arn: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    event_subscription_arn: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    event_https_subscription_arn: Mapped[str | None] = mapped_column(String(255), nullable=True)
+
+    #: Off unless the project turns it on. Enabling it makes SES rewrite every
+    #: link in the mail this project sends and add a tracking pixel - a visible
+    #: change to the customer's own product, with privacy consequences, which
+    #: is not something to switch on by default on their behalf.
+    track_opens_and_clicks: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+
     project: Mapped[Project] = relationship(back_populates="aws_connection")
 
     @property
     def is_connected(self) -> bool:
         return self.status == ConnectionStatus.CONNECTED.value
+
+    @property
+    def events_enabled(self) -> bool:
+        """Whether events have been set up for this project."""
+        return bool(self.configuration_set and self.event_topic_arn)
+
+    @property
+    def event_infrastructure(self) -> EventInfrastructure:
+        """The stored columns as the vocabulary a provisioner speaks."""
+        return EventInfrastructure(
+            configuration_set=self.configuration_set or "",
+            topic_arn=self.event_topic_arn or "",
+            queue_url=self.event_queue_url or "",
+            queue_arn=self.event_queue_arn or "",
+            subscription_arn=self.event_subscription_arn or "",
+            https_subscription_arn=self.event_https_subscription_arn or "",
+            tracks_opens_and_clicks=self.track_opens_and_clicks,
+        )
+
+    def record_event_infrastructure(self, infrastructure: EventInfrastructure) -> None:
+        """Write what a provisioner built onto the row.
+
+        Empty strings become NULL so "nothing there" reads the same whether the
+        row predates this phase or the resource was never created.
+        """
+        self.configuration_set = infrastructure.configuration_set or None
+        self.event_topic_arn = infrastructure.topic_arn or None
+        self.event_queue_url = infrastructure.queue_url or None
+        self.event_queue_arn = infrastructure.queue_arn or None
+        self.event_subscription_arn = infrastructure.subscription_arn or None
+        self.event_https_subscription_arn = infrastructure.https_subscription_arn or None
+        self.track_opens_and_clicks = infrastructure.tracks_opens_and_clicks
+
+    def clear_event_infrastructure(self) -> None:
+        """Forget it, after it has been removed at the provider."""
+        self.record_event_infrastructure(EventInfrastructure())
 
     @property
     def quota(self) -> SendingQuota:
