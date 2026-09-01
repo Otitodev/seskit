@@ -95,6 +95,22 @@
           Amazon SES is reporting what happens to this project's mail. Deliveries,
           bounces and spam complaints appear on each message.
         </p>
+        {% if connection.events_awaiting_confirmation %}
+          {# Otherwise this deployment looks exactly like events being broken:
+             SNS publishes nothing to an unconfirmed subscription, so the page
+             would show everything set up and no events would ever arrive. #}
+          <div class="alert alert--warning" role="status">
+            <p class="alert__title">Waiting for Amazon SNS to reach this instance</p>
+            <p>
+              SNS has sent a confirmation request to
+              <code>{{ public_event_endpoint or "the configured URL" }}</code>
+              and is waiting for a reply. Until it gets one, no events are
+              published. Check that the URL is reachable from the internet over
+              HTTPS, then set up event reporting again.
+            </p>
+          </div>
+        {% endif %}
+
         <dl class="datalist">
           <div class="datalist__row">
             <dt>Configuration set</dt>

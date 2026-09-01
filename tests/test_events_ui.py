@@ -233,6 +233,50 @@ async def test_turning_tracking_off_again(
     assert connection.track_opens_and_clicks is False
 
 
+async def test_an_unconfirmed_https_subscription_is_surfaced(
+    signed_in_client: AsyncClient, db_session: AsyncSession
+) -> None:
+    """Otherwise this deployment looks identical to events being broken.
+
+    SNS publishes nothing to a subscription that has not been confirmed, so the
+    page would show everything set up and no events would ever arrive. This is
+    the diagnostic docs/prior-art.md said was worth copying.
+    """
+    connection = await _connect(db_session, events=True)
+    connection.event_https_subscription_arn = "PendingConfirmation"
+    await db_session.flush()
+
+    page = await signed_in_client.get("/aws")
+
+    assert "Waiting for Amazon SNS to reach this instance" in page.text
+
+
+async def test_a_confirmed_subscription_says_nothing(
+    signed_in_client: AsyncClient, db_session: AsyncSession
+) -> None:
+    """The warning must not linger once SNS has answered."""
+    connection = await _connect(db_session, events=True)
+    connection.event_https_subscription_arn = (
+        f"arn:aws:sns:{REGION}:{ACCOUNT}:seskit-events:confirmed"
+    )
+    await db_session.flush()
+
+    page = await signed_in_client.get("/aws")
+
+    assert "Waiting for Amazon SNS" not in page.text
+
+
+async def test_the_sqs_path_never_shows_the_warning(
+    signed_in_client: AsyncClient, db_session: AsyncSession
+) -> None:
+    """SNS confirms SQS subscriptions itself, so it cannot arise there."""
+    await _connect(db_session, events=True)
+
+    page = await signed_in_client.get("/aws")
+
+    assert "Waiting for Amazon SNS" not in page.text
+
+
 # ------------------------------------------------------------- the message ---
 
 

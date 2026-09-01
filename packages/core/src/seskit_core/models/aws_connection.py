@@ -128,6 +128,21 @@ class AWSConnection(Base, TimestampMixin):
         return bool(self.configuration_set and self.event_topic_arn)
 
     @property
+    def events_awaiting_confirmation(self) -> bool:
+        """Whether SNS is still waiting for the HTTPS endpoint to answer.
+
+        SNS returns the string ``PendingConfirmation`` instead of an ARN until
+        the endpoint confirms, and until then it publishes nothing. Without
+        surfacing this, that deployment looks exactly like events being broken -
+        which is the diagnostic docs/prior-art.md said was worth copying.
+
+        It never arises on the SQS path: SNS confirms those subscriptions
+        itself.
+        """
+        arn = self.event_https_subscription_arn or ""
+        return bool(arn) and not arn.startswith("arn:")
+
+    @property
     def event_infrastructure(self) -> EventInfrastructure:
         """The stored columns as the vocabulary a provisioner speaks."""
         return EventInfrastructure(
