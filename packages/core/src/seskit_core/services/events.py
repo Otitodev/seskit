@@ -72,6 +72,25 @@ async def count_other_users(session: AsyncSession, connection: AWSConnection) ->
     return int(total or 0)
 
 
+async def distinct_event_queues(session: AsyncSession) -> list[tuple[str, str]]:
+    """Every queue that needs polling, as ``(region, queue_url)`` pairs.
+
+    Distinct, because projects sharing a region share a queue - the same
+    reasoning the teardown refcount rests on. Polling once per project would
+    mean several consumers racing for the same messages, each one stealing
+    events from the others' batches and doing the same work twice.
+
+    Correlation is by SES message id, so a single consumer serves every project
+    on that queue without needing to know whose message it is holding.
+    """
+    rows = await session.execute(
+        select(AWSConnection.region, AWSConnection.event_queue_url)
+        .where(AWSConnection.event_queue_url.is_not(None))
+        .distinct()
+    )
+    return [(region, url) for region, url in rows if url]
+
+
 async def setup_events(
     session: AsyncSession,
     provisioner_factory: ProvisionerFactory,

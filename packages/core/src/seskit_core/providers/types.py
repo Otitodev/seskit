@@ -227,3 +227,19 @@ class EventInfrastructure:
     def exists(self) -> bool:
         """Whether anything was provisioned at all."""
         return bool(self.configuration_set or self.topic_arn or self.queue_url)
+
+
+@dataclass(frozen=True, slots=True)
+class QueuedNotification:
+    """One notification taken off a queue, not yet acknowledged.
+
+    ``receipt`` is what acknowledges it, and it is deliberately not the
+    deduplication key: it identifies this *delivery* of the message, and a
+    redelivery of the same notification carries a different one. The key comes
+    from inside the body, from the SNS envelope.
+    """
+
+    receipt: str
+    body: str
+    #: The queue's own id, for logs. Also not the deduplication key.
+    queue_message_id: str = ""

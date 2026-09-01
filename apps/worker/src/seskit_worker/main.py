@@ -13,6 +13,7 @@ from seskit_core.config import get_settings
 from seskit_core.db import dispose_engine
 from seskit_core.logging import configure_logging, get_logger
 
+from seskit_worker.events import poll_events
 from seskit_worker.identities import recheck_identities
 from seskit_worker.jobs import ping
 from seskit_worker.sending import send_email
@@ -47,6 +48,7 @@ class WorkerSettings:
 
     functions = [  # noqa: RUF012 - ARQ needs a plain attribute
         ping,
+        poll_events,
         recheck_identities,
         send_email,
     ]
@@ -59,7 +61,20 @@ class WorkerSettings:
         # but this one walks every due identity and each walk is a round
         # trip to SES. Inheriting 60s would kill a legitimate pass on an
         # instance with a lot of domains.
-        cron(recheck_identities, minute=0, run_at_startup=False, timeout=300)
+        cron(recheck_identities, minute=0, run_at_startup=False, timeout=300),
+        # Every minute, and at startup. Delivery news is what the dashboard is
+        # waiting on, so the gap between a bounce happening and a user seeing it
+        # should be a minute rather than an hour. Each pass long-polls, so a
+        # quiet minute costs one request per queue rather than a spin.
+        cron(
+            poll_events,
+            second=0,
+            run_at_startup=True,
+            timeout=300,
+            # Overlapping passes would have two consumers competing for the
+            # same messages, each stealing events from the other's batch.
+            max_tries=1,
+        ),
     ]
 
     on_startup = startup

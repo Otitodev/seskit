@@ -192,6 +192,23 @@ async def db_session(db_connection: AsyncConnection) -> AsyncIterator[AsyncSessi
 
 
 @pytest.fixture
+def session_factory(db_connection: AsyncConnection) -> async_sessionmaker[AsyncSession]:
+    """Opens *new* sessions on the same rolled-back connection.
+
+    For code that manages its own session lifetime - the event poller opens one
+    per message on purpose, so a rollback in one cannot take the rest of a batch
+    with it. Bound to the same connection as ``db_session``, so what the job
+    writes is visible to the test and still disappears at the end.
+    """
+    return async_sessionmaker(
+        bind=db_connection,
+        class_=AsyncSession,
+        expire_on_commit=False,
+        join_transaction_mode="create_savepoint",
+    )
+
+
+@pytest.fixture
 async def redis_client() -> AsyncIterator[Redis]:
     """A real Redis client on a dedicated database index, flushed around each test."""
     get_settings.cache_clear()

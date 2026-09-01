@@ -25,6 +25,7 @@ from seskit_core.services.aws import (
 from seskit_core.services.events import (
     ProvisionerFactory,
     count_other_users,
+    distinct_event_queues,
     queue_name_for,
     set_open_click_tracking,
     setup_events,
@@ -94,6 +95,7 @@ __all__ = [
     "create_api_key",
     "create_project",
     "disconnect_aws",
+    "distinct_event_queues",
     "find_by_idempotency_key",
     "find_identity",
     "get_connection",

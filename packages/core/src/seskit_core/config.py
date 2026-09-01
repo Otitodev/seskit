@@ -25,6 +25,20 @@ class Environment(StrEnum):
     PRODUCTION = "production"
 
 
+class EventIngestion(StrEnum):
+    """How delivery events reach this instance (§15).
+
+    SQS is the default because it works everywhere §9 says SESKit has to
+    run: no inbound port, no public hostname, no certificate. AWS cannot
+    POST to a laptop, and a self-hosted tool that only works on a public
+    address is not self-hosted in the sense that matters.
+    """
+
+    SQS = "sqs"
+    HTTPS = "https"
+    BOTH = "both"
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=".env",
@@ -112,6 +126,26 @@ class Settings(BaseSettings):
     #: and that is different from one whose events were lost.
     EVENT_CONFIGURATION_SET: str = "seskit"
 
+    #: How events reach this instance. See EventIngestion.
+    EVENT_INGESTION: EventIngestion = EventIngestion.SQS
+
+    #: How long a poll waits on an empty queue. SQS caps this at twenty
+    #: seconds. Long polling rather than a busy loop: short polling forces a
+    #: choice between latency and a billed request every few hundred
+    #: milliseconds, forever.
+    EVENT_POLL_WAIT_SECONDS: int = 20
+
+    #: How many batches one scheduled pass will drain before giving up its
+    #: turn. A bounded pass is what stops a backlog from monopolising the
+    #: worker and starving sends, which are the thing users actually notice.
+    EVENT_POLL_MAX_BATCHES: int = 10
+
+    #: How long a consumer has to record an event before the message returns.
+    #: Must comfortably exceed one ingest, or a slow database turns into
+    #: duplicate processing - harmless, because of the unique constraint, but
+    #: only because it is there.
+    EVENT_VISIBILITY_TIMEOUT_SECONDS: int = 60
+
     # -- Identity verification (§10) -----------------------------------------
 
     #: How long before an unverified identity is re-checked against SES. DNS can
@@ -170,6 +204,23 @@ class Settings(BaseSettings):
         documented way to run this (§25).
         """
         return not self.is_local
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def polls_sqs(self) -> bool:
+        """Whether the worker should poll a queue for events."""
+        return self.EVENT_INGESTION in (EventIngestion.SQS, EventIngestion.BOTH)
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def receives_https(self) -> bool:
+        """Whether the HTTPS receiver should accept SNS notifications.
+
+        Off by default. An endpoint that exists but is not subscribed to is
+        only an attack surface, and this one is reachable without
+        authentication by design - SNS cannot present a credential.
+        """
+        return self.EVENT_INGESTION in (EventIngestion.HTTPS, EventIngestion.BOTH)
 
     @computed_field  # type: ignore[prop-decorator]
     @property

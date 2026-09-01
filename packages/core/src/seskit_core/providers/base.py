@@ -26,6 +26,7 @@ from seskit_core.providers.types import (
     IdentityStatus,
     IdentityType,
     OutboundEmail,
+    QueuedNotification,
     SendingQuota,
     SentMessage,
 )
@@ -130,4 +131,29 @@ class EventProvisioner(Protocol):
         self, infrastructure: EventInfrastructure, *, enabled: bool
     ) -> EventInfrastructure:
         """Turn open and click reporting on or off for the configuration set."""
+        ...
+
+
+@runtime_checkable
+class NotificationQueue(Protocol):
+    """Reading provider notifications off a queue (§15).
+
+    A third capability rather than more methods on the other two, for the same
+    reason they are separate: a provider that can send has no reason to be able
+    to poll, and an interface that demands both makes every implementation
+    carry methods it cannot honour.
+    """
+
+    async def receive(
+        self,
+        *,
+        max_messages: int = 10,
+        wait_seconds: int = 20,
+        visibility_timeout: int = 60,
+    ) -> list[QueuedNotification]:
+        """Take up to a batch off the queue, waiting if it is empty."""
+        ...
+
+    async def delete(self, notification: QueuedNotification) -> None:
+        """Acknowledge one message, so it is not delivered again."""
         ...

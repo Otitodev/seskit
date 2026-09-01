@@ -16,6 +16,7 @@ from seskit_provider_aws_ses.provisioning import (
     queue_policy,
 )
 from seskit_provider_aws_ses.regions import SES_REGION_CODES, SES_REGIONS, is_known_region
+from seskit_provider_aws_ses.sqs import SQSNotificationQueue
 
 __all__ = [
     "BASE_EVENT_TYPES",
@@ -26,6 +27,7 @@ __all__ = [
     "TRACKING_EVENT_TYPES",
     "SESEventProvisioner",
     "SESProvider",
+    "SQSNotificationQueue",
     "event_types",
     "is_known_region",
     "normalise_boto_error",
