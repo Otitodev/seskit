@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
 import pytest
 from httpx import AsyncClient
 from redis.asyncio import Redis
@@ -294,14 +296,22 @@ async def test_last_used_writes_again_once_the_interval_passes(
     issued = await create_api_key(db_session, project_id=project_id, name="production")
 
     await touch_last_used(db_session, redis_client, raw_key=issued.raw_key, interval_seconds=60)
-    first = issued.api_key.last_used_at
+    assert issued.api_key.last_used_at is not None
+
+    # Wind the stored value back rather than comparing two consecutive now()
+    # calls. `datetime.now()` resolution is coarse enough on some platforms -
+    # around 16ms on Windows - that two writes in quick succession produce the
+    # same timestamp, which made this assertion a coin flip rather than a test.
+    stale = datetime(2020, 1, 1, tzinfo=UTC)
+    issued.api_key.last_used_at = stale
+    await db_session.flush()
 
     # Drop the marker rather than sleeping: the behaviour under test is "writes
     # again once the marker is gone", and a real interval would be a slow test.
     await redis_client.delete(f"apikey_used:{issued.api_key.id}")
     await touch_last_used(db_session, redis_client, raw_key=issued.raw_key, interval_seconds=60)
 
-    assert issued.api_key.last_used_at != first
+    assert issued.api_key.last_used_at > stale
 
 
 # ------------------------------------------------------- project scoping ---

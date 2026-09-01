@@ -7,10 +7,14 @@ that every way of failing produces §19's envelope rather than an HTML page.
 
 from __future__ import annotations
 
+import time
+
 from httpx import AsyncClient
 from redis.asyncio import Redis
 from seskit_core.config import Settings
 from seskit_core.security.api_keys import generate_key
+from seskit_core.security.ratelimit import _key as _rate_limit_key
+from seskit_core.security.ratelimit import _window_start
 from seskit_core.services import create_api_key, create_project, register_user, revoke_api_key
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -202,12 +206,26 @@ async def test_remaining_counts_down(app_client: AsyncClient, db_session: AsyncS
 async def test_going_over_the_limit_gives_429_with_retry_after(
     app_client: AsyncClient,
     db_session: AsyncSession,
+    redis_client: Redis,
     settings: Settings,
 ) -> None:
-    _, raw_key = await _project_with_key(db_session)
+    """The allowance is spent up front rather than by making the requests.
 
-    for _ in range(settings.API_RATE_LIMIT_PER_MINUTE):
-        await app_client.get(KEYS_URL, headers=_auth(raw_key))
+    The limiter uses a *fixed* window keyed on the wall clock, so a loop of a
+    hundred requests that happens to straddle a minute boundary resets the
+    counter and the last request is allowed - which made this fail
+    intermittently on a loaded machine. Seeding the counter for the current
+    window puts the request under test in the same window as the allowance it
+    is meant to have exhausted, and turns a hundred round trips into one.
+    """
+    project_id, raw_key = await _project_with_key(db_session)
+
+    window_start = _window_start(time.time(), settings.API_RATE_LIMIT_WINDOW_SECONDS)
+    await redis_client.set(
+        _rate_limit_key(project_id, window_start),
+        settings.API_RATE_LIMIT_PER_MINUTE,
+        ex=settings.API_RATE_LIMIT_WINDOW_SECONDS,
+    )
 
     response = await app_client.get(KEYS_URL, headers=_auth(raw_key))
 
