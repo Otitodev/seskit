@@ -114,6 +114,37 @@ return. SNS has a delivery timeout and a slow handler causes retries.
 Worth copying too: a flag recording that the subscription was confirmed, so the
 dashboard can answer "why am I seeing no events?".
 
+**How they were met (Phase 7, 2026-09-01).** Recorded here rather than only in
+the commits, because the value of the list above was always the reasoning, and a
+requirement with no visible answer invites being re-litigated later.
+
+1. Signature verified over SNS's canonical string in
+   `provider-aws-ses/sns_signature.py`. `TopicArn` is deliberately *not* checked
+   as a substitute; `test_a_forged_topic_does_not_help` signs a message, edits
+   the topic to another account, and asserts refusal - the case their approach
+   accepts.
+2. Both `SigningCertURL` and `SubscribeURL` go through `assert_aws_url` before
+   any request is made, against a host pattern anchored at both ends so
+   `sns.us-east-1.amazonaws.com.evil.test` fails. The tests assert on a
+   recording HTTP client that a refused URL was **never fetched**, since
+   refusing after fetching is not refusing.
+3. A unique constraint on `email_events.provider_event_id`, keyed on the SNS
+   `MessageId` from the envelope - not the SQS message id, which differs per
+   delivery. Tested by delivering the same notification twice on both
+   transports and asserting one row. Raw message delivery is left off on the
+   SQS subscription for this reason: it strips the envelope.
+4. `Outcome.is_settled` decides acknowledgement, and a transient failure raises
+   rather than returning, so it cannot be mistaken for a decision. The HTTPS
+   receiver answers 403 for a bad signature, 400 for an unparseable body, and
+   500 for anything unexpected - which is when SNS should retry.
+
+**Not done:** the confirmation flag. The information exists -
+`AWSConnection.event_https_subscription_arn` holds `PendingConfirmation` until
+SNS is answered - but nothing surfaces it, so the dashboard still cannot answer
+"why am I seeing no events?" for an HTTPS deployment whose subscription never
+confirmed. It does not arise on the SQS path, which is the default, because SNS
+confirms SQS subscriptions itself.
+
 SES event types (§15): `Send`, `Delivery`, `Bounce`, `Complaint`, `Reject`,
 `Open`, `Click`, `Rendering Failure`, `DeliveryDelay`.
 

@@ -41,10 +41,10 @@ toolchain to their stack to self-host their email infrastructure:
 
 ## Status
 
-**Phase 6 of 11 — email sending.** SESKit sends email. Accounts, API keys, AWS
-connection, sender verification and the send pipeline all work; delivery events
-and webhooks are next. See [`SESKit_MVP.md`](SESKit_MVP.md) §31 for the full
-build order.
+**Phase 7 of 11 — delivery events.** SESKit sends email and reports what
+happened to it. Accounts, API keys, AWS connection, sender verification, the
+send pipeline and delivery events all work; customer webhooks are next. See
+[`SESKit_MVP.md`](SESKit_MVP.md) §31 for the full build order.
 
 | Phase | | |
 |---|---|---|
@@ -54,7 +54,7 @@ build order.
 | 4 | AWS SES provider | ✅ Done |
 | 5 | Domain management | ✅ Done |
 | 6 | Email API | ✅ Done |
-| 7 | Event processing | Not started |
+| 7 | Event processing | ✅ Done |
 | 8 | Webhooks | Not started |
 | 9 | Dashboard | Not started |
 | 10 | Python SDK | Not started |
@@ -74,13 +74,24 @@ boto3's own order of precedence:
 
 Give the process credentials by whichever of those suits your deployment, then
 open **AWS** in the dashboard, choose your SES region, and connect. SESKit asks
-AWS who the identity is and what it may do, and records the answer. It creates
-nothing in your AWS account.
+AWS who the identity is and what it may do, and records the answer. Connecting
+creates nothing in your AWS account.
+
+Setting up delivery events does — a queue, a topic and a configuration set — but
+that is a separate button, it tells you what it will create first, and
+disconnecting removes them again. See
+[Delivery events](#delivery-events) below.
 
 ### Minimum IAM policy
 
 §9 of the spec is explicit that SESKit must never ask for `AdministratorAccess`.
-These six actions are everything it uses:
+There are two policies here because they grant genuinely different things, and
+you should be able to run SESKit without the second.
+
+#### Sending (six actions)
+
+Everything except delivery events. All of it is scoped to SES, and only one
+action can create anything.
 
 ```json
 {
@@ -113,6 +124,68 @@ try SESKit — without an AWS connection, sending goes to Mailpit locally.
 Removing an identity is the only destructive thing here, and it is guarded:
 SESKit deletes the identity in SES only when no other project is still using it.
 
+#### Delivery events (nine more)
+
+**Read this before granting it.** Everything above is scoped to SES and mostly
+read-only. This adds permission to create and delete SNS topics and SQS queues
+in your account — a different kind of trust, and the reason it is a separate
+policy and a separate button rather than something the connect flow quietly
+needs.
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "sqs:CreateQueue",
+        "sqs:GetQueueAttributes",
+        "sqs:SetQueueAttributes",
+        "sqs:DeleteQueue",
+        "sqs:ReceiveMessage",
+        "sqs:DeleteMessage"
+      ],
+      "Resource": "arn:aws:sqs:*:*:seskit-events"
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "sns:CreateTopic",
+        "sns:Subscribe",
+        "sns:Unsubscribe",
+        "sns:DeleteTopic"
+      ],
+      "Resource": "arn:aws:sns:*:*:seskit-events"
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "ses:CreateConfigurationSet",
+        "ses:DeleteConfigurationSet",
+        "ses:CreateConfigurationSetEventDestination",
+        "ses:UpdateConfigurationSetEventDestination",
+        "ses:DeleteConfigurationSetEventDestination"
+      ],
+      "Resource": "*"
+    }
+  ]
+}
+```
+
+The SQS and SNS statements are scoped by resource to the queue and topic SESKit
+creates, so this policy cannot touch anything else you own even by mistake. If
+you change `EVENT_RESOURCE_PREFIX`, change those ARNs to match.
+
+The delete permissions are there so that removing event reporting, or
+disconnecting the account, actually cleans up. Granting create without delete
+would leave SESKit able to make resources in your account and unable to tidy
+them away.
+
+`sqs:SendMessage` is deliberately absent. SESKit never writes to the queue —
+SNS does, under a queue policy SESKit sets during setup that admits that one
+topic and nothing else. Adding it here would grant a permission nothing uses.
+
 ### Verifying a sender
 
 Amazon SES will not send from an address it has not verified, so before your
@@ -132,6 +205,67 @@ There are two kinds, and the difference matters if you are in a hurry:
 SESKit re-checks unverified identities every few hours and verified ones monthly.
 That last one is deliberate: it notices if a DKIM record is removed long after
 setup, which would otherwise look fine until a send failed.
+
+### Delivery events
+
+`sent` means Amazon SES accepted the message. That is the last thing SESKit can
+observe on its own — whether it *arrived*, bounced, or was reported as spam is
+knowledge that lives at AWS, and SES does not report it anywhere unless you ask.
+
+Press **Set up event reporting** on the AWS page. SESKit creates, in the region
+the project is connected to:
+
+| | |
+|---|---|
+| SQS queue `seskit-events` | the worker polls this |
+| SNS topic `seskit-events` | SES publishes here, and it fans out to the queue |
+| SES configuration set `seskit` | sends name it, or SES publishes nothing |
+
+Messages sent from that point on show a delivery history: delivered, bounced
+with the reason SES gave, marked as spam. **Messages sent before setup gain
+nothing** — SES only reports on mail sent through a configuration set, so
+existing messages have no history and never will. The message page says which of
+those two situations it is in rather than showing an ambiguous blank.
+
+Removing event reporting, or disconnecting the account, deletes what was
+created. Nothing else in your account is touched, and if a second project on the
+same instance shares the region, the infrastructure stays until the last one
+stops using it.
+
+#### Two ways events get back
+
+Set by `EVENT_INGESTION`:
+
+- **`sqs`** (the default) — the worker polls the queue. Works anywhere: no
+  inbound port, no public hostname, no certificate. AWS cannot POST to a laptop,
+  so this is what makes a self-hosted install work at all.
+- **`https`** — SNS posts to `POST /v1/events/ses`. Needs a public address, set
+  in `PUBLIC_BASE_URL`, and a certificate. Lower latency and no polling.
+- **`both`** — for a migration between the two.
+
+The HTTPS endpoint is unauthenticated by necessity: SNS has no credential to
+present. Every request is checked against the RSA signature SNS signed it with,
+using a certificate fetched only from `sns.<region>.amazonaws.com` and only
+after that host is validated. An unsigned or altered notification is refused
+with 403 and nothing is recorded. The endpoint is not mounted at all unless
+`EVENT_INGESTION` asks for it.
+
+#### Open and click tracking
+
+Off unless you turn it on, per project, and worth understanding before you do.
+Enabling it asks Amazon SES to **rewrite every link in the mail this project
+sends** so that clicks route through an Amazon-operated domain, and to add an
+invisible tracking pixel to HTML messages. Your recipients see the rewritten
+links. That is a visible change to your own product with privacy consequences,
+which is why it is a deliberate choice rather than a default.
+
+#### Duplicate events
+
+SNS and SQS are both explicitly at-least-once, so the same notification will
+arrive twice sooner or later. SESKit deduplicates on the SNS message id with a
+unique constraint, so a redelivered bounce is recorded once. This matters more
+than it sounds: a double-counted bounce inflates the rate AWS judges your
+account by.
 
 ### The SES sandbox
 
@@ -224,6 +358,11 @@ verified addresses until AWS grants production access, which takes about a day.
 Verifying your own email address takes minutes and needs no DNS, so it is the
 fastest way to get a real send working — see
 [Verifying a sender](#verifying-a-sender) above.
+
+Set up [delivery events](#delivery-events) at the same time. Without them a
+message reads as `sent` and stops there, so a bounced address or a spam
+complaint is invisible — and those are the two things that decide whether AWS
+keeps letting you send.
 
 ### Working without Docker
 
