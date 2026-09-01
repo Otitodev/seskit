@@ -10,19 +10,29 @@ from seskit_core.models.aws_connection import AWSConnection, ConnectionStatus
 from seskit_core.models.base import TimestampMixin, utcnow
 from seskit_core.models.email import Email, EmailProvider, EmailStatus
 from seskit_core.models.email_attachment import EmailAttachment
+from seskit_core.models.email_event import (
+    FAILURE_EVENT_TYPES,
+    PUBLIC_EVENT_TYPES,
+    EmailEvent,
+    EventType,
+)
 from seskit_core.models.identity import Identity
 from seskit_core.models.project import DEFAULT_PROJECT_NAME, Project
 from seskit_core.models.user import User, normalise_email
 
 __all__ = [
     "DEFAULT_PROJECT_NAME",
+    "FAILURE_EVENT_TYPES",
+    "PUBLIC_EVENT_TYPES",
     "APIKey",
     "AWSConnection",
     "ConnectionStatus",
     "Email",
     "EmailAttachment",
+    "EmailEvent",
     "EmailProvider",
     "EmailStatus",
+    "EventType",
     "Identity",
     "Project",
     "TimestampMixin",

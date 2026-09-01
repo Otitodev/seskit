@@ -25,6 +25,7 @@ from seskit_core.models.base import TimestampMixin
 
 if TYPE_CHECKING:
     from seskit_core.models.email_attachment import EmailAttachment
+    from seskit_core.models.email_event import EmailEvent
     from seskit_core.models.project import Project
 
 
@@ -86,6 +87,11 @@ class Email(Base, TimestampMixin):
     provider_message_id: Mapped[str | None] = mapped_column(String(255), index=True, nullable=True)
     provider: Mapped[str | None] = mapped_column(String(16), nullable=True)
 
+    #: The SES configuration set this was sent through. Without one SES
+    #: publishes no events at all, so recording it is how a message with no
+    #: delivery history can be told from one that simply was not tracked.
+    configuration_set: Mapped[str | None] = mapped_column(String(64), nullable=True)
+
     from_address: Mapped[str] = mapped_column(String(320), nullable=False)
     to_addresses: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
     cc_addresses: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
@@ -120,6 +126,9 @@ class Email(Base, TimestampMixin):
     project: Mapped[Project] = relationship(back_populates="emails")
     attachments: Mapped[list[EmailAttachment]] = relationship(
         back_populates="email", cascade="all, delete-orphan", lazy="selectin"
+    )
+    events: Mapped[list[EmailEvent]] = relationship(
+        back_populates="email", cascade="all, delete-orphan"
     )
 
     @property
