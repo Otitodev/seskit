@@ -27,7 +27,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from seskit_core.logging import get_logger
-from seskit_core.models import AWSConnection
+from seskit_core.models import AWSConnection, EmailEvent
 from seskit_core.providers import EventProvisioner
 
 logger = get_logger(__name__)
@@ -89,6 +89,22 @@ async def distinct_event_queues(session: AsyncSession) -> list[tuple[str, str]]:
         .distinct()
     )
     return [(region, url) for region, url in rows if url]
+
+
+async def list_events(session: AsyncSession, email_id: str) -> list[EmailEvent]:
+    """What happened to one message, newest first.
+
+    Ordered by ``occurred_at`` rather than by when we heard: a queue backlog can
+    deliver a bounce after the open that preceded it, and a timeline that shows
+    them in arrival order tells the wrong story. Ties break on ``created_at``,
+    because SES stamps an open and a click in the same second often enough.
+    """
+    rows = await session.scalars(
+        select(EmailEvent)
+        .where(EmailEvent.email_id == email_id)
+        .order_by(EmailEvent.occurred_at.desc(), EmailEvent.created_at.desc())
+    )
+    return list(rows)
 
 
 async def setup_events(

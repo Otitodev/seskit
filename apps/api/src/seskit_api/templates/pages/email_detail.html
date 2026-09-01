@@ -79,6 +79,72 @@
     </dl>
   {{ card_close() }}
 
+  {# What happened after SESKit handed the message over (§15).
+
+     Distinct from the status above, deliberately: `sent` describes SESKit's own
+     part and stays true even after a bounce. Both facts belong on the page, and
+     collapsing them would lose the one that says whether SESKit did its job. #}
+  {{ card_open("History") }}
+    {% if events %}
+      <ul class="stack">
+        {% for event in events %}
+          <li>
+            <div class="row">
+              {% if event.type.value == "delivered" %}
+                {{ badge(event.label, tone="success") }}
+              {% elif event.is_failure %}
+                {{ badge(event.label, tone="danger") }}
+              {% elif event.type.value == "complained" %}
+                {{ badge(event.label, tone="warning") }}
+              {% else %}
+                {{ badge(event.label) }}
+              {% endif %}
+              <span class="muted">
+                {{ event.occurred_at.strftime("%Y-%m-%d %H:%M:%S UTC") }}
+              </span>
+            </div>
+            {% if event.data.diagnostic %}
+              {# Usually the only explanation a user will ever get for why their
+                 mail went nowhere, so it is shown rather than summarised. #}
+              <p class="muted table__mono">{{ event.data.diagnostic }}</p>
+            {% elif event.data.reason %}
+              <p class="muted">{{ event.data.reason }}</p>
+            {% elif event.data.link %}
+              <p class="muted table__mono">{{ event.data.link }}</p>
+            {% endif %}
+            {% if event.data.bounce_type %}
+              <p class="muted">
+                {{ event.data.bounce_type }}
+                {%- if event.data.bounce_subtype %} · {{ event.data.bounce_subtype }}{% endif %}
+                {%- if event.data.bounce_type == "Transient" %}
+                  — Amazon SES may deliver this on a later attempt.
+                {% endif %}
+              </p>
+            {% endif %}
+            {% if event.data.to %}
+              <p class="muted table__mono">{{ event.data.to | join(", ") }}</p>
+            {% endif %}
+          </li>
+        {% endfor %}
+      </ul>
+    {% elif not email.configuration_set %}
+      {# The distinction worth drawing: a message sent before event reporting was
+         set up has no history and never will, which is not the same as one whose
+         events have not arrived yet. #}
+      <p class="muted">
+        This message was sent without delivery event reporting, so Amazon SES
+        published nothing about it. Set it up on the
+        <a class="link" href="/aws">AWS page</a> to see deliveries and bounces
+        for messages sent from now on.
+      </p>
+    {% else %}
+      <p class="muted">
+        Nothing reported yet. Amazon SES usually confirms delivery within a few
+        seconds of sending.
+      </p>
+    {% endif %}
+  {{ card_close() }}
+
   {% if email.attachments %}
     {{ card_open("Attachments") }}
       <ul class="stack">

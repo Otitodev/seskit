@@ -84,6 +84,103 @@
       </p>
     {{ card_close() }}
 
+    {# Delivery events (§15).
+
+       The only place in SESKit that creates resources in the user's own AWS
+       account, so the card says exactly what it will make before the button is
+       pressed rather than after. Disconnect removes them again. #}
+    {{ card_open("Delivery events") }}
+      {% if connection.events_enabled %}
+        <p class="muted">
+          Amazon SES is reporting what happens to this project's mail. Deliveries,
+          bounces and spam complaints appear on each message.
+        </p>
+        <dl class="datalist">
+          <div class="datalist__row">
+            <dt>Configuration set</dt>
+            <dd><code>{{ connection.configuration_set }}</code></dd>
+          </div>
+          {% if connection.event_queue_url %}
+            <div class="datalist__row">
+              <dt>Queue</dt>
+              <dd class="table__mono">{{ connection.event_queue_url }}</dd>
+            </div>
+          {% endif %}
+          <div class="datalist__row">
+            <dt>Topic</dt>
+            <dd class="table__mono">{{ connection.event_topic_arn }}</dd>
+          </div>
+          <div class="datalist__row">
+            <dt>Open and click tracking</dt>
+            <dd>
+              {% if connection.track_opens_and_clicks %}
+                {{ badge("On", tone="success") }}
+              {% else %}
+                {{ badge("Off") }}
+              {% endif %}
+            </dd>
+          </div>
+        </dl>
+
+        {# Stated plainly, because it changes mail the *customer* sends rather
+           than anything inside SESKit. #}
+        <p class="muted">
+          {% if connection.track_opens_and_clicks %}
+            Amazon SES is rewriting links in this project's mail and adding a
+            tracking pixel. Turning this off stops both.
+          {% else %}
+            Turning this on asks Amazon SES to rewrite every link in this
+            project's mail so clicks route through an Amazon domain, and to add
+            an invisible tracking pixel to HTML messages. Your recipients will
+            see the rewritten links.
+          {% endif %}
+        </p>
+
+        <div class="row row--end">
+          <form method="post" action="/aws/events/tracking">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <input type="hidden" name="enabled"
+                   value="{{ "off" if connection.track_opens_and_clicks else "on" }}">
+            {{ button(
+              "Turn off open and click tracking" if connection.track_opens_and_clicks
+              else "Turn on open and click tracking",
+              type="submit"
+            ) }}
+          </form>
+          <form method="post" action="/aws/events/remove">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            {{ button("Remove event reporting", variant="danger", type="submit") }}
+          </form>
+        </div>
+
+      {% else %}
+        <p class="muted">
+          Amazon SES does not report what happens to a message unless it is asked
+          to. Without this, SESKit can tell you a message was accepted for
+          sending and nothing after that - not whether it arrived, bounced, or
+          was marked as spam.
+        </p>
+        <p>SESKit will create these in your AWS account, in <code>{{ connection.region }}</code>:</p>
+        <ul class="stack">
+          <li>An SQS queue, <code>{{ event_queue_name }}</code></li>
+          <li>An SNS topic, <code>{{ event_topic_name }}</code>, subscribed to that queue</li>
+          <li>An SES configuration set, <code>{{ event_configuration_set }}</code></li>
+        </ul>
+        <p class="muted">
+          Removing event reporting, or disconnecting this account, deletes them
+          again. Nothing else in your account is touched. Messages already sent
+          will not gain a delivery history - Amazon SES only reports on mail sent
+          after this is set up.
+        </p>
+        <div class="row row--end">
+          <form method="post" action="/aws/events/setup">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            {{ button("Set up event reporting", variant="primary", type="submit") }}
+          </form>
+        </div>
+      {% endif %}
+    {{ card_close() }}
+
     <div class="row row--end">
       <form method="post" action="/aws/refresh">
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">

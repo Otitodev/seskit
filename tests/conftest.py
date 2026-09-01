@@ -37,10 +37,10 @@ os.environ.setdefault("SMTP_PORT", "1025")
 os.environ.setdefault("EMAILS_FROM_EMAIL", "tests@seskit.local")
 
 from fakes.queue import FakeQueue
-from fakes.ses import FakeProviderFactory
+from fakes.ses import FakeProviderFactory, FakeProvisioner
 from httpx import ASGITransport, AsyncClient
 from redis.asyncio import Redis, from_url
-from seskit_api.dependencies import get_provider_factory
+from seskit_api.dependencies import get_provider_factory, get_provisioner_factory
 from seskit_api.main import create_app
 from seskit_api.queue import get_queue
 from seskit_core.config import Settings, get_settings
@@ -249,11 +249,24 @@ def provider_factory() -> FakeProviderFactory:
 
 
 @pytest.fixture
+def provisioner_factory() -> type[FakeProvisioner]:
+    """The event provisioner every ``app_client`` test talks to.
+
+    Overridden for the same reason as the provider: setting up events creates
+    real queues, topics and configuration sets, and no test should be able to
+    reach AWS by forgetting to substitute something.
+    """
+    FakeProvisioner.calls = []
+    return FakeProvisioner
+
+
+@pytest.fixture
 async def app_client(
     settings: Settings,
     db_session: AsyncSession,
     redis_client: Redis,
     provider_factory: FakeProviderFactory,
+    provisioner_factory: type[FakeProvisioner],
     queue: FakeQueue,
 ) -> AsyncIterator[AsyncClient]:
     """An HTTP client backed by the real database and Redis.
@@ -272,6 +285,7 @@ async def app_client(
     # forgetting to override one. A test that wants a particular account state
     # asks for the `provider_factory` fixture and configures it.
     application.dependency_overrides[get_provider_factory] = lambda: provider_factory
+    application.dependency_overrides[get_provisioner_factory] = lambda: provisioner_factory
     # The ASGI transport does not run lifespan, so app.state.queue is never
     # built - and a real pool would make every send need one anyway.
     application.dependency_overrides[get_queue] = lambda: queue

@@ -12,11 +12,13 @@ Phase 5 or 6 breaks here too rather than only in production.
 from __future__ import annotations
 
 from dataclasses import replace
+from typing import ClassVar
 
 from seskit_core.errors import APIError, ErrorType
 from seskit_core.providers import (
     AccountStatus,
     CredentialMode,
+    EventInfrastructure,
     IdentityStatus,
     IdentityType,
     OutboundEmail,
@@ -160,6 +162,50 @@ class FakeProviderFactory:
         self.builds += 1
         self.provider.region = region
         return self.provider
+
+
+class FakeProvisioner:
+    """An ``EventProvisioner`` that records what it was asked to build.
+
+    Hands back plausible ARNs rather than empty strings, because the page reads
+    them - a fake that returned nothing would make an "events are set up" panel
+    render as though they were not.
+    """
+
+    #: Shared, because a factory builds a new instance per call and a test needs
+    #: to see every call across a request.
+    calls: ClassVar[list[str]] = []
+
+    def __init__(self, region: str) -> None:
+        self.region = region
+
+    async def provision_events(
+        self,
+        *,
+        queue_name: str,
+        topic_name: str,
+        configuration_set: str,
+        https_endpoint: str | None = None,
+        track_opens_and_clicks: bool = False,
+    ) -> EventInfrastructure:
+        FakeProvisioner.calls.append("provision")
+        return EventInfrastructure(
+            configuration_set=configuration_set,
+            topic_arn=f"arn:aws:sns:{self.region}:{ACCOUNT_ID}:{topic_name}",
+            queue_url=f"https://sqs.{self.region}.amazonaws.com/{ACCOUNT_ID}/{queue_name}",
+            queue_arn=f"arn:aws:sqs:{self.region}:{ACCOUNT_ID}:{queue_name}",
+            subscription_arn=f"arn:aws:sns:{self.region}:{ACCOUNT_ID}:{topic_name}:sub",
+            tracks_opens_and_clicks=track_opens_and_clicks,
+        )
+
+    async def remove_events(self, infrastructure: EventInfrastructure) -> None:
+        FakeProvisioner.calls.append("remove")
+
+    async def set_open_click_tracking(
+        self, infrastructure: EventInfrastructure, *, enabled: bool
+    ) -> EventInfrastructure:
+        FakeProvisioner.calls.append(f"tracking:{enabled}")
+        return replace(infrastructure, tracks_opens_and_clicks=enabled)
 
 
 def denied(action: str = "ses:GetAccount") -> APIError:

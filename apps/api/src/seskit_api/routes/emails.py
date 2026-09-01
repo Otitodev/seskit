@@ -16,7 +16,7 @@ from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse
 from seskit_core.db import get_session
 from seskit_core.models import Email, EmailStatus
-from seskit_core.services import list_projects
+from seskit_core.services import list_events, list_projects
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -100,6 +100,7 @@ async def email_detail(
         project=project,
         projects=await list_projects(db, current.user.id),
         email=email,
+        events=await list_events(db, email.id),
     )
 
 

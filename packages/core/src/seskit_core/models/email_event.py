@@ -62,6 +62,21 @@ PUBLIC_EVENT_TYPES = frozenset(
     }
 )
 
+#: How each type reads on a page. Written out rather than derived from the
+#: value, because "Delivery_delayed" is what capitalising the enum produces and
+#: it looks like a bug to whoever reads it.
+EVENT_LABELS: dict[EventType, str] = {
+    EventType.SENT: "Sent",
+    EventType.DELIVERED: "Delivered",
+    EventType.BOUNCED: "Bounced",
+    EventType.COMPLAINED: "Marked as spam",
+    EventType.OPENED: "Opened",
+    EventType.CLICKED: "Link clicked",
+    EventType.REJECTED: "Rejected by SES",
+    EventType.DELIVERY_DELAYED: "Delivery delayed",
+    EventType.RENDERING_FAILED: "Template rendering failed",
+}
+
 #: Events that mean the message reached nobody. Useful to §18 and to the
 #: dashboard, and worth naming rather than re-deriving at each call site.
 FAILURE_EVENT_TYPES = frozenset({EventType.BOUNCED, EventType.REJECTED, EventType.RENDERING_FAILED})
@@ -115,6 +130,22 @@ class EmailEvent(Base, TimestampMixin):
     @property
     def is_failure(self) -> bool:
         return self.type in FAILURE_EVENT_TYPES
+
+    @property
+    def label(self) -> str:
+        """How this reads on a page."""
+        return EVENT_LABELS.get(self.type, self.event_type)
+
+    @property
+    def data(self) -> dict[str, object]:
+        """The ``data`` half of §15's normalised event.
+
+        A property so a template reaches for ``event.data.bounce_type`` rather
+        than digging two levels into a JSON column, and so the payload's shape
+        can change without every page changing with it.
+        """
+        data = self.payload.get("data") if isinstance(self.payload, dict) else None
+        return data if isinstance(data, dict) else {}
 
     def __repr__(self) -> str:
         # No payload: it carries recipient addresses, and §6 asks that those

@@ -11,6 +11,7 @@ from seskit_core.models.base import TimestampMixin, utcnow
 from seskit_core.models.email import Email, EmailProvider, EmailStatus
 from seskit_core.models.email_attachment import EmailAttachment
 from seskit_core.models.email_event import (
+    EVENT_LABELS,
     FAILURE_EVENT_TYPES,
     PUBLIC_EVENT_TYPES,
     EmailEvent,
@@ -22,6 +23,7 @@ from seskit_core.models.user import User, normalise_email
 
 __all__ = [
     "DEFAULT_PROJECT_NAME",
+    "EVENT_LABELS",
     "FAILURE_EVENT_TYPES",
     "PUBLIC_EVENT_TYPES",
     "APIKey",

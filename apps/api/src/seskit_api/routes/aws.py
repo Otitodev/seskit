@@ -17,7 +17,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse
 from redis.asyncio import Redis
-from seskit_core.config import Settings
+from seskit_core.config import Settings, get_settings
 from seskit_core.db import get_session
 from seskit_core.errors import APIError, ErrorType
 from seskit_core.logging import get_logger
@@ -30,7 +30,12 @@ from seskit_core.services import (
     disconnect_aws,
     get_connection,
     list_projects,
+    queue_name_for,
     refresh_connection,
+    set_open_click_tracking,
+    setup_events,
+    teardown_events,
+    topic_name_for,
 )
 from seskit_provider_aws_ses import SES_REGIONS, is_known_region
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -65,10 +70,12 @@ async def _page(
     current: CurrentUser,
     project: Project,
     *,
+    settings: Settings | None = None,
     error: str | None = None,
     status_code: int = 200,
 ) -> HTMLResponse:
     """Render the page from whatever the project's current state is."""
+    resolved = settings or get_settings()
     return render(
         request,
         "pages/aws.html",
@@ -80,6 +87,11 @@ async def _page(
         connection=await get_connection(db, project.id),
         regions=SES_REGIONS,
         production_access_url=PRODUCTION_ACCESS_URL,
+        # Named so the page can say exactly what will be created in the user's
+        # account before they agree to it, rather than after.
+        event_queue_name=queue_name_for(resolved.EVENT_RESOURCE_PREFIX),
+        event_topic_name=topic_name_for(resolved.EVENT_RESOURCE_PREFIX),
+        event_configuration_set=resolved.EVENT_CONFIGURATION_SET,
         error=error,
     )
 
@@ -205,6 +217,141 @@ async def disconnect(
         await db.commit()
 
     return await _page(request, db, current, project)
+
+
+@router.post(
+    "/aws/events/setup",
+    response_class=HTMLResponse,
+    dependencies=[Depends(verify_csrf)],
+    summary="Set up delivery event reporting",
+)
+async def setup_event_reporting(
+    request: Request,
+    db: Annotated[AsyncSession, Depends(get_session)],
+    current: Annotated[CurrentUser, Depends(require_user)],
+    project: Annotated[Project, Depends(require_project)],
+    settings: Annotated[Settings, Depends(get_app_settings)],
+    provisioners: Annotated[ProvisionerFactory, Depends(get_provisioner_factory)],
+) -> HTMLResponse:
+    """Create the queue, topic, subscription and configuration set (§15).
+
+    This is the one action in SESKit that creates resources in the user's own
+    AWS account, which is why the page says what it will make before it is
+    pressed and why Disconnect removes them again.
+    """
+    connection = await get_connection(db, project.id)
+    if connection is None or not connection.is_connected:
+        # Nothing to attach events to. The page already says the connection is
+        # missing, so re-rendering says it once rather than twice.
+        return await _page(request, db, current, project, settings=settings)
+
+    try:
+        await setup_events(
+            db,
+            provisioners,
+            connection,
+            resource_prefix=settings.EVENT_RESOURCE_PREFIX,
+            configuration_set=settings.EVENT_CONFIGURATION_SET,
+            https_endpoint=settings.event_https_endpoint,
+        )
+    except APIError as error:
+        await db.rollback()
+        return await _page(
+            request,
+            db,
+            current,
+            project,
+            settings=settings,
+            error=error.message,
+            status_code=_status_for(error),
+        )
+
+    await db.commit()
+    return await _page(request, db, current, project, settings=settings)
+
+
+@router.post(
+    "/aws/events/remove",
+    response_class=HTMLResponse,
+    dependencies=[Depends(verify_csrf)],
+    summary="Remove delivery event reporting",
+)
+async def remove_event_reporting(
+    request: Request,
+    db: Annotated[AsyncSession, Depends(get_session)],
+    current: Annotated[CurrentUser, Depends(require_user)],
+    project: Annotated[Project, Depends(require_project)],
+    settings: Annotated[Settings, Depends(get_app_settings)],
+    provisioners: Annotated[ProvisionerFactory, Depends(get_provisioner_factory)],
+) -> HTMLResponse:
+    """Take the infrastructure back out of AWS.
+
+    Removes nothing another project in the same account and region still
+    depends on - see the refcount in ``services.events``.
+    """
+    connection = await get_connection(db, project.id)
+    if connection is None:
+        return await _page(request, db, current, project, settings=settings)
+
+    try:
+        await teardown_events(db, provisioners, connection)
+    except APIError as error:
+        await db.rollback()
+        return await _page(
+            request,
+            db,
+            current,
+            project,
+            settings=settings,
+            error=error.message,
+            status_code=_status_for(error),
+        )
+
+    await db.commit()
+    return await _page(request, db, current, project, settings=settings)
+
+
+@router.post(
+    "/aws/events/tracking",
+    response_class=HTMLResponse,
+    dependencies=[Depends(verify_csrf)],
+    summary="Turn open and click tracking on or off",
+)
+async def change_tracking(
+    request: Request,
+    db: Annotated[AsyncSession, Depends(get_session)],
+    current: Annotated[CurrentUser, Depends(require_user)],
+    project: Annotated[Project, Depends(require_project)],
+    settings: Annotated[Settings, Depends(get_app_settings)],
+    provisioners: Annotated[ProvisionerFactory, Depends(get_provisioner_factory)],
+    enabled: Annotated[str, Form()] = "",
+) -> HTMLResponse:
+    """Ask SES to report opens and clicks, or to stop.
+
+    Turning this on makes SES rewrite every link in the mail this project sends
+    and add a tracking pixel - a visible change to the customer's own product,
+    which is why it is a deliberate action rather than a default.
+    """
+    connection = await get_connection(db, project.id)
+    if connection is None:
+        return await _page(request, db, current, project, settings=settings)
+
+    try:
+        await set_open_click_tracking(db, provisioners, connection, enabled=enabled == "on")
+    except APIError as error:
+        await db.rollback()
+        return await _page(
+            request,
+            db,
+            current,
+            project,
+            settings=settings,
+            error=error.message,
+            status_code=_status_for(error),
+        )
+
+    await db.commit()
+    return await _page(request, db, current, project, settings=settings)
 
 
 def _status_for(error: APIError) -> int:
