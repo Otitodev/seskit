@@ -479,6 +479,17 @@ image copies each member's manifest by hand to keep the dependency layer cached,
 and a package missing from that list fails at container start rather than at
 build time.
 
+Adding a *dependency* to an existing package has a second trap. Compose mounts
+an anonymous volume at `/app/.venv` so the bind-mounted sources do not shadow
+the installed environment — and that volume survives `docker compose build`, so
+a rebuilt image still starts with the old `.venv` and the new dependency is
+missing. The symptom is a `ModuleNotFoundError` for a package that is provably
+present in the image. Renew the volume:
+
+```bash
+docker compose up -d --renew-anon-volumes
+```
+
 ### Stack
 
 Python 3.12+ · FastAPI · Pydantic v2 · SQLAlchemy 2 (async) · Alembic ·
