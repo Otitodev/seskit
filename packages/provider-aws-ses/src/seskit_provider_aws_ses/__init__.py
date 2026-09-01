@@ -16,9 +16,18 @@ from seskit_provider_aws_ses.provisioning import (
     queue_policy,
 )
 from seskit_provider_aws_ses.regions import SES_REGION_CODES, SES_REGIONS, is_known_region
+from seskit_provider_aws_ses.sns_signature import (
+    AWS_SNS_HOST,
+    SignatureError,
+    assert_aws_url,
+    canonical_string,
+    confirm_subscription,
+    verify,
+)
 from seskit_provider_aws_ses.sqs import SQSNotificationQueue
 
 __all__ = [
+    "AWS_SNS_HOST",
     "BASE_EVENT_TYPES",
     "EVENT_DESTINATION_NAME",
     "NO_CREDENTIALS_MESSAGE",
@@ -28,8 +37,13 @@ __all__ = [
     "SESEventProvisioner",
     "SESProvider",
     "SQSNotificationQueue",
+    "SignatureError",
+    "assert_aws_url",
+    "canonical_string",
+    "confirm_subscription",
     "event_types",
     "is_known_region",
     "normalise_boto_error",
     "queue_policy",
+    "verify",
 ]

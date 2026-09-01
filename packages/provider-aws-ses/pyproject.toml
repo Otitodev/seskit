@@ -6,6 +6,13 @@ requires-python = ">=3.12"
 dependencies = [
     "seskit-core",
     "boto3>=1.35",
+    # Verifying SNS signatures (§15). Present transitively through moto
+    # before this, which made it look available while being a dev-only
+    # dependency - the HTTPS receiver needs it in production.
+    "cryptography>=43",
+    # Fetching the SNS signing certificate, and answering the subscription
+    # handshake. Both only ever to a host that passed assert_aws_url.
+    "httpx>=0.27",
 ]
 
 [build-system]

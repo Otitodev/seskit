@@ -14,6 +14,12 @@ from typing import Literal, Self
 from pydantic import Field, PostgresDsn, RedisDsn, computed_field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+#: Where the HTTPS receiver listens. In core rather than in the API package
+#: because provisioning subscribes SNS to this URL and the route serves it:
+#: two copies of the string would mean a subscription pointing at a path
+#: that answers 404, which looks exactly like events not working.
+EVENT_HTTPS_PATH = "/v1/events/ses"
+
 # Placeholder used in .env.example. Refusing to boot on this value is what stops
 # it reaching a real deployment.
 INSECURE_PLACEHOLDER = "changeme"
@@ -129,6 +135,12 @@ class Settings(BaseSettings):
     #: How events reach this instance. See EventIngestion.
     EVENT_INGESTION: EventIngestion = EventIngestion.SQS
 
+    #: Where SNS can reach this instance, when the HTTPS receiver is in use -
+    #: e.g. ``https://mail.example.com``. No default: guessing at a public URL
+    #: and subscribing SNS to it would create a subscription that silently never
+    #: confirms, which looks exactly like events not working.
+    PUBLIC_BASE_URL: str | None = None
+
     #: How long a poll waits on an empty queue. SQS caps this at twenty
     #: seconds. Long polling rather than a busy loop: short polling forces a
     #: choice between latency and a billed request every few hundred
@@ -204,6 +216,19 @@ class Settings(BaseSettings):
         documented way to run this (§25).
         """
         return not self.is_local
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def event_https_endpoint(self) -> str | None:
+        """The URL to subscribe SNS to, or None if we cannot know it.
+
+        None rather than a guess: subscribing SNS to a URL that is not really
+        this instance creates a subscription that never confirms, and a
+        never-confirmed subscription looks exactly like events not working.
+        """
+        if not self.receives_https or not self.PUBLIC_BASE_URL:
+            return None
+        return f"{self.PUBLIC_BASE_URL.rstrip('/')}{EVENT_HTTPS_PATH}"
 
     @computed_field  # type: ignore[prop-decorator]
     @property
