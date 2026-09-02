@@ -3,6 +3,13 @@
 
 {% block title %}Overview · SESKit{% endblock %}
 
+{% block head %}
+  {# Loaded only on this page. Two hundred kilobytes of charting library has no
+     business on the API keys screen. #}
+  <script defer src="{{ url_for('static', path='/js/vendor/chart.umd.js') }}"></script>
+  <script defer src="{{ url_for('static', path='/js/charts.js') }}"></script>
+{% endblock %}
+
 {% block content %}
   <div class="page-header">
     <h1>Overview</h1>
@@ -13,6 +20,22 @@
 
   {% if metrics.has_activity or counts.total %}
     {% include "partials/metrics.html" %}
+
+    {% if activity %}
+      {{ card_open("Activity") }}
+        {# The canvas is an enhancement. Every number it draws is already in the
+           metrics panel above as server-rendered text, so a blocked or broken
+           script costs a picture, not information. #}
+        <div class="chart">
+          <canvas id="activity-chart" aria-label="Sends, deliveries and bounces over time"
+                  role="img"></canvas>
+        </div>
+        {# `tojson` rather than `safe`: Jinja's filter escapes <, > and &
+           for a script context, so a value can never close the tag early or
+           break out of a string literal and become code. #}
+        <script type="application/json" id="activity-data">{{ activity | tojson }}</script>
+      {{ card_close() }}
+    {% endif %}
   {% else %}
     {# Never a grid of zeroes. §31's design brief is explicit that an empty
        state is the first thing a new install shows on every page, and that it

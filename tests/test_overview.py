@@ -393,3 +393,72 @@ async def test_another_projects_activity_is_not_shown(
     page = await signed_in_client.get("/")
 
     assert "No delivery activity" in page.text
+
+
+# ------------------------------------------------------------------- chart ---
+
+
+async def test_the_chart_data_is_a_json_island_not_inline_script(
+    signed_in_client: AsyncClient, db_session: AsyncSession
+) -> None:
+    """Server data goes into a JSON script tag, escaped by Jinja's `tojson`.
+
+    Interpolating it into JavaScript instead would let a value close the tag
+    early or break out of a string literal - and the values here are derived
+    from mail a customer sent, which is attacker-controlled content.
+    """
+    await _sent(db_session, count=2)
+
+    page = await signed_in_client.get("/")
+
+    assert 'type="application/json" id="activity-data"' in page.text
+    assert "<canvas" in page.text
+
+
+async def test_the_chart_script_is_only_on_this_page(
+    signed_in_client: AsyncClient, db_session: AsyncSession
+) -> None:
+    """Two hundred kilobytes of charting library has no business on the API
+    keys screen.
+    """
+    await _sent(db_session, count=1)
+
+    overview = await signed_in_client.get("/")
+    keys = await signed_in_client.get("/api-keys")
+
+    assert "chart.umd.js" in overview.text
+    assert "chart.umd.js" not in keys.text
+
+
+async def test_the_series_covers_the_window_including_empty_buckets(
+    signed_in_client: AsyncClient, db_session: AsyncSession
+) -> None:
+    """A line drawn only through buckets that had activity invites the reader to
+    believe something happened in between.
+    """
+    import json
+    import re
+
+    await _sent(db_session, count=1)
+
+    page = await signed_in_client.get("/?range=24h")
+    island = re.search(
+        r'<script type="application/json" id="activity-data">(.*?)</script>',
+        page.text,
+        re.S,
+    )
+    assert island is not None
+    data = json.loads(island.group(1))
+
+    assert len(data["points"]) == 25  # 24 hourly buckets, both ends inclusive
+    assert sum(point["sent"] for point in data["points"]) == 1
+    assert all({"label", "sent", "delivered", "bounced"} <= set(p) for p in data["points"])
+
+
+async def test_an_empty_project_renders_no_chart(
+    signed_in_client: AsyncClient, db_session: AsyncSession
+) -> None:
+    """Nothing to plot, and an empty axis is not information."""
+    page = await signed_in_client.get("/")
+
+    assert "<canvas" not in page.text

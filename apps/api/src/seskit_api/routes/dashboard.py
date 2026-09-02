@@ -20,7 +20,14 @@ from redis.asyncio import Redis
 from seskit_core.db import get_session
 from seskit_core.models import Project
 from seskit_core.redis import get_redis
-from seskit_core.services import TimeRange, compute_metrics, get_connection, list_projects
+from seskit_core.services import (
+    ActivityPoint,
+    TimeRange,
+    activity_series,
+    compute_metrics,
+    get_connection,
+    list_projects,
+)
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from seskit_api.dependencies import CurrentUser, require_project, require_user
@@ -33,6 +40,28 @@ router = APIRouter(tags=["dashboard"], include_in_schema=False)
 
 #: Offered in the range control, in the order §17 lists them.
 RANGES = (TimeRange.DAY, TimeRange.WEEK, TimeRange.MONTH)
+
+
+def _chart_data(points: list[ActivityPoint], time_range: TimeRange) -> dict[str, object]:
+    """The activity series as the shape the chart script reads.
+
+    Labels are formatted here rather than in JavaScript, because the server
+    already knows the bucket size and formatting a date in the browser means
+    deciding whose locale and whose timezone - questions this MVP has no answer
+    for and does not need one.
+    """
+    fmt = "%H:%M" if time_range.bucket == "hour" else "%d %b"
+    return {
+        "points": [
+            {
+                "label": point.at.strftime(fmt),
+                "sent": point.sent,
+                "delivered": point.delivered,
+                "bounced": point.bounced,
+            }
+            for point in points
+        ]
+    }
 
 
 @router.get("/", response_class=HTMLResponse, summary="Dashboard overview")
@@ -56,6 +85,9 @@ async def overview(
         projects=await list_projects(db, current.user.id),
         counts=await status_counts(db, project.id),
         metrics=await compute_metrics(db, project.id, time_range=time_range),
+        activity=_chart_data(
+            await activity_series(db, project.id, time_range=time_range), time_range
+        ),
         ranges=RANGES,
         # Distinguishes "nothing has happened yet" from "SES was never asked to
         # report", which look identical on screen and have different fixes.

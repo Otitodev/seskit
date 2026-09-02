@@ -1204,3 +1204,19 @@ svg {
   outline: 2px solid var(--focus-ring);
   outline-offset: 1px;
 }
+
+/* Chart -------------------------------------------------------------------- */
+/* A fixed height so the canvas has something to be responsive *within* - a
+   Chart.js canvas in an auto-height box grows on every resize event. */
+
+.chart {
+  position: relative;
+  height: 16rem;
+  margin-top: var(--space-2);
+}
+
+@media (max-width: 40rem) {
+  .chart {
+    height: 12rem;
+  }
+}
