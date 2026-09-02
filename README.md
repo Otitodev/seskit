@@ -42,6 +42,7 @@ Self-hosted, MIT licensed, and it runs in your own AWS account.
   - [Connect AWS](#connect-aws) · [IAM policies](#iam-policies) ·
     [Verify a sender](#verify-a-sender) · [The SES sandbox](#the-ses-sandbox)
 - [Delivery events](#delivery-events)
+- [Webhooks](#webhooks) — signed events pushed to your application
 - [API](#api)
 - [Configuration](#configuration)
 - [Architecture](#architecture)
@@ -78,8 +79,8 @@ SESKit is in active development. This is honest about what is built:
 | ✅ | Sender verification | Email addresses and domains, with DKIM records |
 | ✅ | Sending | `POST /v1/emails`, attachments, idempotency, queued delivery |
 | ✅ | Delivery events | Delivered, bounced, complained — via SQS or HTTPS |
-| ⬜ | Customer webhooks | Next |
-| ⬜ | Analytics dashboard | |
+| ✅ | Customer webhooks | Signed, retried, with delivery history |
+| ⬜ | Analytics dashboard | Next |
 | ⬜ | Python SDK | Currently a stub — use the HTTP API |
 | ⬜ | Production hardening | |
 
@@ -411,6 +412,109 @@ account by.
 
 ---
 
+## Webhooks
+
+Delivery events tell SESKit what happened to a message. Webhooks tell *your
+application*, so it can suppress a bounced address or flag a complaint without
+polling `GET /v1/emails/{id}` for everything it has ever sent.
+
+Add an endpoint on the **Webhooks** page. SESKit then POSTs a signed JSON body
+for each of §16's six event types:
+
+```text
+email.sent   email.delivered   email.bounced
+email.opened email.clicked     email.complained
+```
+
+The body is the same normalised event the dashboard stores:
+
+```json
+{
+  "id": "evt_01J8XQ...",
+  "type": "email.bounced",
+  "email_id": "email_01J8XQ...",
+  "created_at": "2026-09-02T09:00:05+00:00",
+  "data": {
+    "to": ["user@example.com"],
+    "bounce_type": "Permanent",
+    "diagnostic": "smtp; 550 5.1.1 user unknown"
+  }
+}
+```
+
+> [!IMPORTANT]
+> Webhooks need [delivery events](#delivery-events) set up first. Without a
+> configuration set, Amazon SES publishes nothing, so there is nothing to
+> forward.
+
+### Verifying the signature
+
+**Verify before you act on a webhook.** The URL is the only thing an attacker
+needs to guess, and acting on a forged `email.bounced` means suppressing an
+address they chose.
+
+Each request carries two headers:
+
+```text
+X-SESKit-Signature: v1=3f7a...
+X-SESKit-Timestamp: 1756800000
+```
+
+Recompute the HMAC-SHA256 over `"{timestamp}.{body}"` using your endpoint's
+signing secret, shown on the Webhooks page:
+
+```python
+import hashlib, hmac, time
+
+
+def verify(secret: str, body: bytes, signature: str, timestamp: str) -> bool:
+    # Reject anything stale, or a captured request replays forever.
+    if abs(time.time() - int(timestamp)) > 300:
+        return False
+    expected = hmac.new(
+        secret.encode(), f"{timestamp}.".encode() + body, hashlib.sha256
+    ).hexdigest()
+    return hmac.compare_digest(f"v1={expected}", signature)
+```
+
+Three things matter and are easy to get wrong:
+
+- **Use the raw request body**, not a re-serialised copy. Parsing the JSON and
+  dumping it again reorders keys or changes separators, and the signature will
+  never match.
+- **The timestamp is inside the signed string**, which is what makes a replay
+  detectable. Check it, or a request captured once is valid forever.
+- **Compare in constant time.** A byte-at-a-time comparison leaks the correct
+  signature to anyone willing to make enough attempts.
+
+The `v1=` prefix exists so the scheme can change later without a flag day.
+
+### Retries and failure
+
+| | |
+|---|---|
+| **Retried** | 5xx, 429, timeouts, connection failures |
+| **Not retried** | 4xx — the endpoint understood and refused |
+| **Backoff** | `5s × 2ⁿ` with 30% jitter, six attempts, ≈5 minutes total |
+| **Auto-disable** | 10 consecutive failures, reset by any success |
+
+An endpoint SESKit switches off gets a status of its own — the page says it
+stopped and why, rather than showing a switch that appears to have moved by
+itself. Re-enabling clears the failure count.
+
+Deliveries are **at-least-once**: the same event can arrive twice if your
+endpoint is slow to answer. Deduplicate on the event `id`.
+
+> [!CAUTION]
+> Endpoint URLs are validated against SSRF, at registration **and again at
+> every delivery** against the resolved address. Loopback, private and
+> link-local addresses are refused outside local development, and redirects are
+> never followed — a redirect would forward your signed payload to a host you
+> never registered. If you genuinely need an internal destination in
+> production, list the range in `WEBHOOK_ALLOWED_CIDRS`.
+
+---
+
 ## API
 
 Authenticate with `Authorization: Bearer sk_...`. Interactive docs at
@@ -422,6 +526,8 @@ Authenticate with `Authorization: Bearer sk_...`. Interactive docs at
 | `GET` | `/v1/emails/{email_id}` | Retrieve one email and its status |
 | `GET` | `/v1/domains` | List sending identities and their verification state |
 | `GET` | `/v1/api-keys` | List this project's keys (never the secrets) |
+| `GET` | `/v1/webhooks` | List webhook endpoints (never the signing secrets) |
+| `GET` | `/v1/webhooks/{endpoint_id}/deliveries` | Recent delivery attempts and their status |
 | `POST` | `/v1/events/ses` | SNS notification receiver. Not for callers — see [delivery events](#delivery-events) |
 
 Errors use a consistent envelope:
@@ -451,6 +557,8 @@ Everything comes from the environment, or a local `.env`. See
 | `EVENT_RESOURCE_PREFIX` | `seskit` | Names the SQS queue and SNS topic |
 | `EVENT_CONFIGURATION_SET` | `seskit` | The SES configuration set sends go through |
 | `PUBLIC_BASE_URL` | — | Where SNS can reach this instance, for `https` ingestion |
+| `WEBHOOK_ALLOWED_CIDRS` | — | Internal ranges webhooks may reach in production |
+| `WEBHOOK_MAX_ATTEMPTS` | `6` | Delivery attempts before a webhook is abandoned |
 | `SMTP_HOST` | — | Local delivery target. Points at Mailpit in development |
 | `API_RATE_LIMIT_PER_MINUTE` | `100` | Per project, not per key |
 
