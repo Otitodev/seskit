@@ -39,7 +39,7 @@ from seskit_core.models import (
     utcnow,
 )
 from seskit_core.models.email_event import PUBLIC_EVENT_TYPES
-from seskit_core.security.destinations import DestinationPolicy, validate
+from seskit_core.security.destinations import DestinationPolicy, Resolver, validate
 from seskit_core.security.webhooks import generate_secret
 
 logger = get_logger(__name__)
@@ -99,6 +99,7 @@ async def create_endpoint(
     project_id: str,
     url: str,
     policy: DestinationPolicy,
+    resolver: Resolver | None = None,
 ) -> WebhookEndpoint:
     """Register a destination, refusing anything SESKit must not send to.
 
@@ -108,7 +109,7 @@ async def create_endpoint(
     ``security/destinations.py``.
     """
     url = url.strip()
-    validate(url, policy=policy)
+    await validate(url, policy=policy, resolver=resolver)
 
     endpoint = WebhookEndpoint(project_id=project_id, url=url, secret=generate_secret())
     session.add(endpoint)

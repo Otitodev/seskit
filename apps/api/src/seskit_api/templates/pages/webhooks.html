@@ -1,0 +1,188 @@
+{% extends "base.html" %}
+{% from "components/ui.html" import button, card_open, card_close, empty, field, badge, code_block %}
+
+{% block title %}Webhooks · SESKit{% endblock %}
+
+{% block content %}
+  <div class="page-header">
+    <h1>Webhooks</h1>
+    <p class="page-header__subtitle">
+      Delivery events for <code>{{ project.name }}</code>, pushed to your
+      application as they happen.
+    </p>
+  </div>
+
+  {% if error %}
+    {# One message for every refusal - see the route. Naming the rule that
+       failed would tell whoever is probing which range to try next. #}
+    <div class="alert alert--danger" role="alert">
+      <p>{{ error }}</p>
+    </div>
+  {% endif %}
+
+  {{ card_open("Add an endpoint") }}
+    <form class="row row--end" method="post" action="/webhooks">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <div class="grow">
+        {{ field("url", "Endpoint URL", type="url",
+                 placeholder="https://example.com/webhooks/email",
+                 hint="Must be https and reachable from the public internet.
+                       Every request is signed; verify the signature before
+                       acting on one.",
+                 attrs='maxlength="2048" autocomplete="off"') }}
+      </div>
+      {{ button("Add endpoint", variant="primary", type="submit") }}
+    </form>
+  {{ card_close() }}
+
+  {% if endpoints %}
+    {% for endpoint in endpoints %}
+      {{ card_open("Endpoint") }}
+        {% if endpoint.was_disabled_by_failures %}
+          {# A status of its own, not the one a user sets. A switch that appears
+             to have moved on its own, with nothing saying why, is the version
+             of this that generates support questions. #}
+          <div class="alert alert--warning" role="status">
+            <p class="alert__title">SESKit stopped sending to this endpoint</p>
+            <p>
+              It failed {{ endpoint.consecutive_failures }} times in a row, so
+              deliveries were paused. Fix the endpoint and turn it back on —
+              the failure count resets when you do.
+            </p>
+          </div>
+        {% endif %}
+
+        <dl class="datalist">
+          <div class="datalist__row">
+            <dt>URL</dt>
+            <dd class="table__mono">{{ endpoint.url }}</dd>
+          </div>
+          <div class="datalist__row">
+            <dt>Status</dt>
+            <dd>
+              {% if endpoint.is_enabled %}
+                {{ badge("Active", tone="success") }}
+              {% elif endpoint.was_disabled_by_failures %}
+                {{ badge("Stopped after failures", tone="danger") }}
+              {% else %}
+                {{ badge("Disabled") }}
+              {% endif %}
+            </dd>
+          </div>
+          <div class="datalist__row">
+            <dt>Signing secret</dt>
+            {# Shown in full, and shown every time - unlike an API key. The
+               customer needs this to verify signatures, so a secret they could
+               only see once would be one they had to store elsewhere or lose. #}
+            <dd class="table__mono">{{ endpoint.secret }}</dd>
+          </div>
+          <div class="datalist__row">
+            <dt>Added</dt>
+            <dd class="muted">{{ endpoint.created_at.strftime("%Y-%m-%d %H:%M UTC") }}</dd>
+          </div>
+        </dl>
+
+        <div class="row row--end">
+          <form method="post" action="/webhooks/{{ endpoint.id }}/enabled">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <input type="hidden" name="enabled"
+                   value="{{ "off" if endpoint.is_enabled else "on" }}">
+            {{ button("Disable" if endpoint.is_enabled else "Enable", type="submit") }}
+          </form>
+          <form method="post" action="/webhooks/{{ endpoint.id }}/secret">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            {{ button("Rotate secret", type="submit") }}
+          </form>
+          <form method="post" action="/webhooks/{{ endpoint.id }}/delete">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            {{ button("Delete", variant="danger", type="submit") }}
+          </form>
+        </div>
+        <p class="muted">
+          Rotating the secret takes effect immediately. Deliveries already in
+          flight are signed with the old one and will fail verification at your
+          endpoint.
+        </p>
+
+        {# Delivery history (§17). The row is the queue as well as the log, so
+           this is the actual state of every attempt rather than a summary. #}
+        <h3>Recent deliveries</h3>
+        {% set attempts = deliveries.get(endpoint.id, []) %}
+        {% if attempts %}
+          <div class="table-wrap">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th>Event</th>
+                  <th>Result</th>
+                  <th>Attempts</th>
+                  <th>Last attempt</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for delivery in attempts %}
+                  <tr>
+                    <td class="table__mono">{{ delivery.event.label }}</td>
+                    <td>
+                      {% if delivery.state.value == "delivered" %}
+                        {{ badge("Delivered " ~ delivery.response_status, tone="success") }}
+                      {% elif delivery.state.value == "failed" %}
+                        {{ badge(
+                          ("Failed " ~ delivery.response_status) if delivery.response_status
+                          else "Failed", tone="danger"
+                        ) }}
+                      {% else %}
+                        {{ badge("Pending", tone="warning") }}
+                      {% endif %}
+                      {% if delivery.error %}
+                        <p class="muted">{{ delivery.error }}</p>
+                      {% endif %}
+                    </td>
+                    <td>{{ delivery.attempt_count }}</td>
+                    <td class="muted">
+                      {% if delivery.last_attempt_at %}
+                        {{ delivery.last_attempt_at.strftime("%Y-%m-%d %H:%M:%S UTC") }}
+                      {% elif delivery.next_attempt_at %}
+                        Queued
+                      {% else %}
+                        —
+                      {% endif %}
+                    </td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        {% else %}
+          <p class="muted">
+            Nothing sent yet. Deliveries appear here as soon as this project's
+            mail produces an event — which needs
+            <a class="link" href="/aws">delivery event reporting</a> set up.
+          </p>
+        {% endif %}
+      {{ card_close() }}
+    {% endfor %}
+
+    {{ card_open("Verifying a signature") }}
+      <p class="muted">
+        Every request carries <code>X-SESKit-Signature</code> and
+        <code>X-SESKit-Timestamp</code>. Recompute the HMAC over
+        <code>"{timestamp}.{body}"</code> using the raw request body — not a
+        re-serialised copy of it — and compare in constant time. Reject anything
+        older than a few minutes, or a captured request can be replayed forever.
+      </p>
+      {{ code_block(verify_snippet, language="python") }}
+    {{ card_close() }}
+
+  {% else %}
+    {{ card_open("Endpoints", flush=True) }}
+      {{ empty(
+        "No webhook endpoints yet",
+        "Add one and SESKit will POST a signed JSON event whenever a message is
+         sent, delivered, bounced, marked as spam, opened or clicked — so your
+         application can react without polling.",
+        icon_name="webhook"
+      ) }}
+    {{ card_close() }}
+  {% endif %}
+{% endblock %}

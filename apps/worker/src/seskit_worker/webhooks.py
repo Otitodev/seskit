@@ -167,7 +167,7 @@ async def deliver_one(
     body = payload_bytes(delivery.event)
 
     try:
-        destination = validate(
+        destination = await validate(
             endpoint.url,
             policy=policy_from(
                 is_local=resolved.is_local,

@@ -20,6 +20,7 @@ from seskit_core.models import Project, User
 from seskit_core.redis import get_redis
 from seskit_core.security.api_keys import parse_authorization
 from seskit_core.security.csrf import CSRF_FIELD, CSRF_HEADER, tokens_match
+from seskit_core.security.destinations import Resolver
 from seskit_core.security.ratelimit import RateLimitStatus, check_rate_limit
 from seskit_core.security.sessions import SessionData, read_session
 from seskit_core.services import (
@@ -76,6 +77,17 @@ def get_provider_factory() -> ProviderFactory:
     choose between SES and SMTP per project (§8) at this one seam.
     """
     return SESProvider
+
+
+def get_destination_resolver() -> Resolver | None:
+    """How a webhook URL is resolved before it is accepted (§16).
+
+    ``None`` means "use the real one" - a DNS lookup on a thread. Injected so a
+    test can substitute an answer without touching the network, for the same
+    reason the provider and provisioner factories are: nothing in the suite
+    should depend on what the internet says today.
+    """
+    return None
 
 
 def get_provisioner_factory() -> ProvisionerFactory:

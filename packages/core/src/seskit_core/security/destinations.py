@@ -32,6 +32,7 @@ from one that is open by default.
 
 from __future__ import annotations
 
+import asyncio
 import ipaddress
 import socket
 from collections.abc import Callable, Sequence
@@ -132,6 +133,11 @@ def default_resolver(host: str) -> Sequence[str]:
     All of them, not just the first: a name that returns one public and one
     private address must be refused, and asking for a single answer would let
     the ordering decide whether the check passes.
+
+    Synchronous, and never called directly from a coroutine - ``validate`` hands
+    it to a thread. ``getaddrinfo`` blocks, and a hostname whose nameserver is
+    slow would otherwise stall every request the process is serving, not just
+    this one.
     """
     try:
         infos = socket.getaddrinfo(host, None, proto=socket.IPPROTO_TCP)
@@ -166,7 +172,7 @@ def is_public(address: IPAddress) -> bool:
     )
 
 
-def validate(
+async def validate(
     url: str,
     *,
     policy: DestinationPolicy,
@@ -177,11 +183,17 @@ def validate(
     Raises :class:`DestinationError` for anything refused. Called at
     registration for the error message and again at every delivery for the
     protection - see the module docstring on why once is not enough.
+
+    Async because DNS is. The default lookup goes to a thread rather than
+    blocking the event loop; an injected resolver is called directly, since a
+    test's answer is already in memory.
     """
     host = _check_url(url, policy=policy)
-    resolve = resolver or default_resolver
 
-    raw = resolve(host)
+    if resolver is None:
+        raw = await asyncio.to_thread(default_resolver, host)
+    else:
+        raw = resolver(host)
     if not raw:
         raise DestinationError()
 

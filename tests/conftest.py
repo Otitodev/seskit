@@ -16,7 +16,7 @@ afterwards, so tests share one database without leaking state into each other.
 from __future__ import annotations
 
 import os
-from collections.abc import AsyncIterator, Iterator
+from collections.abc import AsyncIterator, Callable, Iterator
 from typing import Any
 from unittest.mock import AsyncMock
 
@@ -40,7 +40,11 @@ from fakes.queue import FakeQueue
 from fakes.ses import FakeProviderFactory, FakeProvisioner
 from httpx import ASGITransport, AsyncClient
 from redis.asyncio import Redis, from_url
-from seskit_api.dependencies import get_provider_factory, get_provisioner_factory
+from seskit_api.dependencies import (
+    get_destination_resolver,
+    get_provider_factory,
+    get_provisioner_factory,
+)
 from seskit_api.main import create_app
 from seskit_api.queue import get_queue
 from seskit_core.config import Settings, get_settings
@@ -261,12 +265,29 @@ def provisioner_factory() -> type[FakeProvisioner]:
 
 
 @pytest.fixture
+def destination_resolver() -> Callable[[str], list[str]]:
+    """Resolves every webhook hostname to one public address.
+
+    Overridden for every ``app_client`` test so registering an endpoint never
+    performs a real DNS lookup - the same reasoning as the provider and
+    provisioner fakes. A test that wants a refusal asks for a private address
+    or an unusable scheme.
+    """
+
+    def resolver(host: str) -> list[str]:
+        return ["93.184.216.34"]
+
+    return resolver
+
+
+@pytest.fixture
 async def app_client(
     settings: Settings,
     db_session: AsyncSession,
     redis_client: Redis,
     provider_factory: FakeProviderFactory,
     provisioner_factory: type[FakeProvisioner],
+    destination_resolver: Callable[[str], list[str]],
     queue: FakeQueue,
 ) -> AsyncIterator[AsyncClient]:
     """An HTTP client backed by the real database and Redis.
@@ -286,6 +307,7 @@ async def app_client(
     # asks for the `provider_factory` fixture and configures it.
     application.dependency_overrides[get_provider_factory] = lambda: provider_factory
     application.dependency_overrides[get_provisioner_factory] = lambda: provisioner_factory
+    application.dependency_overrides[get_destination_resolver] = lambda: destination_resolver
     # The ASGI transport does not run lifespan, so app.state.queue is never
     # built - and a real pool would make every send need one anyway.
     application.dependency_overrides[get_queue] = lambda: queue

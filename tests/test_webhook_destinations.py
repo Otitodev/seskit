@@ -43,26 +43,30 @@ def resolving_to(*addresses: str) -> object:
     return resolver
 
 
-def _validate(url: str, *addresses: str, policy: DestinationPolicy = STRICT) -> Destination:
-    return validate(url, policy=policy, resolver=resolving_to(*addresses or (PUBLIC,)))  # type: ignore[arg-type]
+async def _validate(url: str, *addresses: str, policy: DestinationPolicy = STRICT) -> Destination:
+    return await validate(url, policy=policy, resolver=resolving_to(*addresses or (PUBLIC,)))  # type: ignore[arg-type]
 
 
 # ------------------------------------------------------------------ accepted ---
 
 
-def test_a_public_https_url_is_accepted() -> None:
-    destination = _validate("https://hooks.example.com/seskit", PUBLIC)
+async def test_a_public_https_url_is_accepted() -> None:
+    destination = await _validate("https://hooks.example.com/seskit", PUBLIC)
 
     assert destination.host == "hooks.example.com"
     assert str(destination.pinned) == PUBLIC
 
 
-def test_a_url_with_a_port_and_query_is_accepted() -> None:
-    assert _validate("https://hooks.example.com:8443/hook?x=1", PUBLIC).host == "hooks.example.com"
+async def test_a_url_with_a_port_and_query_is_accepted() -> None:
+    destination = await _validate("https://hooks.example.com:8443/hook?x=1", PUBLIC)
+
+    assert destination.host == "hooks.example.com"
 
 
-def test_a_public_ipv6_address_is_accepted() -> None:
-    destination = _validate("https://[2606:2800:220:1:248:1893:25c8:1946]/x", "2606:2800:220::1")
+async def test_a_public_ipv6_address_is_accepted() -> None:
+    destination = await _validate(
+        "https://[2606:2800:220:1:248:1893:25c8:1946]/x", "2606:2800:220::1"
+    )
 
     assert destination.addresses
 
@@ -93,37 +97,37 @@ def test_a_public_ipv6_address_is_accepted() -> None:
         ("IPv4-mapped metadata", "::ffff:169.254.169.254"),
     ],
 )
-def test_an_internal_address_is_refused(label: str, address: str) -> None:
+async def test_an_internal_address_is_refused(label: str, address: str) -> None:
     with pytest.raises(DestinationError):
-        _validate("https://internal.example.com/x", address)
+        await _validate("https://internal.example.com/x", address)
 
 
-def test_the_cloud_metadata_service_is_refused() -> None:
+async def test_the_cloud_metadata_service_is_refused() -> None:
     """Named on its own because it is the specific thing that turns this into a
     credential disclosure rather than a curiosity.
     """
     with pytest.raises(DestinationError):
-        _validate("https://metadata.example.com/latest/meta-data/", "169.254.169.254")
+        await _validate("https://metadata.example.com/latest/meta-data/", "169.254.169.254")
 
 
-def test_a_literal_internal_address_is_refused() -> None:
+async def test_a_literal_internal_address_is_refused() -> None:
     """No hostname to resolve - the URL names the address directly."""
     with pytest.raises(DestinationError):
-        _validate("https://127.0.0.1/x", "127.0.0.1")
+        await _validate("https://127.0.0.1/x", "127.0.0.1")
 
 
-def test_one_bad_answer_refuses_the_whole_name() -> None:
+async def test_one_bad_answer_refuses_the_whole_name() -> None:
     """A host answering with both a public and a private address must be
     refused. Otherwise whichever answer the HTTP client happened to pick would
     decide whether the check held.
     """
     with pytest.raises(DestinationError):
-        _validate("https://split.example.com/x", PUBLIC, "10.0.0.1")
+        await _validate("https://split.example.com/x", PUBLIC, "10.0.0.1")
 
 
-def test_a_name_that_resolves_to_nothing_is_refused() -> None:
+async def test_a_name_that_resolves_to_nothing_is_refused() -> None:
     with pytest.raises(DestinationError):
-        validate("https://nowhere.example.com/x", policy=STRICT, resolver=lambda host: [])
+        await validate("https://nowhere.example.com/x", policy=STRICT, resolver=lambda host: [])
 
 
 # -------------------------------------------------- refused by the URL --------
@@ -145,17 +149,17 @@ def test_a_name_that_resolves_to_nothing_is_refused() -> None:
         "https://user:pass@hooks.example.com/x",
     ],
 )
-def test_a_url_that_should_never_be_accepted_is_refused(url: str) -> None:
+async def test_a_url_that_should_never_be_accepted_is_refused(url: str) -> None:
     with pytest.raises(DestinationError):
-        _validate(url, PUBLIC)
+        await _validate(url, PUBLIC)
 
 
-def test_an_absurdly_long_url_is_refused() -> None:
+async def test_an_absurdly_long_url_is_refused() -> None:
     with pytest.raises(DestinationError):
-        _validate("https://hooks.example.com/" + "x" * 3000, PUBLIC)
+        await _validate("https://hooks.example.com/" + "x" * 3000, PUBLIC)
 
 
-def test_every_refusal_says_the_same_thing() -> None:
+async def test_every_refusal_says_the_same_thing() -> None:
     """Naming which rule refused would tell whoever is probing the form exactly
     which internal range to try next, and the user's remedy is identical in
     every case.
@@ -168,7 +172,7 @@ def test_every_refusal_says_the_same_thing() -> None:
         ("https://user:pass@hooks.example.com/x", PUBLIC),
     ]:
         try:
-            _validate(url, address)
+            await _validate(url, address)
         except DestinationError as error:
             messages.add(error.message)
 
@@ -178,7 +182,7 @@ def test_every_refusal_says_the_same_thing() -> None:
 # ------------------------------------------------------- DNS rebinding --------
 
 
-def test_the_check_runs_against_the_resolved_address_every_time() -> None:
+async def test_the_check_runs_against_the_resolved_address_every_time() -> None:
     """The reason validation is not done once at registration.
 
     The same hostname answers publicly the first time and with loopback the
@@ -192,18 +196,18 @@ def test_the_check_runs_against_the_resolved_address_every_time() -> None:
 
     url = "https://rebind.example.com/x"
 
-    assert validate(url, policy=STRICT, resolver=rebinding).host == "rebind.example.com"
+    assert (await validate(url, policy=STRICT, resolver=rebinding)).host == "rebind.example.com"
 
     with pytest.raises(DestinationError):
-        validate(url, policy=STRICT, resolver=rebinding)
+        await validate(url, policy=STRICT, resolver=rebinding)
 
 
-def test_the_resolved_address_is_returned_for_pinning() -> None:
+async def test_the_resolved_address_is_returned_for_pinning() -> None:
     """Resolving, checking, and then letting the HTTP client resolve the name
     again would reopen the window this closes. The caller connects to what was
     checked.
     """
-    destination = _validate("https://hooks.example.com/x", PUBLIC)
+    destination = await _validate("https://hooks.example.com/x", PUBLIC)
 
     assert str(destination.pinned) == PUBLIC
 
@@ -211,38 +215,40 @@ def test_the_resolved_address_is_returned_for_pinning() -> None:
 # ------------------------------------------------------------- policy --------
 
 
-def test_local_development_may_reach_localhost() -> None:
+async def test_local_development_may_reach_localhost() -> None:
     """A receiver on localhost is how anyone tries this feature at all, and
     self-hosted software that cannot be tested locally will not be adopted.
     """
-    assert _validate("http://localhost:9000/hook", "127.0.0.1", policy=LOCAL).host == "localhost"
+    assert (
+        await _validate("http://localhost:9000/hook", "127.0.0.1", policy=LOCAL)
+    ).host == "localhost"
 
 
-def test_an_allowlisted_range_is_reachable_in_production() -> None:
+async def test_an_allowlisted_range_is_reachable_in_production() -> None:
     """The deliberate escape hatch: a self-hosted deployment with a genuine
     internal destination writes the CIDR into the configuration.
     """
     policy = DestinationPolicy(allowed_networks=parse_networks("10.10.0.0/16"))
 
-    assert _validate("https://internal.example.com/x", "10.10.4.5", policy=policy)
+    assert await _validate("https://internal.example.com/x", "10.10.4.5", policy=policy)
 
 
-def test_an_allowlist_does_not_permit_the_range_next_door() -> None:
+async def test_an_allowlist_does_not_permit_the_range_next_door() -> None:
     """The check that makes the previous test mean something."""
     policy = DestinationPolicy(allowed_networks=parse_networks("10.10.0.0/16"))
 
     with pytest.raises(DestinationError):
-        _validate("https://internal.example.com/x", "10.11.4.5", policy=policy)
+        await _validate("https://internal.example.com/x", "10.11.4.5", policy=policy)
 
 
-def test_an_allowlist_does_not_open_plain_http() -> None:
+async def test_an_allowlist_does_not_open_plain_http() -> None:
     """Permitting an address range says nothing about permitting an unencrypted
     connection to it.
     """
     policy = DestinationPolicy(allowed_networks=parse_networks("10.10.0.0/16"))
 
     with pytest.raises(DestinationError):
-        _validate("http://internal.example.com/x", "10.10.4.5", policy=policy)
+        await _validate("http://internal.example.com/x", "10.10.4.5", policy=policy)
 
 
 def test_the_default_policy_allows_nothing_internal() -> None:
