@@ -31,15 +31,18 @@ from __future__ import annotations
 import json
 from typing import Annotated, Any
 
+from arq.connections import ArqRedis
 from fastapi import APIRouter, Depends, Request, Response, status
 from seskit_core.config import EVENT_HTTPS_PATH, Settings
 from seskit_core.db import get_session
 from seskit_core.events import MalformedEnvelope, Outcome, ingest_event, unwrap
 from seskit_core.logging import get_logger
+from seskit_core.services import pending_delivery_ids
 from seskit_provider_aws_ses import SignatureError, confirm_subscription, verify
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from seskit_api.dependencies import get_app_settings
+from seskit_api.queue import get_queue
 
 logger = get_logger(__name__)
 
@@ -63,6 +66,7 @@ async def receive_ses_event(
     request: Request,
     db: Annotated[AsyncSession, Depends(get_session)],
     settings: Annotated[Settings, Depends(get_app_settings)],
+    queue: Annotated[ArqRedis, Depends(get_queue)],
 ) -> Response:
     """Record one notification, or refuse it.
 
@@ -111,14 +115,21 @@ async def receive_ses_event(
         logger.warning("sns_payload_empty", sns_message_id=envelope.message_id)
         return Response(status_code=status.HTTP_204_NO_CONTENT)
 
-    outcome, _ = await ingest_event(
+    outcome, event = await ingest_event(
         db,
         envelope.event,
         # The envelope's id: the event body is identical across redeliveries,
         # so nothing inside it could tell one from another.
         provider_event_id=envelope.message_id or None,
     )
+    # Read before the commit, so the ids are available afterwards.
+    delivery_ids = await pending_delivery_ids(db, event.id) if event is not None else []
     await db.commit()
+
+    for delivery_id in delivery_ids:
+        # Latency only - the delivery row is what makes the webhook durable, so
+        # a failure to enqueue costs seconds rather than the webhook itself.
+        await queue.enqueue_job("deliver_webhook", delivery_id)
 
     if outcome is Outcome.RECORDED:
         logger.info("sns_event_recorded", sns_message_id=envelope.message_id)

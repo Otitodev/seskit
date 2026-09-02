@@ -23,7 +23,7 @@ send, and a user notices a late email long before a late bounce receipt.
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from typing import Any
 
 from seskit_core.config import get_settings
@@ -31,7 +31,7 @@ from seskit_core.db import get_session_factory
 from seskit_core.events import MalformedEnvelope, Outcome, ingest_event, unwrap
 from seskit_core.logging import get_logger
 from seskit_core.providers import NotificationQueue, QueuedNotification
-from seskit_core.services import distinct_event_queues
+from seskit_core.services import distinct_event_queues, pending_delivery_ids
 from seskit_provider_aws_ses import SQSNotificationQueue
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -47,6 +47,11 @@ QueueBuilder = Callable[[str, str], NotificationQueue]
 #: against a transaction the test can still see and roll back.
 SessionFactory = Callable[[], AsyncSession]
 
+#: Asks the queue to attempt a webhook delivery now. Optional: the row is
+#: what makes the delivery durable, so a missing enqueue costs latency
+#: rather than the webhook - the sweep picks it up within the minute.
+Enqueue = Callable[[str], Awaitable[None]]
+
 
 def build_queue(region: str, queue_url: str) -> NotificationQueue:
     """Map a region and queue URL onto a reader.
@@ -61,6 +66,7 @@ async def poll_events(
     *,
     build: QueueBuilder | None = None,
     session_factory: SessionFactory | None = None,
+    enqueue: Enqueue | None = None,
 ) -> int:
     """Drain every queue this instance has events on. Returns events recorded.
 
@@ -74,6 +80,7 @@ async def poll_events(
 
     build = build or build_queue
     factory = session_factory or get_session_factory()
+    enqueue = enqueue or _enqueue_via(ctx)
     recorded = 0
 
     async with factory() as session:
@@ -84,6 +91,7 @@ async def poll_events(
             recorded += await drain(
                 build(region, queue_url),
                 session_factory=factory,
+                enqueue=enqueue,
                 max_batches=settings.EVENT_POLL_MAX_BATCHES,
                 wait_seconds=settings.EVENT_POLL_WAIT_SECONDS,
                 visibility_timeout=settings.EVENT_VISIBILITY_TIMEOUT_SECONDS,
@@ -102,6 +110,7 @@ async def drain(
     queue: NotificationQueue,
     *,
     session_factory: SessionFactory,
+    enqueue: Enqueue | None = None,
     max_batches: int,
     wait_seconds: int,
     visibility_timeout: int,
@@ -119,7 +128,7 @@ async def drain(
             break
 
         for notification in batch:
-            if await handle(queue, notification, session_factory=session_factory):
+            if await handle(queue, notification, session_factory=session_factory, enqueue=enqueue):
                 recorded += 1
 
     return recorded
@@ -130,6 +139,7 @@ async def handle(
     notification: QueuedNotification,
     *,
     session_factory: SessionFactory,
+    enqueue: Enqueue | None = None,
 ) -> bool:
     """Process one message. Returns whether an event was recorded.
 
@@ -165,16 +175,42 @@ async def handle(
     # the same notification race, and a shared session would take the rest of
     # the batch down with it.
     async with session_factory() as session:
-        outcome, _ = await ingest_event(
+        outcome, event = await ingest_event(
             session,
             envelope.event,
             # The envelope's id, not the queue's: SQS issues a new message id
             # per delivery, so keying on that would deduplicate nothing.
             provider_event_id=envelope.message_id or None,
         )
+        # Read before the commit closes the session, so the ids survive.
+        delivery_ids = (
+            await pending_delivery_ids(session, event.id)
+            if enqueue is not None and event is not None
+            else []
+        )
         await session.commit()
+
+    for delivery_id in delivery_ids:
+        # Latency only. A failure here loses seconds, not the webhook.
+        await enqueue(delivery_id)  # type: ignore[misc]
 
     if outcome.is_settled:
         await queue.delete(notification)
 
     return outcome is Outcome.RECORDED
+
+
+def _enqueue_via(ctx: dict[str, Any]) -> Enqueue | None:
+    """Enqueue through the worker's own ARQ pool, if it has one.
+
+    ARQ puts the pool on the job context. A test driving ``drain`` directly has
+    no context and passes its own callback, or none at all.
+    """
+    pool = ctx.get("redis")
+    if pool is None:
+        return None
+
+    async def enqueue(delivery_id: str) -> None:
+        await pool.enqueue_job("deliver_webhook", delivery_id)
+
+    return enqueue

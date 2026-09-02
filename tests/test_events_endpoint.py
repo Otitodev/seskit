@@ -24,9 +24,11 @@ from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import padding, rsa
 from cryptography.x509.oid import NameOID
 from fakes import ses_events
+from fakes.queue import FakeQueue
 from httpx import ASGITransport, AsyncClient
 from redis.asyncio import Redis
 from seskit_api.main import create_app
+from seskit_api.queue import get_queue
 from seskit_core.config import EventIngestion, Settings
 from seskit_core.db import get_session
 from seskit_core.models import Email, EmailEvent, EmailStatus
@@ -103,7 +105,7 @@ def _notification(payload: dict[str, Any], *, message_id: str = "sns-1") -> dict
 
 @pytest.fixture
 async def receiver(
-    settings: Settings, db_session: AsyncSession, redis_client: Redis
+    settings: Settings, db_session: AsyncSession, redis_client: Redis, queue: FakeQueue
 ) -> AsyncClient:
     """A client for an instance configured to accept HTTPS notifications."""
     configured = settings.model_copy(update={"EVENT_INGESTION": EventIngestion.BOTH})
@@ -114,6 +116,9 @@ async def receiver(
 
     application.dependency_overrides[get_session] = _session
     application.dependency_overrides[get_redis] = lambda: redis_client
+    # The receiver enqueues webhook deliveries after ingest; the ASGI transport
+    # does not run lifespan, so app.state.queue is never built.
+    application.dependency_overrides[get_queue] = lambda: queue
 
     return AsyncClient(transport=ASGITransport(app=application), base_url="http://test")
 
@@ -307,7 +312,7 @@ async def test_a_confirmation_pointing_off_aws_is_refused(
 
 
 async def test_the_endpoint_is_absent_unless_configured(
-    settings: Settings, db_session: AsyncSession, redis_client: Redis
+    settings: Settings, db_session: AsyncSession, redis_client: Redis, queue: FakeQueue
 ) -> None:
     """SQS is the default, and an endpoint nothing is subscribed to is only an
     attack surface.
@@ -319,6 +324,7 @@ async def test_the_endpoint_is_absent_unless_configured(
 
     application.dependency_overrides[get_session] = _session
     application.dependency_overrides[get_redis] = lambda: redis_client
+    application.dependency_overrides[get_queue] = lambda: queue
 
     async with AsyncClient(
         transport=ASGITransport(app=application), base_url="http://test"

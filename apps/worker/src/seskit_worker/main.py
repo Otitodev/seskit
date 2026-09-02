@@ -17,6 +17,7 @@ from seskit_worker.events import poll_events
 from seskit_worker.identities import recheck_identities
 from seskit_worker.jobs import ping
 from seskit_worker.sending import send_email
+from seskit_worker.webhooks import deliver_webhook, sweep_webhooks
 
 logger = get_logger(__name__)
 
@@ -51,6 +52,7 @@ class WorkerSettings:
         poll_events,
         recheck_identities,
         send_email,
+        deliver_webhook,
     ]
 
     #: Hourly, on the hour. The hour is not the interval - each identity has its
@@ -75,6 +77,10 @@ class WorkerSettings:
             # same messages, each stealing events from the other's batch.
             max_tries=1,
         ),
+        # Every minute. The immediate enqueue is what makes a webhook prompt;
+        # this is what makes it certain - it carries the retries, which are
+        # due-dated on the row, and anything the enqueue lost.
+        cron(sweep_webhooks, second=30, run_at_startup=True, timeout=300, max_tries=1),
     ]
 
     on_startup = startup

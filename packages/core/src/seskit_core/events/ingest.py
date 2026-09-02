@@ -38,6 +38,7 @@ from seskit_core.events.normalise import (
 from seskit_core.ids import IDPrefix, generate_id
 from seskit_core.logging import get_logger
 from seskit_core.models import Email, EmailEvent, EventType
+from seskit_core.services.webhooks import queue_deliveries
 
 logger = get_logger(__name__)
 
@@ -134,6 +135,12 @@ async def ingest_event(
             select(EmailEvent).where(EmailEvent.provider_event_id == provider_event_id)
         )
         return Outcome.DUPLICATE, existing
+
+    # The Phase 8 seam. Queueing is durable - a row per enabled endpoint - so a
+    # webhook survives the process dying between here and the delivery attempt.
+    # Deliberately after the flush: a delivery pointing at an event that was
+    # never committed would be one nothing can ever send.
+    await queue_deliveries(session, event)
 
     logger.info(
         "event_recorded",
