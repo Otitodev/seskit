@@ -1,0 +1,88 @@
+{# The Overview's numbers (§17, §18).
+
+   A partial so the range control can swap just this fragment over HTMX rather
+   than reloading the page - the same pattern Refresh uses on the AWS page.
+   Rendered standalone on those responses, so it carries everything it needs.
+
+   Server-rendered, deliberately: the numbers are the content and the chart is
+   an enhancement. With JavaScript unavailable this panel still says everything
+   §17 asks for. #}
+{% from "components/ui.html" import metric, badge %}
+
+<div id="metrics">
+  <div class="row row--end">
+    {# Links, not buttons: a range is a view, and a view should be linkable and
+       survive a refresh. HTMX upgrades them to a fragment swap; without it they
+       are ordinary navigation that still works. #}
+    <nav class="segmented" aria-label="Time range">
+      {% for option in ranges %}
+        <a class="segmented__item{{ ' is-active' if option == metrics.range else '' }}"
+           href="/?range={{ option.value }}"
+           hx-get="/partials/metrics?range={{ option.value }}"
+           hx-target="#metrics"
+           hx-swap="outerHTML"
+           hx-push-url="/?range={{ option.value }}"
+           {% if option == metrics.range %}aria-current="page"{% endif %}>
+          {{ option.value }}
+        </a>
+      {% endfor %}
+    </nav>
+  </div>
+
+  {# §18's six counts. #}
+  <div class="grid-metrics">
+    {{ metric("Sent", metrics.sent|thousands) }}
+    {{ metric("Delivered", metrics.delivered|thousands,
+              meta=metrics.delivery_rate|percent ~ " of sent") }}
+    {{ metric("Bounced", metrics.bounced|thousands,
+              meta=metrics.bounce_rate|percent ~ " of sent") }}
+    {{ metric("Complaints", metrics.complained|thousands,
+              meta=metrics.complaint_rate|percent ~ " of sent") }}
+  </div>
+
+  <div class="grid-metrics">
+    {# Open and click say "Not tracked" rather than 0%. Tracking is off unless a
+       project turns it on (Phase 7), and 0% would claim nobody opened the mail
+       when the truth is that nobody was counting. #}
+    {% if metrics.tracking_enabled %}
+      {{ metric("Open rate", metrics.open_rate|percent,
+                meta=metrics.opened|thousands ~ " of " ~ metrics.delivered|thousands ~ " delivered") }}
+      {{ metric("Click rate", metrics.click_rate|percent,
+                meta=metrics.clicked|thousands ~ " of " ~ metrics.delivered|thousands ~ " delivered") }}
+    {% else %}
+      {{ metric("Open rate", "—", meta="Not tracked") }}
+      {{ metric("Click rate", "—", meta="Not tracked") }}
+    {% endif %}
+  </div>
+
+  {% if not metrics.tracking_enabled %}
+    <p class="muted">
+      Open and click tracking is off. Turning it on asks Amazon SES to rewrite
+      links in your mail and add a tracking pixel — see the
+      <a class="link" href="/aws">AWS page</a>.
+    </p>
+  {% endif %}
+
+  {# Bounce and complaint rates are the two numbers AWS judges an account by, so
+     the thresholds it acts on are stated rather than left to be discovered in a
+     suspension email. AWS's published limits: review above 5% bounce or 0.1%
+     complaint. #}
+  {% if metrics.bounce_rate is not none and metrics.bounce_rate >= 0.05 %}
+    <div class="alert alert--danger" role="alert">
+      <p class="alert__title">Bounce rate is above 5%</p>
+      <p>
+        Amazon SES reviews accounts above this level and can pause sending.
+        Check the bounced messages on the <a class="link" href="/emails">Emails
+        page</a> and stop sending to addresses that failed permanently.
+      </p>
+    </div>
+  {% elif metrics.complaint_rate is not none and metrics.complaint_rate >= 0.001 %}
+    <div class="alert alert--warning" role="status">
+      <p class="alert__title">Complaint rate is above 0.1%</p>
+      <p>
+        Amazon SES reviews accounts above this level. Recipients are marking
+        this mail as spam.
+      </p>
+    </div>
+  {% endif %}
+</div>

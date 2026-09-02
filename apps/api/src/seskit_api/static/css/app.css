@@ -1159,3 +1159,48 @@ svg {
 .link:hover {
   text-decoration-thickness: 2px;
 }
+
+/* Segmented control -------------------------------------------------------- */
+/* The Overview's time range. Links rather than buttons, so a range is a view
+   that can be linked to and survives a refresh - HTMX upgrades them to a
+   fragment swap, and without it they are ordinary navigation that still works.
+   Sized and coloured entirely from tokens, like every other component. */
+
+.segmented {
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+  padding: 2px;
+  background: var(--neutral-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.segmented__item {
+  display: inline-flex;
+  align-items: center;
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  font-size: 0.8125rem;
+  font-variant-numeric: tabular-nums;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.segmented__item:hover {
+  color: var(--text);
+  background: var(--surface-hover);
+}
+
+.segmented__item.is-active {
+  color: var(--text);
+  background: var(--surface);
+  border-color: var(--border-strong);
+  box-shadow: 0 1px 2px rgb(16 24 40 / 6%);
+}
+
+.segmented__item:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
+}

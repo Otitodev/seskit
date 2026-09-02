@@ -21,6 +21,32 @@ TEMPLATES_DIR = Path(__file__).parent / "templates"
 
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 
+#: What a rate with no denominator renders as. Not "0%", which asserts that
+#: nothing was delivered out of things that were sent - on an empty account
+#: nothing was sent at all, and a dash is the honest answer.
+NO_VALUE = "—"
+
+
+def percent(value: float | None, *, places: int = 1) -> str:
+    """A rate as a percentage, or a dash when there is no rate.
+
+    A filter rather than formatting in each template, because the ``None`` case
+    is a decision (§18) and repeating it per page is how one of them eventually
+    renders "0.0%" instead.
+    """
+    if value is None:
+        return NO_VALUE
+    return f"{value * 100:.{places}f}%"
+
+
+def thousands(value: int | None) -> str:
+    """A count with separators. Dense tables are easier to scan than 1240."""
+    return NO_VALUE if value is None else f"{value:,}"
+
+
+templates.env.filters["percent"] = percent
+templates.env.filters["thousands"] = thousands
+
 
 def render(
     request: Request,

@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "components/ui.html" import metric, card_open, card_close, empty, code_block %}
+{% from "components/ui.html" import card_open, card_close, empty, code_block, button %}
 
 {% block title %}Overview · SESKit{% endblock %}
 
@@ -7,45 +7,29 @@
   <div class="page-header">
     <h1>Overview</h1>
     <p class="page-header__subtitle">
-      Email activity across this project.
+      Delivery for <code>{{ project.name }}</code> over the {{ metrics.range.label|lower }}.
     </p>
   </div>
 
-  {# Real counts as of Phase 6 - these were hardcoded zeroes while nothing could
-     send. Delivered, bounced and complained still are: those come from SES
-     events, which is Phase 7, and inventing them would misreport delivery. #}
-  <div class="grid-metrics">
-    {{ metric("Sent", counts.sent) }}
-    {{ metric("Queued", counts.queued) }}
-    {{ metric("Failed", counts.failed) }}
-    {{ metric("Delivered", "—", meta="Phase 7") }}
-  </div>
-
-  {{ card_open("Email activity") }}
-    {% if counts.total %}
-      <p>
-        {{ counts.total }} message{{ "" if counts.total == 1 else "s" }} recorded
-        for <code>{{ project.name }}</code>.
-        <a class="link" href="/emails">See them all</a>.
-      </p>
-    {% else %}
+  {% if metrics.has_activity or counts.total %}
+    {% include "partials/metrics.html" %}
+  {% else %}
+    {# Never a grid of zeroes. §31's design brief is explicit that an empty
+       state is the first thing a new install shows on every page, and that it
+       should say what will appear and what to do next. Six zeroes and a dash
+       say neither. #}
+    {{ card_open("Nothing sent yet") }}
       {{ empty(
-        "No emails yet",
-        "Send one and it appears here. With no AWS account connected it goes to
-         Mailpit rather than Amazon SES, so nothing needs verifying first.",
+        "No delivery activity",
+        "Send a message and its delivery, bounce and complaint rates appear
+         here. With no AWS account connected it goes to Mailpit rather than
+         Amazon SES, so nothing needs verifying first.",
         icon_name="inbox",
         action_label="Create an API key",
         action_href="/api-keys"
       ) }}
-    {% endif %}
-  {{ card_close() }}
 
-  {{ card_open("Send your first email") }}
-    <div class="stack">
-      <p class="muted">
-        SESKit is running. Sending goes live in a later build phase — this is
-        the API the Python SDK will call.
-      </p>
+      <p class="muted">Once you have a key, send one:</p>
       {{ code_block(
         'curl -X POST http://localhost:8000/v1/emails \\\n'
         '  -H "Authorization: Bearer sk_..." \\\n'
@@ -54,6 +38,29 @@
         '"subject":"Hello","html":"<h1>Hello from SESKit</h1>"}\'',
         language="cURL"
       ) }}
-    </div>
-  {{ card_close() }}
+    {{ card_close() }}
+  {% endif %}
+
+  {% if counts.total %}
+    {{ card_open("Recent activity") }}
+      {# Kept on one line: a sentence broken across template lines renders with
+         the indentation inside it, which reads fine but makes the visible text
+         something no test - and no search on the page - can match. #}
+      <p>
+        {{ counts.total|thousands }} {{ "message" if counts.total == 1 else "messages" }} recorded for <code>{{ project.name }}</code>{% if counts.queued %}, {{ counts.queued|thousands }} still queued{% endif %}{% if counts.failed %}, {{ counts.failed|thousands }} failed to send{% endif %}.
+        <a class="link" href="/emails">See them all</a>.
+      </p>
+
+      {% if not events_configured %}
+        {# The distinction that matters: no delivery data because nothing has
+           happened yet, versus none because SES was never asked to report. The
+           second looks identical on screen and has a completely different fix. #}
+        <p class="muted">
+          Delivery, bounce and complaint figures need event reporting, which is
+          not set up for this project — Amazon SES publishes nothing until it
+          is. <a class="link" href="/aws">Set it up on the AWS page</a>.
+        </p>
+      {% endif %}
+    {{ card_close() }}
+  {% endif %}
 {% endblock %}

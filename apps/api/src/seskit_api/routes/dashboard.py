@@ -1,8 +1,13 @@
 """Dashboard routes.
 
-The Overview still shows an empty state - there is no data until Phase 6
-records a send. What changed in Phase 2 is that it is no longer public, and it
-renders in the context of a project.
+The Overview shows §18's counts and rates for a time range. The range is a query
+parameter rather than session state, so a view is linkable and survives a
+refresh - and the metrics panel is also served on its own, so the range control
+swaps a fragment over HTMX instead of reloading the page.
+
+The numbers are server-rendered. The chart that Phase 9 adds is an enhancement
+on top of them; with JavaScript unavailable the page still says everything §17
+asks for.
 """
 
 from __future__ import annotations
@@ -15,7 +20,7 @@ from redis.asyncio import Redis
 from seskit_core.db import get_session
 from seskit_core.models import Project
 from seskit_core.redis import get_redis
-from seskit_core.services import list_projects
+from seskit_core.services import TimeRange, compute_metrics, get_connection, list_projects
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from seskit_api.dependencies import CurrentUser, require_project, require_user
@@ -26,14 +31,22 @@ from seskit_api.templating import render
 router = APIRouter(tags=["dashboard"], include_in_schema=False)
 
 
+#: Offered in the range control, in the order §17 lists them.
+RANGES = (TimeRange.DAY, TimeRange.WEEK, TimeRange.MONTH)
+
+
 @router.get("/", response_class=HTMLResponse, summary="Dashboard overview")
 async def overview(
     request: Request,
     db: Annotated[AsyncSession, Depends(get_session)],
     current: Annotated[CurrentUser, Depends(require_user)],
     project: Annotated[Project, Depends(require_project)],
+    range: str | None = None,
 ) -> HTMLResponse:
-    """Render the Overview for the selected project."""
+    """Render the Overview for the selected project and range."""
+    time_range = TimeRange.parse(range)
+    connection = await get_connection(db, project.id)
+
     return render(
         request,
         "pages/overview.html",
@@ -42,6 +55,40 @@ async def overview(
         project=project,
         projects=await list_projects(db, current.user.id),
         counts=await status_counts(db, project.id),
+        metrics=await compute_metrics(db, project.id, time_range=time_range),
+        ranges=RANGES,
+        # Distinguishes "nothing has happened yet" from "SES was never asked to
+        # report", which look identical on screen and have different fixes.
+        events_configured=bool(connection and connection.events_enabled),
+    )
+
+
+@router.get(
+    "/partials/metrics",
+    response_class=HTMLResponse,
+    summary="Overview metrics fragment",
+)
+async def metrics_partial(
+    request: Request,
+    db: Annotated[AsyncSession, Depends(get_session)],
+    current: Annotated[CurrentUser, Depends(require_user)],
+    project: Annotated[Project, Depends(require_project)],
+    range: str | None = None,
+) -> HTMLResponse:
+    """The metrics panel on its own, for the range control's HTMX swap.
+
+    Authenticated like the page it belongs to - these are a project's delivery
+    figures, not the unauthenticated health badge below.
+    """
+    time_range = TimeRange.parse(range)
+
+    return render(
+        request,
+        "partials/metrics.html",
+        current=current,
+        project=project,
+        metrics=await compute_metrics(db, project.id, time_range=time_range),
+        ranges=RANGES,
     )
 
 
