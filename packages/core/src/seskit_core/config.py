@@ -158,6 +158,38 @@ class Settings(BaseSettings):
     #: only because it is there.
     EVENT_VISIBILITY_TIMEOUT_SECONDS: int = 60
 
+    # -- Webhooks (§16) -------------------------------------------------------
+
+    #: Address ranges webhooks may reach even in production, as comma-separated
+    #: CIDRs. Empty by default: SESKit will not POST to a loopback, private or
+    #: link-local address outside local development, because delivery responses
+    #: are captured and shown in the dashboard, which would turn a webhook into
+    #: a read primitive against the internal network. Self-hosted deployments
+    #: with a genuine internal destination write it here deliberately.
+    WEBHOOK_ALLOWED_CIDRS: str = ""
+
+    #: How long one delivery attempt may take, connect and read together. Short:
+    #: a slow endpoint should not hold a worker slot that queued sends are
+    #: waiting behind.
+    WEBHOOK_TIMEOUT_SECONDS: int = 10
+
+    #: Attempts before a delivery is abandoned. With the backoff below this
+    #: spans roughly five minutes, which covers a deploy but not an outage.
+    WEBHOOK_MAX_ATTEMPTS: int = 6
+
+    #: First retry delay. Each subsequent attempt doubles it, with jitter.
+    WEBHOOK_RETRY_BASE_SECONDS: int = 5
+
+    #: Consecutive failures before an endpoint is switched off. Reset by any
+    #: success, so this counts a sustained outage rather than a bad week months
+    #: ago.
+    WEBHOOK_FAILURE_LIMIT: int = 10
+
+    #: How much of a response body is kept for the delivery log. A few KB is
+    #: enough to debug with; without a ceiling, a hostile endpoint streams
+    #: gigabytes into a column that gets rendered into a page.
+    WEBHOOK_RESPONSE_CAPTURE_BYTES: int = 4096
+
     # -- Identity verification (§10) -----------------------------------------
 
     #: How long before an unverified identity is re-checked against SES. DNS can
