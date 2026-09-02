@@ -4,6 +4,13 @@ Keeps business rules out of route handlers, so they can be tested without HTTP
 and reused from a CLI later (§32.12). Phase 6's send logic belongs here too.
 """
 
+from seskit_core.services.analytics import (
+    ActivityPoint,
+    Metrics,
+    TimeRange,
+    activity_series,
+    compute_metrics,
+)
 from seskit_core.services.api_keys import (
     IssuedKey,
     create_api_key,
@@ -92,11 +99,15 @@ from seskit_core.services.webhooks import (
 )
 
 __all__ = [
+    "ActivityPoint",
     "EmailAlreadyRegistered",
     "IssuedKey",
+    "Metrics",
     "ProviderFactory",
     "ProvisionerFactory",
     "SignupClosed",
+    "TimeRange",
+    "activity_series",
     "add_identity",
     "attachment_rows",
     "authenticate",
@@ -106,6 +117,7 @@ __all__ = [
     "choose_provider",
     "classify",
     "clear_check_marker",
+    "compute_metrics",
     "configuration_set_for",
     "connect_aws",
     "count_other_references",

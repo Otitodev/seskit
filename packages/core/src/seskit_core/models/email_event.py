@@ -119,7 +119,13 @@ class EmailEvent(Base, TimestampMixin):
     #: When the provider says it happened - deliberately not when we heard. A
     #: queue backlog or a retry means we often learn late, and an analytics
     #: query that cannot tell the two apart reports the wrong day.
-    occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    #: Indexed on its own as well as with ``email_id``: §18's metrics ask
+    #: "everything that happened in this window", and an index led by
+    #: ``email_id`` cannot answer that. Measured - see the migration
+    #: c73e1f4a8d92, which records the plans and timings.
+    occurred_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, index=True
+    )
 
     email: Mapped[Email] = relationship(back_populates="events")
 
