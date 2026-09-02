@@ -10,12 +10,13 @@ either breaking every caller or serving two shapes for ever.
 
 from fastapi import APIRouter
 
-from seskit_api.routes.v1 import api_keys, domains, emails, events
+from seskit_api.routes.v1 import api_keys, domains, emails, events, webhooks
 
 router = APIRouter(prefix="/v1")
 router.include_router(api_keys.router)
 router.include_router(domains.router)
 router.include_router(emails.router)
 router.include_router(events.router)
+router.include_router(webhooks.router)
 
 __all__ = ["router"]
