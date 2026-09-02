@@ -20,8 +20,16 @@ from seskit_core.models.email_event import (
 from seskit_core.models.identity import Identity
 from seskit_core.models.project import DEFAULT_PROJECT_NAME, Project
 from seskit_core.models.user import User, normalise_email
+from seskit_core.models.webhook import (
+    DEFAULT_FAILURE_LIMIT,
+    DeliveryStatus,
+    WebhookDelivery,
+    WebhookEndpoint,
+    WebhookStatus,
+)
 
 __all__ = [
+    "DEFAULT_FAILURE_LIMIT",
     "DEFAULT_PROJECT_NAME",
     "EVENT_LABELS",
     "FAILURE_EVENT_TYPES",
@@ -29,6 +37,7 @@ __all__ = [
     "APIKey",
     "AWSConnection",
     "ConnectionStatus",
+    "DeliveryStatus",
     "Email",
     "EmailAttachment",
     "EmailEvent",
@@ -39,6 +48,9 @@ __all__ = [
     "Project",
     "TimestampMixin",
     "User",
+    "WebhookDelivery",
+    "WebhookEndpoint",
+    "WebhookStatus",
     "normalise_email",
     "utcnow",
 ]

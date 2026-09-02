@@ -22,6 +22,7 @@ if TYPE_CHECKING:
     from seskit_core.models.email import Email
     from seskit_core.models.identity import Identity
     from seskit_core.models.user import User
+    from seskit_core.models.webhook import WebhookEndpoint
 
 DEFAULT_PROJECT_NAME = "Default"
 
@@ -57,6 +58,9 @@ class Project(Base, TimestampMixin):
         back_populates="project", cascade="all, delete-orphan"
     )
     emails: Mapped[list[Email]] = relationship(
+        back_populates="project", cascade="all, delete-orphan"
+    )
+    webhook_endpoints: Mapped[list[WebhookEndpoint]] = relationship(
         back_populates="project", cascade="all, delete-orphan"
     )
 
