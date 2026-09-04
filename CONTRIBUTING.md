@@ -4,6 +4,11 @@ Thanks for taking an interest. This document covers everything you need to get a
 change merged: the setup, the checks, the commit convention, and the handful of
 traps that have already cost someone an afternoon.
 
+> **Working with a coding agent?** [`AGENTS.md`](AGENTS.md) is the same ground
+> compressed for one — layout, the two-tier test harness, and the rules that
+> are not negotiable. This document is the fuller version and wins wherever
+> they disagree.
+
 ---
 
 ## Contents
