@@ -11,9 +11,12 @@ and that generated files are still generated rather than hand-edited.
 
 from __future__ import annotations
 
+import json
 import re
+import shutil
+import subprocess
 from pathlib import Path
-from typing import Any
+from typing import Any, NamedTuple
 
 import pytest
 
@@ -106,6 +109,165 @@ def test_every_listed_page_carries_a_description() -> None:
         if not isinstance(entry, dict)
     ]
     assert not bare, f"listed without a description: {bare}"
+
+
+# ---------------------------------------------------------- code samples ---
+
+#: Put immediately before a fence to say the block is not meant to work as
+#: written. Used where a sample describes an interface that does not exist yet,
+#: which is honest rather than broken - and saying so in the file is better
+#: than a reader discovering it by pasting the code.
+ILLUSTRATIVE = "<!-- docs-test: illustrative -->"
+
+_FENCE = re.compile(
+    r"(?:(" + re.escape(ILLUSTRATIVE) + r")\s*\n)?^```(\w*)\n(.*?)^```", re.S | re.M
+)
+
+
+class Sample(NamedTuple):
+    where: str
+    language: str
+    body: str
+    illustrative: bool
+
+
+def _samples(language: str | None = None) -> list[Sample]:
+    found: list[Sample] = []
+    for path in sorted((ROOT / "docs").rglob("*.md")):
+        text = path.read_text(encoding="utf-8")
+        for index, (marker, lang, body) in enumerate(_FENCE.findall(text)):
+            lang = lang or "text"
+            if language and lang != language:
+                continue
+            rel = path.relative_to(ROOT).as_posix()
+            found.append(Sample(f"{rel} block {index}", lang, body, bool(marker)))
+    return found
+
+
+def test_there_are_samples_to_check() -> None:
+    """A parser that silently matches nothing would make every check below
+    pass, which is the failure this whole file exists to avoid.
+    """
+    assert len(_samples()) > 40
+
+
+def test_the_illustrative_marker_is_recognised() -> None:
+    """The marker only means something if the parser sees it.
+
+    A typo in the comment would silently produce an unmarked block that the
+    checks then treat as real - the marker failing open rather than closed.
+    Asserted against a known user of it, so renaming the marker without
+    updating the pages that carry it fails here.
+    """
+    marked = [s for s in _samples() if s.illustrative]
+
+    assert marked, f"nothing carries {ILLUSTRATIVE!r}; has the marker been renamed?"
+    assert any("reference/sdk.md" in s.where for s in marked), (
+        "the SDK sample describes a client that does not exist and should be marked"
+    )
+
+
+@pytest.mark.parametrize("sample", _samples("python"), ids=lambda s: s.where)
+def test_every_python_sample_parses(sample: Sample) -> None:
+    """Not executed - most of these need a running server - but a sample that
+    does not even parse has never been read by anyone, let alone run.
+    """
+    compile(sample.body, sample.where, "exec")
+
+
+@pytest.mark.parametrize("sample", _samples("json"), ids=lambda s: s.where)
+def test_every_json_sample_parses(sample: Sample) -> None:
+    """A malformed payload example is copied into somebody's test fixture and
+    debugged for an hour before they suspect the documentation.
+    """
+    json.loads(sample.body)
+
+
+@pytest.mark.parametrize("sample", _samples("bash"), ids=lambda s: s.where)
+def test_every_shell_sample_parses(sample: Sample) -> None:
+    """Syntax-checked, never run: these create databases and start containers.
+
+    Passed on stdin rather than written to a temporary file, because Git Bash
+    on Windows cannot open a Windows path handed to it that way - the check
+    then fails for every block regardless of what it contains, which looks like
+    a real failure and is not.
+    """
+    bash = shutil.which("bash")
+    if bash is None:
+        pytest.skip("bash not available")
+
+    # The resolved path, not the bare name: which() has already found it, and
+    # running whatever "bash" happens to resolve to at the time is the habit
+    # this project should not be teaching in its own test suite.
+    # S603 is suppressed below because the argv is fixed and the sample goes in
+    # on stdin, where -n parses it and stops. Nothing here is executed, which is
+    # the entire reason for choosing -n over running the block.
+    result = subprocess.run(  # noqa: S603
+        [bash, "-n"], input=sample.body, capture_output=True, text=True, check=False
+    )
+    assert result.returncode == 0, f"{sample.where}: {result.stderr.strip()}"
+
+
+def test_the_documented_verifier_actually_verifies() -> None:
+    """The snippet a customer will paste, run against the real signing code.
+
+    This is the sample that matters. Every other one fails visibly when it is
+    wrong - this one fails by accepting a forged event, silently, in somebody
+    else's production system.
+
+    The dashboard shows its own copy of this snippet and has its own test.
+    Which is the point: there are two copies, they had already drifted before
+    this existed, and only one of them was being checked.
+    """
+    from seskit_core.security.webhooks import sign
+
+    sample = next(s for s in _samples("python") if "guides/webhooks.md" in s.where)
+    namespace: dict[str, Any] = {}
+    exec(sample.body, namespace)  # noqa: S102 - running the docs is the point
+    verify = namespace["verify"]
+
+    secret = "whsec_documented"
+    body = b'{"id":"evt_1","type":"email.delivered"}'
+    signature, timestamp = sign(secret, body)
+
+    assert verify(secret, body, signature, str(timestamp)) is True, "a real signature was refused"
+    assert verify(secret, b"{}", signature, str(timestamp)) is False, "a tampered body was accepted"
+    assert verify("whsec_other", body, signature, str(timestamp)) is False, (
+        "any secret was accepted"
+    )
+    assert verify(secret, body, signature, str(timestamp - 3600)) is False, "a replay was accepted"
+
+
+def test_the_documented_verifier_agrees_with_the_dashboards() -> None:
+    """Two copies of the same instructions, held to the same answer.
+
+    They differ in formatting and always will - the page can breathe where a
+    dashboard panel cannot. What they must not differ in is what they accept.
+    """
+    from seskit_api.routes.webhooks import VERIFY_SNIPPET
+    from seskit_core.security.webhooks import sign
+
+    sample = next(s for s in _samples("python") if "guides/webhooks.md" in s.where)
+
+    verifiers = []
+    for source in (sample.body, VERIFY_SNIPPET):
+        namespace: dict[str, Any] = {}
+        exec(source, namespace)  # noqa: S102
+        verifiers.append(namespace["verify"])
+
+    secret = "whsec_documented"
+    body = b'{"id":"evt_1","type":"email.bounced"}'
+    signature, timestamp = sign(secret, body)
+
+    cases = [
+        (secret, body, signature, str(timestamp)),
+        (secret, b"{}", signature, str(timestamp)),
+        ("whsec_other", body, signature, str(timestamp)),
+        (secret, body, signature, str(timestamp - 3600)),
+    ]
+    for case in cases:
+        page, dashboard = (verify(*case) for verify in verifiers)
+        assert page == dashboard, f"the two copies disagree on {case[1]!r}"
 
 
 # ------------------------------------------------------------- generated ---
