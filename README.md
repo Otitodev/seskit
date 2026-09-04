@@ -42,6 +42,7 @@ Self-hosted, MIT licensed, and it runs in your own AWS account.
   - [Connect AWS](#connect-aws) · [IAM policies](#iam-policies) ·
     [Verify a sender](#verify-a-sender) · [The SES sandbox](#the-ses-sandbox)
 - [Delivery events](#delivery-events)
+- [Dashboard](#dashboard) — what the metrics mean, and what each rate divides by
 - [Webhooks](#webhooks) — signed events pushed to your application
 - [API](#api)
 - [Configuration](#configuration)
@@ -412,6 +413,68 @@ account by.
 
 ---
 
+## Dashboard
+
+The Overview turns those events into the numbers you actually get judged on.
+Everything below is computed live from Postgres — nothing is precomputed and
+nothing is cached, because a stale delivery metric is worse than a slow one.
+
+### Counts
+
+| | |
+|---|---|
+| **Sent** | messages SESKit handed to a provider, and the provider accepted |
+| **Delivered** · **Bounced** · **Complained** · **Opened** · **Clicked** | messages with at least one event of that kind |
+
+The five event counts are **distinct messages, never event rows**. Amazon SES
+emits an `Open` every time a message is opened, so counting rows would produce
+open rates above 100% — which reads as a bug and costs you trust in every other
+number on the page.
+
+### Rates, and what each one divides by
+
+```text
+Delivery rate    delivered  / sent
+Bounce rate      bounced    / sent        ← the number AWS suspends accounts over
+Complaint rate   complained / sent        ← and this one
+Open rate        opened     / delivered
+Click rate       clicked    / delivered
+```
+
+**Bounce and complaint divide by *sent* because that is what AWS divides by.**
+Computing them against *delivered* would be flattering, smaller than the figure
+in your SES console, and wrong in the one direction that gets an account
+suspended while your own dashboard still looks healthy. SESKit shows a warning
+above AWS's published review thresholds — **5% bounce, 0.1% complaint**.
+
+**Open and click divide by *delivered***, because a message that never arrived
+could not be opened. Dividing by sent would depress both rates by exactly your
+bounce rate.
+
+Every rate is shown as `—` when its denominator is zero. `0%` would assert
+something untrue about an empty account.
+
+### "Not tracked" is not 0%
+
+Open and click tracking is [off unless you turn it on](#open-and-click-tracking).
+With it off, both rates read **Not tracked** rather than `0%` — the truth is not
+that nobody opened your mail, it is that nobody was counting.
+
+### Time ranges
+
+**24 hours**, **7 days** and **30 days**, as a query parameter (`/?range=7d`),
+so a view is linkable and survives a refresh. Events are filtered on **when they
+happened**, not when SESKit heard about them: a queue backlog that delivers a
+bounce an hour late still files it under the hour it occurred.
+
+The numbers are server-rendered HTML. The activity chart on top of them is an
+enhancement — with JavaScript blocked or broken you lose the picture, not the
+information. Chart.js is vendored rather than loaded from a CDN; its version,
+hash and provenance are in
+[`static/js/vendor/README.md`](apps/api/src/seskit_api/static/js/vendor/README.md).
+
+---
+
 ## Webhooks
 
 Delivery events tell SESKit what happened to a message. Webhooks tell *your
@@ -501,6 +564,20 @@ The `v1=` prefix exists so the scheme can change later without a flag day.
 An endpoint SESKit switches off gets a status of its own — the page says it
 stopped and why, rather than showing a switch that appears to have moved by
 itself. Re-enabling clears the failure count.
+
+### Changing an endpoint's URL
+
+Edit it on the Webhooks page. Three things worth knowing:
+
+- **The signing secret does not change.** Moving your receiver should not
+  require re-keying verification on both sides at the same moment.
+- **Deliveries already queued go to the new URL**, because the worker reads the
+  endpoint at attempt time. Your receiver moved; its backlog moves with it.
+- **The failure count resets, but a paused endpoint stays paused.** The count
+  described an address that is now gone. Resuming outbound requests is a larger
+  act than editing a field, so it stays an explicit click.
+
+The new URL is checked against the same SSRF rules as a new registration.
 
 Deliveries are **at-least-once**: the same event can arrive twice if your
 endpoint is slow to answer. Deduplicate on the event `id`.

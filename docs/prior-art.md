@@ -174,6 +174,47 @@ was plumbing and got none. Both are untrusted boundaries.
   outside local, and check the *resolved* address rather than the string, or DNS
   rebinding walks past the check.
 
+### Phase 9 - dashboard
+
+Their dashboard is the part of the product people screenshot, and the part
+where a metric is easiest to get quietly wrong. Two things worth taking, one
+worth doing differently.
+
+- **Rates are only as good as their denominators.** Bounce and complaint divide
+  by *sent*, because that is what AWS divides by; a rate computed against
+  *delivered* is flattering, smaller than the SES console's, and wrong in the
+  direction that gets an account suspended while the dashboard looks fine. Open
+  and click divide by *delivered*, because a message that never arrived could
+  not be opened.
+- **Count distinct messages, never event rows.** SES emits an `Open` per open.
+  Counting rows produces open rates above 100%, which reads as a bug and costs
+  trust in every other figure on the page.
+- **`—`, never `0%`, when the denominator is zero**, and **"Not tracked"** when
+  tracking is off. `0%` asserts that nobody opened the mail when the truth is
+  that nobody was counting. This is where SESKit goes further than they do.
+
+How Phase 9 met it:
+
+- One service module, `services/analytics.py`, two grouped queries, no cache.
+  §18 says PostgreSQL aggregation is sufficient; a dashboard rendered a few
+  times a day does not need precomputation, and a stale metric is worse than a
+  slow one.
+- Windows filter on `occurred_at`, not `created_at` - Phase 7 separated them so
+  a queue backlog cannot file a bounce under the day SESKit heard about it.
+- The index question was **measured, not guessed**: `EXPLAIN` on 200k seeded
+  rows showed a Seq Scan at 61.8ms against a Bitmap Index Scan at 20.0ms, and a
+  covering index was *slower* at 26.0ms. The migration's docstring carries the
+  numbers.
+- The numbers are server-rendered; the chart is an enhancement on top of them,
+  enforced by a test that asserts the metrics are in the HTML with the script
+  absent.
+
+Deliberately not done: per-recipient analytics, export, date pickers beyond
+§17's three ranges, and **Alpine.js** - §31 lists it to be vendored "when there
+is finally something that needs them", and nothing on these pages holds client
+state HTMX does not already handle. A library nothing imports is weight on
+every page load and supply-chain surface for no behaviour.
+
 ## Onboarding friction
 
 A brand-new AWS account cannot send to arbitrary recipients for ~24 hours -
