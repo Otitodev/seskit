@@ -7,7 +7,7 @@ that arrives here from the provider: delivered, bounced, complained.
 **The unique constraint is the whole point.** SNS and SQS are both explicitly
 at-least-once, so the same notification will be delivered twice sooner or later.
 Without a constraint on the provider's own event id, a redelivered bounce
-becomes two bounces, and every rate §18 computes is wrong. `docs/prior-art.md`
+becomes two bounces, and every rate §18 computes is wrong. `docs/design/prior-art.md`
 records a comparable project that intended this and missed it.
 """
 

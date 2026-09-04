@@ -6,7 +6,7 @@ URL? Acting on a forged `email.bounced` means suppressing an address the
 attacker chose.
 
 **The timestamp is signed with the body, not sent beside it.** This is the whole
-design, and it is the thing `docs/prior-art.md` calls out. Signing the body
+design, and it is the thing `docs/design/prior-art.md` calls out. Signing the body
 alone gives a signature that stays valid forever: anyone who captures one
 request can replay it unchanged, indefinitely, and each replay verifies. Binding
 the timestamp into the signed string means a replay carries the *original*

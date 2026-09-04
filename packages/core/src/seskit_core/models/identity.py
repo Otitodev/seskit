@@ -3,7 +3,7 @@
 §6 calls this `Domain`, and for a domain that is what it is. But SES verifies a
 single email address as an identity too, and that form needs no DNS at all - it
 is the only way a new user reaches a real send in minutes instead of days (see
-``docs/prior-art.md``). Calling an address a domain would be a lie the rest of
+``docs/design/prior-art.md``). Calling an address a domain would be a lie the rest of
 the code has to keep telling, so the model is named for what it holds and the
 routes keep the name users look for.
 

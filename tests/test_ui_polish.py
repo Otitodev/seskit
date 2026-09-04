@@ -1,4 +1,4 @@
-"""Action feedback (§17, `docs/design-system.md`).
+"""Action feedback (§17, `docs/design/system.md`).
 
 Until this, every state-changing form in the dashboard re-rendered its page and
 said nothing. A successful save looked exactly like a save that never happened,

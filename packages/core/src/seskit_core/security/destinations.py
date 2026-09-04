@@ -1,6 +1,6 @@
 """Deciding whether SESKit may POST to a URL a user typed (§16).
 
-This is the requirement `docs/prior-art.md` records as *missing* from the
+This is the requirement `docs/design/prior-art.md` records as *missing* from the
 comparable project, and the reason it matters is a composition rather than
 either half on its own:
 

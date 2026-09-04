@@ -8,7 +8,7 @@ and a server with a hostname should not have to.
 **This endpoint is unauthenticated by design and cannot be otherwise.** SNS has
 no credential to present. Everything that stands between it and a stranger
 posting fabricated bounces is the signature check, which is why the four
-requirements drawn from `docs/prior-art.md` all land here:
+requirements drawn from `docs/design/prior-art.md` all land here:
 
 1. The RSA signature is verified over SNS's canonical string. Checking
    ``TopicArn`` instead - as the project recorded there does - checks a field

@@ -1,6 +1,6 @@
 """Refusing webhook destinations SESKit must not reach (§16).
 
-The requirement `docs/prior-art.md` records as missing from the comparable
+The requirement `docs/design/prior-art.md` records as missing from the comparable
 project. The danger is a composition, not either half:
 
 - a user may register any URL, including one inside SESKit's own network;

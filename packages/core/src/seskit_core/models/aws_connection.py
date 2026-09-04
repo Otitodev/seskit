@@ -134,7 +134,7 @@ class AWSConnection(Base, TimestampMixin):
         SNS returns the string ``PendingConfirmation`` instead of an ARN until
         the endpoint confirms, and until then it publishes nothing. Without
         surfacing this, that deployment looks exactly like events being broken -
-        which is the diagnostic docs/prior-art.md said was worth copying.
+        which is the diagnostic docs/design/prior-art.md said was worth copying.
 
         It never arises on the SQS path: SNS confirms those subscriptions
         itself.

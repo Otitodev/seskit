@@ -1,7 +1,7 @@
 """The SMTP provider (§25, §26).
 
 Built before the SES send path on purpose. §31 says it "unblocks testing every
-later phase without AWS", and `docs/prior-art.md` records the sharper reason: a
+later phase without AWS", and `docs/design/prior-art.md` records the sharper reason: a
 new AWS account cannot mail an arbitrary recipient for about 24 hours, so if the
 first successful send depended on AWS, nobody would reach one on their first
 afternoon. Pointed at Mailpit, `POST /v1/emails` works the moment

@@ -5,7 +5,7 @@ stubbed-out crypto. A test that patches the verification proves only that the
 patch works, and this is the one place in SESKit where an unauthenticated
 stranger can otherwise write to the database.
 
-The two failures being guarded against, from docs/prior-art.md:
+The two failures being guarded against, from docs/design/prior-art.md:
 
 * checking ``TopicArn`` instead of the signature, when ``TopicArn`` is a field
   in the request body and topic ARNs are not secrets;
@@ -194,7 +194,7 @@ async def test_a_tampered_message_is_refused(
 async def test_a_forged_topic_does_not_help(
     signing_key: rsa.RSAPrivateKey, certificate_pem: bytes
 ) -> None:
-    """Checking TopicArn - as the project in docs/prior-art.md does - would
+    """Checking TopicArn - as the project in docs/design/prior-art.md does - would
     accept this, because the ARN is a field in the body the attacker wrote.
     """
     message = _sign(signing_key, _notification())

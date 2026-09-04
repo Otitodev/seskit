@@ -240,7 +240,7 @@ async def test_an_unconfirmed_https_subscription_is_surfaced(
 
     SNS publishes nothing to a subscription that has not been confirmed, so the
     page would show everything set up and no events would ever arrive. This is
-    the diagnostic docs/prior-art.md said was worth copying.
+    the diagnostic docs/design/prior-art.md said was worth copying.
     """
     connection = await _connect(db_session, events=True)
     connection.event_https_subscription_arn = "PendingConfirmation"

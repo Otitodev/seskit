@@ -8,7 +8,7 @@ network, and it is the same shape ``services/events.py`` uses for provisioning.
 frequently share a host - three projects pointing at the same SaaS, or a dozen
 instances at one customer. Without jitter every delivery that failed at the same
 moment retries at the same moment, so a service coming back up is immediately
-knocked over again by the herd it just dropped. `docs/prior-art.md` records 30%,
+knocked over again by the herd it just dropped. `docs/design/prior-art.md` records 30%,
 which is enough to smear a wave across a window without making the schedule
 unpredictable to a human reading the log.
 

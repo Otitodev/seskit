@@ -128,7 +128,7 @@ The full documentation lives in [`docs/`](docs/index.md).
 
 **Design notes** — [why SES-native](docs/design/why-ses.md) ·
 [security model](docs/design/security-model.md) ·
-[prior art](docs/prior-art.md)
+[prior art](docs/design/prior-art.md)
 
 ### The two questions asked before anyone clones
 
@@ -177,7 +177,7 @@ uv run mypy .                  # type-check
 ```
 
 Before changing the dashboard, read
-[`docs/design-system.md`](docs/design-system.md).
+[`docs/design/system.md`](docs/design/system.md).
 
 Security issues: see [SECURITY.md](SECURITY.md) rather than opening a public
 issue.

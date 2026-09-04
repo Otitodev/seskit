@@ -3,7 +3,7 @@
 What is asserted here is mostly about *acknowledgement*, because that is where
 this kind of code goes wrong quietly. A message deleted too early is a delivery
 event nobody will ever see again; a message never deleted is a queue that stops
-making progress. `docs/prior-art.md` records a comparable project that answered
+making progress. `docs/design/prior-art.md` records a comparable project that answered
 success on parse failures, which is the first mistake.
 
 The queue is a fake rather than moto because what matters is which messages
@@ -317,7 +317,7 @@ async def test_a_failure_leaves_the_message_on_the_queue(
     """The asymmetry the whole design rests on.
 
     An exception means we do not know what happened. Acknowledging then is how
-    events disappear without trace - which is the failure docs/prior-art.md
+    events disappear without trace - which is the failure docs/design/prior-art.md
     records, where a transient bug answered success and dropped the event.
     """
     await _sent_email(db_session)
