@@ -1006,6 +1006,97 @@ svg {
   color: var(--text);
 }
 
+/* Skip link.
+   Hidden the same way .visually-hidden hides things, but with a way back:
+   .visually-hidden has no :focus escape, and it must not grow one, because it
+   is also what hides the "View " prefix inside table links. A skip link nobody
+   can see when they tab to it helps a screen reader and abandons every other
+   keyboard user, which is the half more likely to be watching the screen. */
+.skip-link {
+  position: absolute;
+  left: var(--space-4);
+  top: var(--space-4);
+  z-index: 100;
+  padding: var(--space-2) var(--space-4);
+  background: var(--surface-raised);
+  color: var(--text);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  font-size: var(--text-sm);
+  text-decoration: none;
+  transform: translateY(calc(-100% - var(--space-4) - 4px));
+}
+
+.skip-link:focus-visible {
+  transform: translateY(0);
+}
+
+/* Toast.
+   Server-rendered in the document, then floated by app.js. Without scripts it
+   stays in flow at the top of the page, which is why the positioning lives on
+   the [data-toast-floating] state rather than on .toast itself - a message
+   that scripts never reached must not end up fixed over the content with no
+   way to dismiss it. */
+.toast {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin: var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  background: var(--success-bg);
+  color: var(--text);
+  border: 1px solid var(--success-border);
+  border-radius: var(--radius);
+  font-size: var(--text-sm);
+}
+
+.toast[data-toast-floating] {
+  position: fixed;
+  right: var(--space-6);
+  bottom: var(--space-6);
+  left: auto;
+  z-index: 200;
+  margin: 0;
+  max-width: min(380px, calc(100vw - var(--space-12)));
+  background: var(--surface-raised);
+  border-color: var(--border-strong);
+  box-shadow: var(--shadow-lg);
+  animation: toast-in 160ms ease-out;
+}
+
+.toast__text {
+  flex: 1;
+}
+
+.toast__close {
+  flex-shrink: 0;
+  padding: 0 var(--space-1);
+  background: none;
+  border: 0;
+  color: var(--text-muted);
+  font-size: var(--text-lg);
+  line-height: 1;
+  cursor: pointer;
+}
+
+.toast__close:hover {
+  color: var(--text);
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(var(--space-3));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .toast[data-toast-floating] {
+    animation: none;
+  }
+}
+
 /* ------------------------------------------------------------ 5. Utilities */
 
 .muted { color: var(--text-muted); }

@@ -1,0 +1,18 @@
+{# Confirmation that an action happened.
+
+   Server-rendered, then promoted to a floating toast by app.js. Rendering it
+   here rather than building it in JavaScript means the message exists in the
+   HTML a screen reader reads, and survives a page that loads with scripts
+   blocked - it simply stays where it is instead of floating.
+
+   role="status" with aria-live="polite" announces the text without stealing
+   focus, which matters because the user is usually still on the control they
+   just pressed. #}
+{% if flash %}
+  <div class="toast" data-toast role="status" aria-live="polite">
+    <span class="toast__text">{{ flash }}</span>
+    <button class="toast__close" type="button" data-toast-dismiss aria-label="Dismiss">
+      &times;
+    </button>
+  </div>
+{% endif %}

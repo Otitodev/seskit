@@ -36,7 +36,9 @@
 {# hx-headers puts the CSRF token on every HTMX request, so a fragment POST is
    accepted without each one having to carry a hidden field. #}
 <body{% if csrf_token %} hx-headers='{"X-CSRF-Token": "{{ csrf_token }}"}'{% endif %}>
-  <a class="visually-hidden" href="#main">Skip to content</a>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  {% include "components/toast.html" %}
 
   <div class="app">
     <aside class="sidebar">
