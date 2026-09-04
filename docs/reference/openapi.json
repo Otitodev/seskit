@@ -1,0 +1,1304 @@
+{
+  "components": {
+    "schemas": {
+      "APIKeyList": {
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/APIKeyResponse"
+            },
+            "title": "Data",
+            "type": "array"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "APIKeyList",
+        "type": "object"
+      },
+      "APIKeyResponse": {
+        "description": "A key as the API describes it - prefix only, never the secret.",
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "examples": [
+              "key_01J8XQ2K3M4N5P6Q7R8S9T0V1W"
+            ],
+            "title": "Id",
+            "type": "string"
+          },
+          "key_prefix": {
+            "description": "The first characters of the key, for recognising it in a list.",
+            "examples": [
+              "sk_3nK9vQ2m"
+            ],
+            "title": "Key Prefix",
+            "type": "string"
+          },
+          "last_used_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Accurate to the minute; not updated on every request.",
+            "title": "Last Used At"
+          },
+          "name": {
+            "examples": [
+              "production"
+            ],
+            "title": "Name",
+            "type": "string"
+          },
+          "revoked_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Null while the key is active. Revocation is permanent.",
+            "title": "Revoked At"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "key_prefix",
+          "created_at"
+        ],
+        "title": "APIKeyResponse",
+        "type": "object"
+      },
+      "AttachmentRequest": {
+        "description": "One attachment, base64 encoded.\n\nJSON has no byte type, so content arrives encoded. The size limit is applied\nto the *assembled message* rather than to this field, because base64 inflates\ncontent by about a third and it is the assembled size SES rejects.",
+        "properties": {
+          "content": {
+            "description": "Base64-encoded file content.",
+            "title": "Content",
+            "type": "string"
+          },
+          "content_type": {
+            "default": "application/octet-stream",
+            "examples": [
+              "text/csv"
+            ],
+            "title": "Content Type",
+            "type": "string"
+          },
+          "filename": {
+            "examples": [
+              "report.csv"
+            ],
+            "maxLength": 255,
+            "title": "Filename",
+            "type": "string"
+          }
+        },
+        "required": [
+          "filename",
+          "content"
+        ],
+        "title": "AttachmentRequest",
+        "type": "object"
+      },
+      "DependencyStatus": {
+        "properties": {
+          "database": {
+            "title": "Database",
+            "type": "boolean"
+          },
+          "redis": {
+            "title": "Redis",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "database",
+          "redis"
+        ],
+        "title": "DependencyStatus",
+        "type": "object"
+      },
+      "DnsRecordResponse": {
+        "description": "One record the customer has to publish.\n\n``from_attributes`` because the source is a frozen dataclass, not a dict -\npydantic will not read a nested dataclass by attribute without it.",
+        "properties": {
+          "name": {
+            "examples": [
+              "abc123._domainkey.example.com"
+            ],
+            "title": "Name",
+            "type": "string"
+          },
+          "record_type": {
+            "examples": [
+              "CNAME"
+            ],
+            "title": "Record Type",
+            "type": "string"
+          },
+          "value": {
+            "examples": [
+              "abc123.dkim.amazonses.com"
+            ],
+            "title": "Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "record_type",
+          "name",
+          "value"
+        ],
+        "title": "DnsRecordResponse",
+        "type": "object"
+      },
+      "DomainList": {
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/DomainResponse"
+            },
+            "title": "Data",
+            "type": "array"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "DomainList",
+        "type": "object"
+      },
+      "DomainResponse": {
+        "description": "A sending domain and where its verification has got to.",
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "dkim_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "examples": [
+              "success"
+            ],
+            "title": "Dkim Status"
+          },
+          "dns_records": {
+            "items": {
+              "$ref": "#/components/schemas/DnsRecordResponse"
+            },
+            "title": "Dns Records",
+            "type": "array"
+          },
+          "id": {
+            "examples": [
+              "dom_01J8XQ2K3M4N5P6Q7R8S9T0V1W"
+            ],
+            "title": "Id",
+            "type": "string"
+          },
+          "last_checked_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Checked At"
+          },
+          "mail_from_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "examples": [
+              "not_started"
+            ],
+            "title": "Mail From Status"
+          },
+          "region": {
+            "examples": [
+              "us-east-1"
+            ],
+            "title": "Region",
+            "type": "string"
+          },
+          "value": {
+            "examples": [
+              "example.com"
+            ],
+            "title": "Value",
+            "type": "string"
+          },
+          "verification_status": {
+            "examples": [
+              "success"
+            ],
+            "title": "Verification Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "value",
+          "region",
+          "verification_status",
+          "created_at"
+        ],
+        "title": "DomainResponse",
+        "type": "object"
+      },
+      "EmailResponse": {
+        "description": "A stored message, as a customer sees it.\n\nBcc is deliberately absent. It is recorded - support gets asked - but a\nblind copy readable from the API is not blind.",
+        "properties": {
+          "cc": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Cc",
+            "type": "array"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "delivered_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Delivered At"
+          },
+          "from": {
+            "examples": [
+              "hello@example.com"
+            ],
+            "title": "From",
+            "type": "string"
+          },
+          "html": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Html"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "last_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Error"
+          },
+          "provider_message_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider Message Id"
+          },
+          "reply_to": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Reply To",
+            "type": "array"
+          },
+          "sent_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sent At"
+          },
+          "status": {
+            "examples": [
+              "sent"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "subject": {
+            "title": "Subject",
+            "type": "string"
+          },
+          "text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Text"
+          },
+          "to": {
+            "items": {
+              "type": "string"
+            },
+            "title": "To",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "status",
+          "from",
+          "to",
+          "cc",
+          "reply_to",
+          "subject",
+          "created_at"
+        ],
+        "title": "EmailResponse",
+        "type": "object"
+      },
+      "ErrorBody": {
+        "properties": {
+          "message": {
+            "description": "Human-readable explanation. Not intended for pattern matching.",
+            "examples": [
+              "Invalid or missing API key."
+            ],
+            "title": "Message",
+            "type": "string"
+          },
+          "type": {
+            "description": "Machine-readable error type.",
+            "examples": [
+              "authentication_failed"
+            ],
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "message"
+        ],
+        "title": "ErrorBody",
+        "type": "object"
+      },
+      "ErrorResponse": {
+        "properties": {
+          "error": {
+            "$ref": "#/components/schemas/ErrorBody"
+          }
+        },
+        "required": [
+          "error"
+        ],
+        "title": "ErrorResponse",
+        "type": "object"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "HealthResponse": {
+        "properties": {
+          "status": {
+            "const": "ok",
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "title": "HealthResponse",
+        "type": "object"
+      },
+      "ReadinessResponse": {
+        "properties": {
+          "dependencies": {
+            "$ref": "#/components/schemas/DependencyStatus"
+          },
+          "status": {
+            "enum": [
+              "ready",
+              "not_ready"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "dependencies"
+        ],
+        "title": "ReadinessResponse",
+        "type": "object"
+      },
+      "SendEmailRequest": {
+        "description": "\u00a711's request body.",
+        "properties": {
+          "attachments": {
+            "items": {
+              "$ref": "#/components/schemas/AttachmentRequest"
+            },
+            "title": "Attachments",
+            "type": "array"
+          },
+          "bcc": {
+            "anyOf": [
+              {
+                "anyOf": [
+                  {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  {
+                    "type": "string"
+                  }
+                ],
+                "examples": [
+                  [
+                    "user@example.com"
+                  ]
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bcc"
+          },
+          "cc": {
+            "anyOf": [
+              {
+                "anyOf": [
+                  {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  {
+                    "type": "string"
+                  }
+                ],
+                "examples": [
+                  [
+                    "user@example.com"
+                  ]
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cc"
+          },
+          "from": {
+            "examples": [
+              "Acme <hello@example.com>"
+            ],
+            "maxLength": 320,
+            "title": "From",
+            "type": "string"
+          },
+          "headers": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Headers",
+            "type": "object"
+          },
+          "html": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "examples": [
+              "<h1>Welcome!</h1>"
+            ],
+            "title": "Html"
+          },
+          "reply_to": {
+            "anyOf": [
+              {
+                "anyOf": [
+                  {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  {
+                    "type": "string"
+                  }
+                ],
+                "examples": [
+                  [
+                    "user@example.com"
+                  ]
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reply To"
+          },
+          "subject": {
+            "examples": [
+              "Welcome to Acme"
+            ],
+            "maxLength": 998,
+            "title": "Subject",
+            "type": "string"
+          },
+          "text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "examples": [
+              "Welcome to Acme"
+            ],
+            "title": "Text"
+          },
+          "to": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "examples": [
+              [
+                "user@example.com"
+              ]
+            ],
+            "title": "To"
+          }
+        },
+        "required": [
+          "from",
+          "to",
+          "subject"
+        ],
+        "title": "SendEmailRequest",
+        "type": "object"
+      },
+      "SendEmailResponse": {
+        "description": "\u00a711's response: the id, and that it was accepted.\n\n``queued`` rather than ``sent`` because that is what has happened. The\nmessage is durable and will be attempted; claiming it had gone out would be\na promise this response cannot make.",
+        "properties": {
+          "id": {
+            "examples": [
+              "email_01J8XQ2K3M4N5P6Q7R8S9T0V1W"
+            ],
+            "title": "Id",
+            "type": "string"
+          },
+          "status": {
+            "examples": [
+              "queued"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "status"
+        ],
+        "title": "SendEmailResponse",
+        "type": "object"
+      },
+      "ValidationError": {
+        "properties": {
+          "ctx": {
+            "title": "Context",
+            "type": "object"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "title": "Location",
+            "type": "array"
+          },
+          "msg": {
+            "title": "Message",
+            "type": "string"
+          },
+          "type": {
+            "title": "Error Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError",
+        "type": "object"
+      },
+      "WebhookDeliveryList": {
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/WebhookDeliveryResponse"
+            },
+            "title": "Data",
+            "type": "array"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "WebhookDeliveryList",
+        "type": "object"
+      },
+      "WebhookDeliveryResponse": {
+        "description": "One attempt to deliver one event to one endpoint.",
+        "properties": {
+          "attempt_count": {
+            "examples": [
+              1
+            ],
+            "title": "Attempt Count",
+            "type": "integer"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "examples": [
+              null
+            ],
+            "title": "Error"
+          },
+          "event_id": {
+            "examples": [
+              "evt_01J8XQ2K3M4N5P6Q7R8S9T0V1W"
+            ],
+            "title": "Event Id",
+            "type": "string"
+          },
+          "id": {
+            "examples": [
+              "whd_01J8XQ2K3M4N5P6Q7R8S9T0V1W"
+            ],
+            "title": "Id",
+            "type": "string"
+          },
+          "last_attempt_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Attempt At"
+          },
+          "next_attempt_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Attempt At"
+          },
+          "response_status": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "examples": [
+              200
+            ],
+            "title": "Response Status"
+          },
+          "status": {
+            "examples": [
+              "delivered"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "event_id",
+          "status",
+          "attempt_count",
+          "created_at"
+        ],
+        "title": "WebhookDeliveryResponse",
+        "type": "object"
+      },
+      "WebhookEndpointList": {
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/WebhookEndpointResponse"
+            },
+            "title": "Data",
+            "type": "array"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "WebhookEndpointList",
+        "type": "object"
+      },
+      "WebhookEndpointResponse": {
+        "description": "A registered destination and whether SESKit is still sending to it.",
+        "properties": {
+          "consecutive_failures": {
+            "default": 0,
+            "examples": [
+              0
+            ],
+            "title": "Consecutive Failures",
+            "type": "integer"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "examples": [
+              "wh_01J8XQ2K3M4N5P6Q7R8S9T0V1W"
+            ],
+            "title": "Id",
+            "type": "string"
+          },
+          "status": {
+            "examples": [
+              "active"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "url": {
+            "examples": [
+              "https://example.com/webhooks/email"
+            ],
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "url",
+          "status",
+          "created_at"
+        ],
+        "title": "WebhookEndpointResponse",
+        "type": "object"
+      }
+    }
+  },
+  "info": {
+    "description": "A Python-native developer email platform built on Amazon SES.",
+    "title": "SESKit",
+    "version": "0.1.0"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/healthz": {
+      "get": {
+        "description": "Return 200 whenever the process is running. Checks no dependencies.",
+        "operationId": "healthz_healthz_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Liveness probe",
+        "tags": [
+          "health"
+        ]
+      }
+    },
+    "/readyz": {
+      "get": {
+        "description": "Round-trip both Postgres and Redis.\n\nReturns 503 if either is unreachable, so a partially-started stack is not\nadvertised as ready.",
+        "operationId": "readyz_readyz_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadinessResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadinessResponse"
+                }
+              }
+            },
+            "description": "A dependency is unavailable"
+          }
+        },
+        "summary": "Readiness probe",
+        "tags": [
+          "health"
+        ]
+      }
+    },
+    "/v1/api-keys": {
+      "get": {
+        "description": "Every key belonging to the calling key's project.\n\nScoped by the authenticated project rather than by anything in the request,\nso there is no parameter a caller could change to see someone else's keys.",
+        "operationId": "list_keys_v1_api_keys_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIKeyList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid or missing API key."
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Rate limit exceeded."
+          }
+        },
+        "summary": "List API keys",
+        "tags": [
+          "api-keys"
+        ]
+      }
+    },
+    "/v1/domains": {
+      "get": {
+        "description": "Every domain this key's project can send from.",
+        "operationId": "list_domains_v1_domains_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DomainList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid or missing API key."
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Rate limit exceeded."
+          }
+        },
+        "summary": "List sending domains",
+        "tags": [
+          "domains"
+        ]
+      }
+    },
+    "/v1/emails": {
+      "post": {
+        "description": "Accept a message for sending.",
+        "operationId": "send_email_v1_emails_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SendEmailRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SendEmailResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid or missing API key."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Rate limit exceeded."
+          }
+        },
+        "summary": "Send an email",
+        "tags": [
+          "emails"
+        ]
+      }
+    },
+    "/v1/emails/{email_id}": {
+      "get": {
+        "description": "One message, if it belongs to this key's project.\n\nOwnership is part of the query, so an id from another project is a 404\nrather than a 403 - which would confirm the id exists.",
+        "operationId": "get_email_v1_emails__email_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "email_id",
+            "required": true,
+            "schema": {
+              "title": "Email Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmailResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid or missing API key."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Rate limit exceeded."
+          }
+        },
+        "summary": "Retrieve an email",
+        "tags": [
+          "emails"
+        ]
+      }
+    },
+    "/v1/webhooks": {
+      "get": {
+        "description": "Every webhook endpoint registered on this key's project.\n\nThe signing secret is not included - see the note in\n``schemas/webhooks.py``. It is available on the dashboard, where it is read\nonce by a person rather than returned to code on every call.",
+        "operationId": "list_webhook_endpoints_v1_webhooks_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WebhookEndpointList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid or missing API key."
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Rate limit exceeded."
+          }
+        },
+        "summary": "List webhook endpoints",
+        "tags": [
+          "webhooks"
+        ]
+      }
+    },
+    "/v1/webhooks/{endpoint_id}/deliveries": {
+      "get": {
+        "description": "Recent delivery attempts for one endpoint, newest first.\n\nThe delivery row is the queue as well as the log, so what comes back is the\nactual state of each attempt - including one still pending a retry, with the\ntime it is next due.",
+        "operationId": "list_webhook_deliveries_v1_webhooks__endpoint_id__deliveries_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "endpoint_id",
+            "required": true,
+            "schema": {
+              "title": "Endpoint Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WebhookDeliveryList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid or missing API key."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Rate limit exceeded."
+          }
+        },
+        "summary": "List recent webhook deliveries",
+        "tags": [
+          "webhooks"
+        ]
+      }
+    }
+  }
+}
