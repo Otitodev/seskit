@@ -12,6 +12,7 @@
 
 A thin client over the HTTP API:
 
+<!-- docs-test: illustrative -->
 ```python
 from seskit import SesKit
 
