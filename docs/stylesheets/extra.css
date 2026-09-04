@@ -1,29 +1,50 @@
 /* Colours only, per §31: this site is Material for MkDocs wearing SESKit's
-   accent, not a theme rewritten from scratch. Restyling a documentation
-   theme is a way to spend a week and end up with something less accessible
-   than what shipped.
+   brand, not a theme rewritten from scratch. Restyling a documentation theme is
+   a way to spend a week and end up with something less accessible than what
+   shipped.
 
-   The accent is the dashboard's, so a reader moving between the docs and a
-   running instance does not feel handed off to a different product. */
+   #0166f8 is sampled from the logo mark and is the same value the dashboard
+   uses for --accent, so a reader moving between the docs and a running
+   instance does not feel handed off to a different product.
+
+   Material has no built-in palette at this hue, which is why mkdocs.yml sets
+   `primary: custom` and the values live here. */
 
 :root {
-  --md-primary-fg-color: #0f766e;
-  --md-primary-fg-color--light: #14b8a6;
-  --md-primary-fg-color--dark: #115e59;
-  --md-accent-fg-color: #0d9488;
+  --md-primary-fg-color: #0166f8;
+  --md-primary-fg-color--light: #3d8bff;
+  --md-primary-fg-color--dark: #0154cf;
+  --md-primary-bg-color: #ffffff;
+  --md-primary-bg-color--light: #ffffffb3;
+
+  /* Links and interactive accents. Slightly darkened from the brand blue,
+     because Material puts this on body-text-sized runs against white where
+     #0166f8 sits at 4.93:1 — passing, but with nothing spare. */
+  --md-accent-fg-color: #0154cf;
+  --md-accent-fg-color--transparent: #0166f81a;
 }
 
 [data-md-color-scheme="slate"] {
-  --md-primary-fg-color: #2dd4bf;
-  --md-accent-fg-color: #5eead4;
-  /* Material's default slate is a touch blue; this sits closer to the
+  /* The same hue lifted for a dark surface, matching the dashboard's own dark
+     accent rather than reusing the light value, which fails against it. */
+  --md-primary-fg-color: #4d94ff;
+  --md-accent-fg-color: #6aa5ff;
+  --md-typeset-a-color: #4d94ff;
+  /* Material's default slate is a touch blue-grey; this sits closer to the
      dashboard's own dark surface. */
   --md-default-bg-color: #0f1115;
 }
 
+/* The header logo is a transparent PNG of the mark. Material sizes these to
+   1.2rem by default, which leaves it looking incidental next to the site name. */
+.md-header__button.md-logo img {
+  height: 1.6rem;
+  width: 1.6rem;
+}
+
 /* The ASCII diagrams on the home page and in the guides carry meaning in their
    alignment, so they must not wrap or shrink into illegibility on a phone.
-   They scroll inside their own block instead - the page body never does. */
+   They scroll inside their own block instead — the page body never does. */
 .md-typeset pre > code {
   overflow-x: auto;
 }

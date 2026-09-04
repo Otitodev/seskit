@@ -1,0 +1,49 @@
+{#
+  Social card metadata.
+
+  Material can generate cards itself with the `social` plugin, but that pulls in
+  Cairo and Pango as system libraries — a build dependency that would have to be
+  installed in CI and on anyone's laptop who runs `mkdocs serve`. A designed
+  card already exists, so this points at it and stays a static file.
+
+  `extrahead` is Material's own extension point, so this override survives a
+  theme upgrade in a way that copying `base.html` would not.
+#}
+{% extends "base.html" %}
+
+{% block extrahead %}
+  {#- `page` is None while the theme renders 404.html, so every access to it
+      needs guarding. Without this the build dies on that one template, which
+      is easy to miss because it is the only page nobody navigates to. -#}
+  {% set title = config.site_name %}
+  {% if page and page.title and not page.is_homepage %}
+    {% set title = page.title ~ " · " ~ config.site_name %}
+  {% endif %}
+
+  {% set description = config.site_description %}
+  {% if page and page.meta and page.meta.description %}
+    {% set description = page.meta.description %}
+  {% endif %}
+
+  {% set url = config.site_url %}
+  {% if page and page.canonical_url %}
+    {% set url = page.canonical_url %}
+  {% endif %}
+
+  {% set image = config.site_url ~ "assets/seskit-og-1200x630.jpg" %}
+
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="{{ config.site_name }}">
+  <meta property="og:title" content="{{ title }}">
+  <meta property="og:description" content="{{ description }}">
+  <meta property="og:url" content="{{ url }}">
+  <meta property="og:image" content="{{ image }}">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="SESKit — a Python-native email platform built on Amazon SES">
+
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="{{ title }}">
+  <meta name="twitter:description" content="{{ description }}">
+  <meta name="twitter:image" content="{{ image }}">
+{% endblock %}

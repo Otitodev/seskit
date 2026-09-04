@@ -24,6 +24,12 @@ strict: true
 theme:
   name: material
   language: en
+  # The icon, not a wordmark: Material puts this on a coloured header bar, and
+  # the supplied horizontal logo carries a baked white background that would
+  # show as a white block against it.
+  logo: assets/seskit-icon.png
+  favicon: assets/favicon.png
+  custom_dir: overrides
   features:
     - navigation.sections
     - navigation.top
@@ -41,21 +47,27 @@ theme:
         name: Switch to light mode
     - media: "(prefers-color-scheme: light)"
       scheme: default
-      primary: teal
-      accent: teal
+      primary: custom
+      accent: custom
       toggle:
         icon: material/brightness-7
         name: Switch to dark mode
     - media: "(prefers-color-scheme: dark)"
       scheme: slate
-      primary: teal
-      accent: teal
+      primary: custom
+      accent: custom
       toggle:
         icon: material/brightness-4
         name: Follow system
 
 extra_css:
   - stylesheets/extra.css
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/Otitodev/seskit
+      name: SESKit on GitHub
 
 plugins:
   # Client-side, no Algolia and no third party. Same reasoning as vendoring

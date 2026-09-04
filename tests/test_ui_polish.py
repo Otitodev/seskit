@@ -327,6 +327,53 @@ def test_the_active_nav_item_is_marked_for_assistive_technology() -> None:
     assert 'aria-current="page"' in markup
 
 
+# --------------------------------------------------------------- branding ---
+
+
+def test_the_brand_mark_is_the_transparent_asset() -> None:
+    """Only the icon has an alpha channel.
+
+    The supplied horizontal and stacked wordmarks are RGB with a baked white
+    background, so either of them in the app shell would render as a white
+    block in dark mode. This fails if one is ever wired into a template.
+    """
+    banned = ("logo-horizontal", "logo_horizontal", "logo-stacked", "logo_stacked")
+    offenders = [
+        f"{name}: {word}" for name, markup in _templates() for word in banned if word in markup
+    ]
+
+    assert not offenders, "opaque wordmark in the app shell:\n" + "\n".join(offenders)
+
+
+def test_the_accent_and_the_focus_ring_agree_in_every_theme() -> None:
+    """The ring is the accent by definition.
+
+    There are three theme blocks - :root, the prefers-color-scheme media query,
+    and [data-theme] for the explicit toggle - and moving the accent in two of
+    them is exactly the mistake this catches.
+    """
+    import re
+
+    css = _stylesheet()
+    accents = re.findall(r"--accent:\s*(#[0-9a-f]{6})", css)
+    rings = re.findall(r"--focus-ring:\s*(#[0-9a-f]{6})", css)
+
+    assert len(accents) == 3, f"expected three theme blocks, found {len(accents)}"
+    assert set(rings) <= set(accents), f"focus rings {set(rings)} not among accents {set(accents)}"
+
+
+def test_every_page_offers_a_favicon() -> None:
+    """Both shells, not just the dashboard. The sign-in page is the first thing
+    a new instance shows, and a default globe in the tab there is the first
+    impression.
+    """
+    shells = dict(_templates())
+
+    for name in ("base.html", "base_auth.html"):
+        assert 'rel="icon"' in shells[name], name
+        assert 'rel="apple-touch-icon"' in shells[name], name
+
+
 # ----------------------------------------------------------- the skip link ---
 
 
