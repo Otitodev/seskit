@@ -145,6 +145,51 @@ async def get_owned_endpoint(
     return endpoint
 
 
+async def update_endpoint_url(
+    session: AsyncSession,
+    endpoint: WebhookEndpoint,
+    *,
+    url: str,
+    policy: DestinationPolicy,
+    resolver: Resolver | None = None,
+) -> bool:
+    """Point an endpoint somewhere else. Returns whether anything changed.
+
+    **The signing secret survives**, which is the whole reason this exists as
+    its own operation rather than as delete-and-recreate. Someone moving their
+    receiver should not have to re-key verification on both sides at once.
+
+    **Deliveries already queued follow the new URL**, because the worker reads
+    ``endpoint.url`` at attempt time rather than at queue time. That is the
+    correct behaviour - the receiver moved - and it is stated on the page rather
+    than left to be discovered.
+
+    Validation is the same courtesy check ``create_endpoint`` runs: it puts the
+    error on the form instead of in a log an hour later. The check that actually
+    protects the network still runs again at delivery, against the resolved
+    address.
+    """
+    url = url.strip()
+    await validate(url, policy=policy, resolver=resolver)
+
+    if url == endpoint.url:
+        return False
+
+    endpoint.url = url
+
+    # The count described the *old* address and means nothing against a new one.
+    # The status deliberately does not move with it: enabling an endpoint
+    # resumes outbound requests, which is a larger act than editing a field, and
+    # one that should stay explicit. The page stops showing the stale "failed
+    # five times in a row" banner once the URL has changed, and offers the
+    # button instead - see `pages/webhooks.html`.
+    endpoint.consecutive_failures = 0
+
+    await session.flush()
+    logger.info("webhook_endpoint_url_changed", endpoint_id=endpoint.id)
+    return True
+
+
 async def set_enabled(
     session: AsyncSession, endpoint: WebhookEndpoint, *, enabled: bool
 ) -> WebhookEndpoint:
@@ -394,4 +439,5 @@ __all__ = [
     "record_delivery_success",
     "rotate_secret",
     "set_enabled",
+    "update_endpoint_url",
 ]

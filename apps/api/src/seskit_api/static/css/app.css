@@ -445,6 +445,29 @@ svg {
   gap: var(--space-4);
 }
 
+/* A message's delivery timeline (§17). A rail rather than a plain list, so the
+   entries read as one sequence; it is decoration over `.stack`, which still
+   lays the items out on its own if this rule is ever dropped. */
+.timeline {
+  border-left: 1px solid var(--border);
+  padding-left: var(--space-4);
+}
+
+.timeline__item {
+  position: relative;
+}
+
+.timeline__item::before {
+  content: "";
+  position: absolute;
+  left: calc(-1 * var(--space-4) - 4px);
+  top: 0.5rem;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--border-strong);
+}
+
 .row {
   display: flex;
   align-items: center;

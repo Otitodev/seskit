@@ -84,11 +84,15 @@
      Distinct from the status above, deliberately: `sent` describes SESKit's own
      part and stays true even after a bounce. Both facts belong on the page, and
      collapsing them would lose the one that says whether SESKit did its job. #}
-  {{ card_open("History") }}
+  {{ card_open("Timeline") }}
     {% if events %}
-      <ul class="stack">
+      {# Newest first, and said out loud: a timeline whose direction the reader
+         has to infer from the timestamps is worse than a plain list. Ordered on
+         `occurred_at` rather than on arrival - see `list_events`. #}
+      <p class="muted">Most recent first, by when the event happened.</p>
+      <ul class="stack timeline">
         {% for event in events %}
-          <li>
+          <li class="timeline__item">
             <div class="row">
               {% if event.type.value == "delivered" %}
                 {{ badge(event.label, tone="success") }}

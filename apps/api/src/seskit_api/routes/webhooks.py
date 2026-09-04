@@ -32,6 +32,7 @@ from seskit_core.services import (
     policy_from,
     rotate_secret,
     set_enabled,
+    update_endpoint_url,
 )
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -147,6 +148,50 @@ async def create(
         # page is about to render.
         # The same message for every refusal. Naming which rule failed would
         # tell whoever is probing which internal range to try next.
+        return await _page(request, db, current, project, error=error.message, status_code=400)
+
+    await db.commit()
+    return await _page(request, db, current, project)
+
+
+@router.post(
+    "/webhooks/{endpoint_id}/url",
+    response_class=HTMLResponse,
+    dependencies=[Depends(verify_csrf)],
+    summary="Change a webhook endpoint's URL",
+)
+async def change_url(
+    request: Request,
+    endpoint_id: str,
+    db: Annotated[AsyncSession, Depends(get_session)],
+    current: Annotated[CurrentUser, Depends(require_user)],
+    project: Annotated[Project, Depends(require_project)],
+    settings: Annotated[Settings, Depends(get_app_settings)],
+    resolver: Annotated[Resolver | None, Depends(get_destination_resolver)],
+    url: Annotated[str, Form()] = "",
+) -> HTMLResponse:
+    """Point an endpoint somewhere else, keeping its signing secret.
+
+    Editing rather than replacing exists for one reason: a customer who moves
+    their receiver should not have to re-key verification on both sides at the
+    same time. The new URL is checked exactly as a new one would be.
+    """
+    endpoint = await get_owned_endpoint(db, project_id=project.id, endpoint_id=endpoint_id)
+    if endpoint is None:
+        return await _page(request, db, current, project)
+
+    try:
+        await update_endpoint_url(
+            db,
+            endpoint,
+            url=url,
+            policy=_policy(settings),  # type: ignore[arg-type]
+            resolver=resolver,
+        )
+    except DestinationError as error:
+        # No rollback, for the same reason as create: validate() runs before
+        # anything is written, so the old URL is still the stored one and there
+        # is nothing to undo.
         return await _page(request, db, current, project, error=error.message, status_code=400)
 
     await db.commit()

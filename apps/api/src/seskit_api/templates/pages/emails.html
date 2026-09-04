@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "components/ui.html" import card_open, card_close, empty, badge, metric, code_block %}
+{% from "components/ui.html" import card_open, card_close, empty, metric, code_block %}
 
 {% block title %}Emails · SESKit{% endblock %}
 
@@ -11,7 +11,10 @@
     </p>
   </div>
 
-  {% if emails %}
+  {# `counts.total`, not `emails`: the list can be empty because a filter
+     narrowed it, which is a different situation from an empty project and gets
+     a different answer inside the fragment. #}
+  {% if counts.total %}
     <div class="grid-metrics">
       {{ metric("Total", counts.total) }}
       {{ metric("Sent", counts.sent) }}
@@ -20,50 +23,7 @@
     </div>
 
     {{ card_open("Recent", flush=True) }}
-      <div class="table-wrap">
-        <table class="table">
-          <thead>
-            <tr>
-              <th>Status</th>
-              <th>To</th>
-              <th>Subject</th>
-              <th>Sent</th>
-              <th><span class="visually-hidden">Actions</span></th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for email in emails %}
-              <tr>
-                <td>
-                  {% if email.status == "sent" %}
-                    {{ badge("Sent", tone="success") }}
-                  {% elif email.status == "failed" %}
-                    {{ badge("Failed", tone="danger") }}
-                  {% elif email.status == "sending" %}
-                    {{ badge("Sending", tone="warning") }}
-                  {% else %}
-                    {{ badge("Queued", tone="warning") }}
-                  {% endif %}
-                </td>
-                {# Bcc is deliberately not here. It is recorded, but a blind
-                   copy listed beside the other recipients is not blind. #}
-                <td class="table__mono">{{ email.to_addresses | join(", ") }}</td>
-                <td>{{ email.subject }}</td>
-                <td class="muted">
-                  {% if email.sent_at %}
-                    {{ email.sent_at.strftime("%Y-%m-%d %H:%M UTC") }}
-                  {% else %}
-                    —
-                  {% endif %}
-                </td>
-                <td class="table__actions">
-                  <a class="link" href="/emails/{{ email.id }}">View</a>
-                </td>
-              </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      </div>
+      {% include "partials/email_table.html" %}
     {{ card_close() }}
   {% else %}
     {{ card_open("Emails") }}

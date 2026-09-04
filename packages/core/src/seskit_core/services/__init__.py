@@ -96,6 +96,7 @@ from seskit_core.services.webhooks import (
     record_delivery_success,
     rotate_secret,
     set_enabled,
+    update_endpoint_url,
 )
 
 __all__ = [
@@ -158,7 +159,6 @@ __all__ = [
     "record_delivery_success",
     "record_failure",
     "record_sent",
-    "record_success",
     "refresh_connection",
     "refresh_identity",
     "register_user",
@@ -174,5 +174,6 @@ __all__ = [
     "to_outbound",
     "topic_name_for",
     "touch_last_used",
+    "update_endpoint_url",
     "verify_api_key",
 ]

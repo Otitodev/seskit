@@ -35,6 +35,33 @@ router = APIRouter(tags=["emails"], include_in_schema=False)
 #: project's entire sending record into a template.
 PAGE_SIZE = 50
 
+#: Offered in the filter control. Derived from the enum rather than written out,
+#: so a new status cannot appear in the table and be missing from the filter.
+STATUS_FILTERS = (None, *EmailStatus)
+
+
+def parse_status(value: str | None) -> EmailStatus | None:
+    """The requested status, or ``None`` for all of them.
+
+    Forgiving on purpose, like ``TimeRange.parse``: a hand-edited or stale URL
+    should render the page it was clearly asking for rather than a 422. There is
+    nothing to protect here - the value only ever narrows a query that is
+    already scoped to one project.
+    """
+    if not value:
+        return None
+    try:
+        return EmailStatus(value)
+    except ValueError:
+        return None
+
+
+async def _list(db: AsyncSession, project_id: str, status: EmailStatus | None) -> list[Email]:
+    query = select(Email).where(Email.project_id == project_id)
+    if status is not None:
+        query = query.where(Email.status == status.value)
+    return list(await db.scalars(query.order_by(Email.id.desc()).limit(PAGE_SIZE)))
+
 
 @router.get("/emails", response_class=HTMLResponse, summary="Sent email")
 async def emails_page(
@@ -42,18 +69,16 @@ async def emails_page(
     db: Annotated[AsyncSession, Depends(get_session)],
     current: Annotated[CurrentUser, Depends(require_user)],
     project: Annotated[object, Depends(require_project)],
+    status: str | None = None,
 ) -> HTMLResponse:
-    """The project's recent messages, newest first."""
-    project_id = getattr(project, "id", "")
+    """The project's recent messages, newest first.
 
-    emails = list(
-        await db.scalars(
-            select(Email)
-            .where(Email.project_id == project_id)
-            .order_by(Email.id.desc())
-            .limit(PAGE_SIZE)
-        )
-    )
+    The status is a query parameter rather than session state, so a filtered
+    view is linkable and survives a refresh - the same reasoning as the
+    Overview's range.
+    """
+    project_id = getattr(project, "id", "")
+    selected = parse_status(status)
 
     return render(
         request,
@@ -62,8 +87,42 @@ async def emails_page(
         nav_active="emails",
         project=project,
         projects=await list_projects(db, current.user.id),
-        emails=emails,
+        emails=await _list(db, project_id, selected),
+        # Unfiltered, deliberately. These are the project's totals; a "Total"
+        # that changed when you clicked "Failed" would no longer mean anything.
         counts=await status_counts(db, project_id),
+        statuses=STATUS_FILTERS,
+        selected_status=selected,
+    )
+
+
+@router.get(
+    "/partials/emails",
+    response_class=HTMLResponse,
+    summary="Email table fragment",
+)
+async def emails_partial(
+    request: Request,
+    db: Annotated[AsyncSession, Depends(get_session)],
+    current: Annotated[CurrentUser, Depends(require_user)],
+    project: Annotated[object, Depends(require_project)],
+    status: str | None = None,
+) -> HTMLResponse:
+    """The table on its own, for the filter's HTMX swap.
+
+    Authenticated like the page it belongs to - this is a project's mail.
+    """
+    project_id = getattr(project, "id", "")
+    selected = parse_status(status)
+
+    return render(
+        request,
+        "partials/email_table.html",
+        current=current,
+        project=project,
+        emails=await _list(db, project_id, selected),
+        statuses=STATUS_FILTERS,
+        selected_status=selected,
     )
 
 

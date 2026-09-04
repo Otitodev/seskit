@@ -41,21 +41,55 @@
         {% if endpoint.was_disabled_by_failures %}
           {# A status of its own, not the one a user sets. A switch that appears
              to have moved on its own, with nothing saying why, is the version
-             of this that generates support questions. #}
-          <div class="alert alert--warning" role="status">
-            <p class="alert__title">SESKit stopped sending to this endpoint</p>
-            <p>
-              It failed {{ endpoint.consecutive_failures }} times in a row, so
-              deliveries were paused. Fix the endpoint and turn it back on —
-              the failure count resets when you do.
-            </p>
-          </div>
+             of this that generates support questions.
+
+             Two messages, because the first one stops being true. Changing the
+             URL clears the failure count - it counted failures against an
+             address that is gone - and a banner still accusing this endpoint of
+             failing five times in a row would be describing somewhere else. #}
+          {% if endpoint.consecutive_failures %}
+            <div class="alert alert--warning" role="status">
+              <p class="alert__title">SESKit stopped sending to this endpoint</p>
+              <p>
+                It failed {{ endpoint.consecutive_failures }} times in a row, so
+                deliveries were paused. Fix the endpoint and turn it back on —
+                the failure count resets when you do.
+              </p>
+            </div>
+          {% else %}
+            <div class="alert alert--warning" role="status">
+              <p class="alert__title">This endpoint is still paused</p>
+              <p>
+                Nothing has failed since. Turn it back on to resume deliveries —
+                SESKit does not restart them by itself.
+              </p>
+            </div>
+          {% endif %}
         {% endif %}
 
         <dl class="datalist">
           <div class="datalist__row">
-            <dt>URL</dt>
-            <dd class="table__mono">{{ endpoint.url }}</dd>
+            <dt>
+              <label for="url-{{ endpoint.id }}">URL</label>
+            </dt>
+            {# Editable in place. Moving a receiver keeps the signing secret,
+               which is the whole point of this being an edit rather than a
+               delete and a re-add - nobody should have to re-key verification
+               on both sides at once. #}
+            <dd>
+              <form class="row row--end" method="post"
+                    action="/webhooks/{{ endpoint.id }}/url">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                <input class="input input--mono grow" id="url-{{ endpoint.id }}"
+                       type="url" name="url" value="{{ endpoint.url }}"
+                       maxlength="2048" autocomplete="off" required>
+                {{ button("Save", type="submit") }}
+              </form>
+              <p class="muted">
+                Deliveries already queued go to the new URL, and the signing
+                secret does not change.
+              </p>
+            </dd>
           </div>
           <div class="datalist__row">
             <dt>Status</dt>
