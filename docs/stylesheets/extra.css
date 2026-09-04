@@ -25,11 +25,21 @@
 }
 
 [data-md-color-scheme="slate"] {
-  /* The same hue lifted for a dark surface, matching the dashboard's own dark
-     accent rather than reusing the light value, which fails against it. */
-  --md-primary-fg-color: #4d94ff;
+  /* The header, not the accent.
+
+     Material paints the header bar with --md-primary-fg-color. Carrying the
+     lifted blue up here made a bright bar across the top of a dark page, and
+     the measurements were bad in both directions: the white site title sat at
+     3.00:1 against it, under the 4.5 it needs, and the pale logo at 2.64:1,
+     under the 3.0 a graphic needs. A dark bar takes those to 17.28:1 and
+     15.19:1 and stops the page shouting before it says anything. */
+  --md-primary-fg-color: #171b21;
+  --md-primary-bg-color: #e8ecf2;
+
+  /* Links keep the lifted blue - 6.48:1 on the dark page background. */
   --md-accent-fg-color: #6aa5ff;
   --md-typeset-a-color: #4d94ff;
+
   /* Material's default slate is a touch blue-grey; this sits closer to the
      dashboard's own dark surface. */
   --md-default-bg-color: #0f1115;

@@ -340,6 +340,54 @@ svg {
   /* Explicit dimensions so the row does not reflow when the image loads. */
 }
 
+/* Two marks, one shown.
+
+   The sidebar follows the surface rather than the accent, so the mark cannot
+   be one file: the blue one measures 3.64:1 on the dark surface where the pale
+   one measures 15.77:1, and the pale one is unreadable on white.
+
+   Both are in the markup and CSS picks. That means the wrong one is fetched
+   too - 8KB, once, cached - which buys a swap that happens before first paint
+   with no flash and no JavaScript. The ordering below matters: the explicit
+   [data-theme] rules come last so a user who chose light inside a dark OS gets
+   the light mark, which is the case the media query alone gets wrong. */
+.sidebar__mark--dark,
+.auth__mark--dark {
+  display: none;
+}
+
+@media (prefers-color-scheme: dark) {
+  .sidebar__mark--light,
+  .auth__mark--light {
+    display: none;
+  }
+
+  .sidebar__mark--dark,
+  .auth__mark--dark {
+    display: block;
+  }
+}
+
+[data-theme="dark"] .sidebar__mark--light,
+[data-theme="dark"] .auth__mark--light {
+  display: none;
+}
+
+[data-theme="dark"] .sidebar__mark--dark,
+[data-theme="dark"] .auth__mark--dark {
+  display: block;
+}
+
+[data-theme="light"] .sidebar__mark--light,
+[data-theme="light"] .auth__mark--light {
+  display: block;
+}
+
+[data-theme="light"] .sidebar__mark--dark,
+[data-theme="light"] .auth__mark--dark {
+  display: none;
+}
+
 .sidebar__nav {
   display: flex;
   flex-direction: column;

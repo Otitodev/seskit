@@ -24,10 +24,14 @@ strict: true
 theme:
   name: material
   language: en
-  # The icon, not a wordmark: Material puts this on a coloured header bar, and
-  # the supplied horizontal logo carries a baked white background that would
-  # show as a white block against it.
-  logo: assets/seskit-icon.png
+  # The pale variant, not the blue one. Material puts this on the header bar,
+  # which is the brand blue in the light theme - a blue mark on it measures
+  # 1.00:1, because it is the same colour. The pale mark reads on the light bar
+  # (4.34:1) and on the dark one, so one asset covers both themes.
+  #
+  # Not a wordmark either: the supplied horizontal logo carries a baked white
+  # background that would show as a white block against the bar.
+  logo: assets/seskit-icon-white.png
   favicon: assets/favicon.png
   custom_dir: overrides
   features:
@@ -41,7 +45,14 @@ theme:
   palette:
     # Three states, matching the dashboard's own theme toggle: an explicit
     # light, an explicit dark, and following the system by default.
+    # "custom" on all three, including this one. It is the state a first-time
+    # visitor lands in, and leaving it unset does not mean "inherit" - Material
+    # falls back to indigo and emits data-md-color-primary="indigo", whose
+    # attribute selector outranks the :root rule in extra.css. The brand colour
+    # would then apply everywhere except the view most people actually see.
     - media: "(prefers-color-scheme)"
+      primary: custom
+      accent: custom
       toggle:
         icon: material/brightness-auto
         name: Switch to light mode

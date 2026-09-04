@@ -56,7 +56,9 @@
       {# The mark is decorative: the word beside it already names the link, and
          a screen reader announcing "SESKit SESKit" is worse than silence. #}
       <a class="sidebar__brand" href="/">
-        <img class="sidebar__mark" src="{{ url_for('static', path='/img/seskit-icon-192.png') }}"
+        <img class="sidebar__mark sidebar__mark--light" src="{{ url_for('static', path='/img/seskit-icon-192.png') }}"
+             width="24" height="24" alt="" aria-hidden="true">
+        <img class="sidebar__mark sidebar__mark--dark" src="{{ url_for('static', path='/img/seskit-icon-white-192.png') }}"
              width="24" height="24" alt="" aria-hidden="true">
         SESKit
       </a>

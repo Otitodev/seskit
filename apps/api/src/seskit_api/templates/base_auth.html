@@ -36,7 +36,9 @@
       {# Larger than the sidebar's, because on a sign-in page the mark is the
          only thing establishing what you are signing in to. #}
       <div class="auth__brand">
-        <img class="auth__mark" src="{{ url_for('static', path='/img/seskit-icon-192.png') }}"
+        <img class="auth__mark auth__mark--light" src="{{ url_for('static', path='/img/seskit-icon-192.png') }}"
+             width="32" height="32" alt="" aria-hidden="true">
+        <img class="auth__mark auth__mark--dark" src="{{ url_for('static', path='/img/seskit-icon-white-192.png') }}"
              width="32" height="32" alt="" aria-hidden="true">
         SESKit
       </div>
