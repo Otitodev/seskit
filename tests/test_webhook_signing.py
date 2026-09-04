@@ -7,7 +7,7 @@ address the attacker chose.
 The test that matters is `test_the_timestamp_is_inside_the_signature`. Signing
 the body alone produces a signature that stays valid forever, so anyone who
 captures one request can replay it unchanged and it verifies every time. That is
-the failure `docs/prior-art.md` warns about, and it is invisible in every other
+the failure `docs/design/prior-art.md` warns about, and it is invisible in every other
 test here - a body-only scheme would pass all of them.
 """
 
@@ -88,7 +88,7 @@ def test_the_timestamp_is_inside_the_signature() -> None:
     Change only the timestamp and the signature must change. If it does not,
     the timestamp is being sent beside the signature rather than covered by it,
     and a captured request can be replayed forever with a fresh one - the exact
-    failure docs/prior-art.md identifies. Every other test in this file would
+    failure docs/design/prior-art.md identifies. Every other test in this file would
     still pass.
     """
     first, _ = sign(SECRET, BODY, timestamp=TIMESTAMP)

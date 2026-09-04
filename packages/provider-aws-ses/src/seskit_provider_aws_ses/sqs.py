@@ -4,7 +4,7 @@ The default transport, because it works everywhere §9 says SESKit has to run.
 There is no inbound port to open, no public hostname, and no certificate: a
 laptop behind NAT polls the same way a server does. It is also authenticated by
 IAM rather than by signature, which removes three of the four security
-requirements in ``docs/prior-art.md`` by construction - there is no endpoint to
+requirements in ``docs/design/prior-art.md`` by construction - there is no endpoint to
 forge a request at, no signature to verify, and no ``SubscribeURL`` to be
 tricked into fetching.
 

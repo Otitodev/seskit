@@ -3,7 +3,7 @@
 The deduplication test is the reason this file exists. SNS and SQS are both
 at-least-once, so the same notification *will* arrive twice; without the unique
 constraint a redelivered bounce becomes two bounces and every rate §18 computes
-is wrong. `docs/prior-art.md` records a comparable project that threaded the
+is wrong. `docs/design/prior-art.md` records a comparable project that threaded the
 message id through its queue and then keyed on nothing.
 """
 

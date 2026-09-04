@@ -71,8 +71,8 @@ everything else:
 
 - [Security model](security-model.md) — credentials, signatures, and the
   boundaries.
-- [Prior art](../prior-art.md) — what was learned from reading comparable
+- [Prior art](prior-art.md) — what was learned from reading comparable
   projects, and the requirements it generated.
-- [Design brief](../design-brief.md) and
-  [design system](../design-system.md) — how the dashboard is meant to look
+- [Design brief](brief.md) and
+  [design system](system.md) — how the dashboard is meant to look
   and why.

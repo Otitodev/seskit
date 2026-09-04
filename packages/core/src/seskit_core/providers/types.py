@@ -93,7 +93,7 @@ class IdentityType(StrEnum):
 
     The address form matters out of proportion to its size. It needs no DNS and
     no registrar access, so it is the only way a new user reaches a real send in
-    minutes rather than days (see docs/prior-art.md).
+    minutes rather than days (see docs/design/prior-art.md).
     """
 
     DOMAIN = "domain"

@@ -2,7 +2,7 @@
 
 The HTTPS receiver is reachable by anyone who learns its URL, and SNS cannot
 present a credential - so the signature is the only thing standing between a
-stranger and a fabricated bounce. `docs/prior-art.md` records a comparable
+stranger and a fabricated bounce. `docs/design/prior-art.md` records a comparable
 project that checks only that ``TopicArn`` matches a configured value; but
 ``TopicArn`` is a field *in the request body*, and topic ARNs are not secrets.
 Anyone who learns one can invent complaints against any address they like, and

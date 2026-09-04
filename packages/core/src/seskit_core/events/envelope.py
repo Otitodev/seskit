@@ -50,7 +50,7 @@ class SNSEnvelope:
     event: dict[str, Any] = field(default_factory=dict)
     #: Only on the handshake. Attacker-supplied, and never to be fetched
     #: without validating its host first - see the SSRF requirement in
-    #: docs/prior-art.md.
+    #: docs/design/prior-art.md.
     subscribe_url: str = ""
 
     @property

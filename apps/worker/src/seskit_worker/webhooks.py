@@ -18,7 +18,7 @@ address's.
 
 **Redirects are never followed.** A redirect forwards the signed payload to a
 host the user never registered - and the signature makes it look authentic when
-it arrives there. `docs/prior-art.md` lists this; httpx follows redirects only
+it arrives there. `docs/design/prior-art.md` lists this; httpx follows redirects only
 when asked, and it is asked not to, explicitly, so the default can never drift.
 
 **The response body is bounded and read by streaming.** It is captured for the

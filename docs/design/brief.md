@@ -4,7 +4,7 @@
 > to treating design quality as a build requirement rather than an afterthought.
 >
 > Kept for provenance. The working reference distilled from it is
-> [`design-system.md`](design-system.md) — read that one when building a page.
+> [`system.md`](system.md) — read that one when building a page.
 
 ---
 

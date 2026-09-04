@@ -7,7 +7,7 @@ inbound port and no certificate, because §9 says SESKit has to run there.
 **What acknowledges a message, and what does not.** A message is deleted only
 once its outcome is *settled*: recorded, a known duplicate, or something no
 amount of retrying will fix. Anything else is left alone and reappears when the
-visibility timeout expires. That asymmetry is the whole design - `docs/prior-art.md`
+visibility timeout expires. That asymmetry is the whole design - `docs/design/prior-art.md`
 records a comparable project that answered success on parse failures, so a
 transient bug dropped events permanently and silently.
 

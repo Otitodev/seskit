@@ -348,7 +348,7 @@ async def test_an_allowlisted_range_is_delivered_to_in_production(
 async def test_a_redirect_is_not_followed(db_session: AsyncSession, settings: Settings) -> None:
     """A redirect forwards the signed payload to a host the user never
     registered - and the signature makes it look authentic when it arrives
-    there. `docs/prior-art.md` lists this; here the redirect points at the cloud
+    there. `docs/design/prior-art.md` lists this; here the redirect points at the cloud
     metadata service, which is what makes it worth more than a style note.
 
     The 302 is recorded as a failure rather than chased.

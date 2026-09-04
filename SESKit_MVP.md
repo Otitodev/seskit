@@ -168,7 +168,7 @@ runs one Python service. A build pipeline that required a Node toolchain — or 
 
 Server-rendered does not mean unpolished. The dashboard should look like a
 developer infrastructure product, not an admin template. Design direction,
-tokens, and the component vocabulary live in `docs/design-system.md`; read it
+tokens, and the component vocabulary live in `docs/design/system.md`; read it
 before building any dashboard page.
 
 ## Infrastructure
@@ -699,7 +699,7 @@ with increasing delays.
 
 Server-rendered from the FastAPI app with Jinja2 and HTMX (§5). Pages are
 composed from the shared component macros; design direction and the component
-vocabulary are in `docs/design-system.md`.
+vocabulary are in `docs/design/system.md`.
 
 The dashboard should contain these pages.
 
@@ -1276,7 +1276,7 @@ The coding agent should implement in this order.
 - logging (structlog JSON, request-ID middleware, secret redaction — §21/§22)
 - health checks (`/healthz` liveness, `/readyz` readiness)
 - ARQ worker with a `ping` job proving the queue round-trips
-- UI foundation: design tokens, app shell, component macros, empty states (§5, `docs/design-system.md`)
+- UI foundation: design tokens, app shell, component macros, empty states (§5, `docs/design/system.md`)
 - Tests, ruff, mypy (strict), pre-commit, GitHub Actions CI
 
 ## Phase 2 — Authentication and projects
@@ -1343,7 +1343,7 @@ The coding agent should implement in this order.
 ## Phase 9 — Dashboard
 
 Built from the component macros and design tokens established in Phase 1 — do
-not restyle per page, and read `docs/design-system.md` first.
+not restyle per page, and read `docs/design/system.md` first.
 
 - overview (replace Phase 1's placeholder with real metrics)
 - emails
@@ -1362,13 +1362,13 @@ the pages real data while deliberately not restyling them. Both debts come due
 here, and in this order: the polish lands first, because screenshots taken of
 an unfinished interface are screenshots to retake.
 
-- finish the component layer `docs/design-system.md` already specifies —
+- finish the component layer `docs/design/system.md` already specifies —
   loading states on every HTMX swap, copy affordances, toasts, the skip link
 - documentation site (MkDocs + Material, GitHub Pages; no Node, per §5)
 - move the guides out of the README, leaving a storefront
 - API reference generated from `openapi.json`, never hand-written
 - operating SESKit — deploying, upgrading, backup, troubleshooting
-- make `docs/prior-art.md`, the design brief and the design system reachable
+- make `docs/design/prior-art.md`, the design brief and the design system reachable
 - agent-readable docs: `llms.txt`, `llms-full.txt`, `AGENTS.md`
 - the documentation's code samples run in CI rather than being proofread
 

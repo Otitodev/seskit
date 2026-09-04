@@ -136,9 +136,8 @@ nav:
   - Design notes:
       - Why SES-native: design/why-ses.md
       - Security model: design/security-model.md
-      # Written long before this site existed and unreachable until now. They
-      # move under design/ when their section is written; the nav points at
-      # where they currently live so this commit adds files and moves none.
-      - Prior art: prior-art.md
-      - Design brief: design-brief.md
-      - Design system: design-system.md
+      # Written long before this site existed, and unfindable until it gave
+      # them a home. They now sit with the rest of the design notes.
+      - Prior art: design/prior-art.md
+      - Design brief: design/brief.md
+      - Design system: design/system.md
