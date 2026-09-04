@@ -86,6 +86,61 @@ plugins:
   # documentation phones out on every page load argues against itself.
   - search
 
+  # llms.txt is a curated index with one line per page, so an agent can find
+  # the right page without crawling the site. llms-full.txt is the whole corpus
+  # in a single fetch, for one that would rather read everything.
+  #
+  # Generated at build time rather than committed, which is the opposite of the
+  # decision taken for the API reference - deliberately. That file is small and
+  # its diffs are worth reading in review; llms-full.txt is every page
+  # concatenated, so committing it would put a copy of the entire documentation
+  # in the diff of any change to any page.
+  #
+  # The descriptions are written here rather than pulled from each page's first
+  # paragraph, because the job of this file is to let something decide *not* to
+  # open a page. That needs a sentence about what the page answers, which is a
+  # different sentence from the one a page opens with.
+  - llmstxt:
+      full_output: llms-full.txt
+      markdown_description: >-
+        SESKit is a self-hosted, Python-native email platform built on Amazon
+        SES. You run the server yourself on your own AWS account; the `seskit`
+        package on PyPI is an optional thin client for talking to it over HTTP,
+        and currently reserves the name without implementing a client.
+      sections:
+        Start here:
+          - index.md: What SESKit is, and the distinction between the server you run and the client you install.
+          - getting-started/installation.md: Running the server with Docker Compose, and the non-Docker path.
+          - getting-started/first-email.md: Sending through Mailpit in a minute with no AWS account; what "queued" means; idempotency keys.
+          - getting-started/sending-from-your-app.md: Calling a running instance from your own code over HTTP, with error handling and rate limits.
+          - getting-started/dashboard-tour.md: What each dashboard page shows.
+        Guides:
+          - guides/no-aws-account-yet.md: The path from no AWS account to a verified sender, and what SES costs.
+          - guides/connect-aws.md: Pointing SESKit at an AWS account. Credentials are resolved by boto3 and never stored.
+          - guides/iam-policies.md: The exact IAM permissions, why each is needed, and how to grant them in stages.
+          - guides/verify-a-sender.md: Verifying a domain or a single address; DKIM, SPF and DMARC.
+          - guides/ses-sandbox.md: What the SES sandbox restricts and how to leave it.
+          - guides/delivery-events.md: How SES reports deliveries and bounces, SQS versus HTTPS ingestion, and open/click tracking.
+          - guides/webhooks.md: Registering endpoints, verifying the HMAC signature, retries, and the SSRF rules.
+          - guides/metrics.md: The six counts and five rates, and what each rate divides by.
+        Reference:
+          - reference/api.md: Every HTTP endpoint, generated from the OpenAPI schema.
+          - reference/sdk.md: The Python SDK, why it is optional, and that it is not written yet.
+          - reference/configuration.md: Every environment variable, its default, and its effect.
+          - reference/events.md: The event vocabulary, webhook payload shape, and bounce types.
+          - reference/errors.md: Every error type, which are worth retrying, and which are not.
+        Operating SESKit:
+          - operating/deploying.md: What has to run, the required environment, and health checks.
+          - operating/upgrading.md: Migration ordering, and why a downgrade is not a rollback.
+          - operating/backup.md: What to back up, and that a dump carries the webhook signing secrets.
+          - operating/troubleshooting.md: Common failures ordered by how often each is the cause.
+        Design notes:
+          - design/why-ses.md: Why SESKit builds on SES directly rather than abstracting over providers.
+          - design/security-model.md: Credentials, signatures, SSRF defence, tenancy, and what is not covered yet.
+          - design/prior-art.md: What was learned from comparable projects and the requirements it produced.
+          - design/system.md: Design tokens, components, and the rules for changing the dashboard.
+          - design/brief.md: The visual direction for the dashboard.
+
 markdown_extensions:
   - admonition
   - attr_list

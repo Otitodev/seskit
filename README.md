@@ -130,6 +130,14 @@ The full documentation lives in [`docs/`](docs/index.md).
 [security model](docs/design/security-model.md) ·
 [prior art](docs/design/prior-art.md)
 
+**Reading this with an agent?** The site publishes
+[`llms.txt`](https://otitodev.github.io/seskit/llms.txt) — every page with a
+one-line description of what it answers — and
+[`llms-full.txt`](https://otitodev.github.io/seskit/llms-full.txt), the whole
+corpus in a single fetch. Every page is also served as raw markdown at its own
+URL with `index.md` appended. If you are working *on* SESKit rather than with
+it, [`AGENTS.md`](AGENTS.md) is the orientation.
+
 ### The two questions asked before anyone clones
 
 - **What permissions does it need?** Six SES actions to send, nine more for
