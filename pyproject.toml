@@ -13,6 +13,19 @@ dependencies = [
 ]
 
 [dependency-groups]
+# Its own group, not dev: building the site is not part of the static gate a
+# contributor runs before every commit, and nobody editing a route should have
+# to install a documentation theme to do it.
+#
+#   uv run --group docs mkdocs serve
+docs = [
+    # Capped below 2.0 deliberately. Material for MkDocs' own analysis of the
+    # 2.0 rewrite says it removes the plugin system, breaks theme overrides and
+    # offers no migration path. Upgrading is a decision to take on purpose,
+    # with the site in front of you - not one to inherit from a resolver.
+    "mkdocs>=1.6,<2",
+    "mkdocs-material>=9.5,<10",
+]
 dev = [
     "pytest>=8.0",
     "pytest-asyncio>=0.24",

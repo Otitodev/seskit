@@ -1,0 +1,121 @@
+# SESKit documentation site.
+#
+#   uv run --group docs mkdocs serve          # by hand, at :8000
+#   uv run --group docs mkdocs build --strict # what CI runs
+#
+# MkDocs rather than Docusaurus, VitePress or Starlight because §5 forbids
+# Node, npm and a build step. This is a Python dependency in the workspace that
+# already exists, and it is what FastAPI, Pydantic, uv and Typer use - which
+# makes it familiar to exactly the developer who would adopt SESKit.
+
+site_name: SESKit
+site_description: A Python-native developer email platform built on Amazon SES.
+site_url: https://otitodev.github.io/seskit/
+repo_url: https://github.com/Otitodev/seskit
+repo_name: Otitodev/seskit
+edit_uri: edit/main/docs/
+copyright: MIT licensed.
+
+# --strict turns warnings into errors, and a broken internal link is a warning.
+# Documentation that links to a page that does not exist is worse than
+# documentation that does not mention it.
+strict: true
+
+theme:
+  name: material
+  language: en
+  features:
+    - navigation.sections
+    - navigation.top
+    - navigation.tracking
+    - content.code.copy
+    - content.action.edit
+    - search.suggest
+    - toc.follow
+  palette:
+    # Three states, matching the dashboard's own theme toggle: an explicit
+    # light, an explicit dark, and following the system by default.
+    - media: "(prefers-color-scheme)"
+      toggle:
+        icon: material/brightness-auto
+        name: Switch to light mode
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: teal
+      accent: teal
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: teal
+      accent: teal
+      toggle:
+        icon: material/brightness-4
+        name: Follow system
+
+extra_css:
+  - stylesheets/extra.css
+
+plugins:
+  # Client-side, no Algolia and no third party. Same reasoning as vendoring
+  # Chart.js instead of loading it from a CDN: a self-hosted product whose
+  # documentation phones out on every page load argues against itself.
+  - search
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.details
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.superfences
+
+# Contributor documentation, not user documentation. It belongs to
+# CONTRIBUTING.md and is deliberately absent from the nav rather than absent
+# from the repository.
+not_in_nav: |
+  commit-conventions.md
+
+nav:
+  - Home: index.md
+  - Getting started:
+      - Install and run: getting-started/installation.md
+      - Your first email: getting-started/first-email.md
+      - Sending from your app: getting-started/sending-from-your-app.md
+      - The dashboard: getting-started/dashboard-tour.md
+  - Guides:
+      - No AWS account yet?: guides/no-aws-account-yet.md
+      - Connect an AWS account: guides/connect-aws.md
+      - IAM policies: guides/iam-policies.md
+      - Verify a sender: guides/verify-a-sender.md
+      - Leave the SES sandbox: guides/ses-sandbox.md
+      - Delivery events: guides/delivery-events.md
+      - Webhooks: guides/webhooks.md
+      - Reading your metrics: guides/metrics.md
+  - Reference:
+      - HTTP API: reference/api.md
+      - Python SDK: reference/sdk.md
+      - Configuration: reference/configuration.md
+      - Events and payloads: reference/events.md
+      - Errors: reference/errors.md
+  - Operating SESKit:
+      - Deploying: operating/deploying.md
+      - Upgrading and migrations: operating/upgrading.md
+      - Backup and restore: operating/backup.md
+      - Troubleshooting: operating/troubleshooting.md
+  - Design notes:
+      - Why SES-native: design/why-ses.md
+      - Security model: design/security-model.md
+      # Written long before this site existed and unreachable until now. They
+      # move under design/ when their section is written; the nav points at
+      # where they currently live so this commit adds files and moves none.
+      - Prior art: prior-art.md
+      - Design brief: design-brief.md
+      - Design system: design-system.md
