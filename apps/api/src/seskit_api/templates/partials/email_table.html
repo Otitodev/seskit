@@ -18,11 +18,17 @@
          hx-target="#email-table"
          hx-swap="outerHTML"
          hx-push-url="/emails{{ '?status=' ~ option.value if option else '' }}"
+         hx-indicator="#email-filter-busy"
          {% if option == selected_status %}aria-current="page"{% endif %}>
         {{ option.value | capitalize if option else "All" }}
       </a>
     {% endfor %}
   </nav>
+  {# aria-hidden: the swapped table is the announcement, and a live region for
+     the wait as well would say two things about one click. #}
+  <span class="segmented-busy htmx-indicator" id="email-filter-busy" aria-hidden="true">
+    <span class="spinner"></span>
+  </span>
 
   {% if emails %}
     <div class="table-wrap">
