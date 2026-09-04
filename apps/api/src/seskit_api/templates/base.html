@@ -18,6 +18,17 @@
   <meta name="description" content="A Python-native developer email platform built on Amazon SES.">
   <meta name="color-scheme" content="light dark">
 
+  {# Two sizes rather than one scaled: a browser picking 16px out of a 512px
+     source resamples it badly, and the tab icon is the smallest thing here and
+     the one most often looked at. The .ico is for the tools that still ask for
+     /favicon.ico by convention rather than by link tag. #}
+  <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', path='/img/seskit-icon-32.png') }}">
+  <link rel="icon" type="image/png" sizes="16x16" href="{{ url_for('static', path='/img/seskit-icon-16.png') }}">
+  <link rel="apple-touch-icon" href="{{ url_for('static', path='/img/seskit-icon-180.png') }}">
+  {# Matches the surface behind it, so a mobile browser's chrome does not
+     announce itself in a colour the dashboard never uses. #}
+  <meta name="theme-color" content="#0166f8">
+
   {# Applied before first paint so a dark-theme user never sees a light flash. #}
   <script>
     (function () {
@@ -42,8 +53,11 @@
 
   <div class="app">
     <aside class="sidebar">
+      {# The mark is decorative: the word beside it already names the link, and
+         a screen reader announcing "SESKit SESKit" is worse than silence. #}
       <a class="sidebar__brand" href="/">
-        <span class="sidebar__mark" aria-hidden="true">S</span>
+        <img class="sidebar__mark" src="{{ url_for('static', path='/img/seskit-icon-192.png') }}"
+             width="24" height="24" alt="" aria-hidden="true">
         SESKit
       </a>
 

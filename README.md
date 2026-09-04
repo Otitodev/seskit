@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="docs/assets/seskit-icon.png" alt="" width="88" height="88">
+
 # SESKit
 
 **A Python-native developer email platform built on Amazon SES.**

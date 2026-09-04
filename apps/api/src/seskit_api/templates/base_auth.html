@@ -12,6 +12,11 @@
   <meta name="color-scheme" content="light dark">
   <meta name="robots" content="noindex">
 
+  <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', path='/img/seskit-icon-32.png') }}">
+  <link rel="icon" type="image/png" sizes="16x16" href="{{ url_for('static', path='/img/seskit-icon-16.png') }}">
+  <link rel="apple-touch-icon" href="{{ url_for('static', path='/img/seskit-icon-180.png') }}">
+  <meta name="theme-color" content="#0166f8">
+
   {# Before the stylesheet, so a dark-theme visitor never sees a white flash. #}
   <script>
     (function () {
@@ -28,8 +33,11 @@
 <body>
   <main class="auth">
     <div class="auth__card">
+      {# Larger than the sidebar's, because on a sign-in page the mark is the
+         only thing establishing what you are signing in to. #}
       <div class="auth__brand">
-        <span class="sidebar__mark" aria-hidden="true">S</span>
+        <img class="auth__mark" src="{{ url_for('static', path='/img/seskit-icon-192.png') }}"
+             width="32" height="32" alt="" aria-hidden="true">
         SESKit
       </div>
 

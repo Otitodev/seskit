@@ -32,11 +32,14 @@
   --text-muted: #5a6472;
   --text-subtle: #8a94a3;
 
-  /* Ultramarine. Restrained: primary actions and active nav state only.     */
-  --accent: #3355ff;
-  --accent-hover: #2642e0;
-  --accent-subtle: #eef1ff;
-  --accent-border: #c7d2fe;
+  /* The brand blue, sampled from the logo mark. Restrained: primary actions
+     and active nav state only. White on it is 4.93:1 and it is 4.64:1 against
+     the page background - both AA, and both tighter than the indigo this
+     replaced, so darkening it further is the safe direction if it ever moves. */
+  --accent: #0166f8;
+  --accent-hover: #0154cf;
+  --accent-subtle: #e8f1ff;
+  --accent-border: #b9d4ff;
   --accent-contrast: #ffffff;
 
   /* Semantic colours are for delivery state, never for decoration.          */
@@ -56,7 +59,7 @@
   --neutral-bg: #f2f4f7;
   --neutral-border: #e4e7ec;
 
-  --focus-ring: #3355ff;
+  --focus-ring: #0166f8;
 
   /* Type. IBM Plex where present - designed for technical products - with a
      system stack behind it. No webfont request: a self-hosted dashboard may
@@ -118,10 +121,13 @@
     --text-muted: #98a2b3;
     --text-subtle: #6b7686;
 
-    --accent: #6e8bff;
-    --accent-hover: #8aa1ff;
-    --accent-subtle: #171e33;
-    --accent-border: #2a3563;
+    /* The same hue lifted for a dark surface - 5.98:1, matching the tone the
+       indigo held here rather than simply reusing the light-theme value, which
+       would fail against #14171d. */
+    --accent: #4d94ff;
+    --accent-hover: #6aa5ff;
+    --accent-subtle: #0a1a33;
+    --accent-border: #17356b;
     --accent-contrast: #0b0d11;
 
     --success: #47cd89;
@@ -140,7 +146,7 @@
     --neutral-bg: #1a1f26;
     --neutral-border: #2a313b;
 
-    --focus-ring: #6e8bff;
+    --focus-ring: #4d94ff;
 
     --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.3);
     --shadow: 0 1px 3px rgb(0 0 0 / 0.4), 0 1px 2px rgb(0 0 0 / 0.3);
@@ -162,10 +168,10 @@
   --text-muted: #98a2b3;
   --text-subtle: #6b7686;
 
-  --accent: #6e8bff;
-  --accent-hover: #8aa1ff;
-  --accent-subtle: #171e33;
-  --accent-border: #2a3563;
+  --accent: #4d94ff;
+  --accent-hover: #6aa5ff;
+  --accent-subtle: #0a1a33;
+  --accent-border: #17356b;
   --accent-contrast: #0b0d11;
 
   --success: #47cd89;
@@ -184,7 +190,7 @@
   --neutral-bg: #1a1f26;
   --neutral-border: #2a313b;
 
-  --focus-ring: #6e8bff;
+  --focus-ring: #4d94ff;
 
   --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.3);
   --shadow: 0 1px 3px rgb(0 0 0 / 0.4), 0 1px 2px rgb(0 0 0 / 0.3);
@@ -320,17 +326,18 @@ svg {
 
 .sidebar__brand:hover { text-decoration: none; }
 
+/* The logo mark, which replaced a lettered square standing in for it.
+   The icon is the only supplied asset with an alpha channel, so it is the only
+   one that can sit on the sidebar in both themes - the horizontal and stacked
+   wordmarks carry a baked white background and would show as a white block in
+   dark mode. The word "SESKit" beside it is therefore set in the interface
+   type rather than being part of an image, which also keeps it selectable,
+   sharp at any zoom, and recoloured by the theme for free. */
 .sidebar__mark {
-  display: grid;
-  place-items: center;
   width: 24px;
   height: 24px;
-  border-radius: var(--radius-sm);
-  background: var(--accent);
-  color: var(--accent-contrast);
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  font-weight: 600;
+  flex-shrink: 0;
+  /* Explicit dimensions so the row does not reflow when the image loads. */
 }
 
 .sidebar__nav {
@@ -902,6 +909,12 @@ svg {
   font-size: var(--text-md);
   font-weight: 600;
   letter-spacing: -0.02em;
+}
+
+.auth__mark {
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
 }
 
 .auth__header {
