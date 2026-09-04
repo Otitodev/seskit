@@ -1,0 +1,29 @@
+/* Colours only, per §31: this site is Material for MkDocs wearing SESKit's
+   accent, not a theme rewritten from scratch. Restyling a documentation
+   theme is a way to spend a week and end up with something less accessible
+   than what shipped.
+
+   The accent is the dashboard's, so a reader moving between the docs and a
+   running instance does not feel handed off to a different product. */
+
+:root {
+  --md-primary-fg-color: #0f766e;
+  --md-primary-fg-color--light: #14b8a6;
+  --md-primary-fg-color--dark: #115e59;
+  --md-accent-fg-color: #0d9488;
+}
+
+[data-md-color-scheme="slate"] {
+  --md-primary-fg-color: #2dd4bf;
+  --md-accent-fg-color: #5eead4;
+  /* Material's default slate is a touch blue; this sits closer to the
+     dashboard's own dark surface. */
+  --md-default-bg-color: #0f1115;
+}
+
+/* The ASCII diagrams on the home page and in the guides carry meaning in their
+   alignment, so they must not wrap or shrink into illegibility on a phone.
+   They scroll inside their own block instead - the page body never does. */
+.md-typeset pre > code {
+  overflow-x: auto;
+}

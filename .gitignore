@@ -44,3 +44,6 @@ htmlcov/
 
 # Docker
 docker-compose.override.yml
+
+# MkDocs build output.
+site/

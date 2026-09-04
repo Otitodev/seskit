@@ -1,0 +1,79 @@
+name: Docs
+
+on:
+  push:
+    branches: [main]
+    # Only when something the site is built from actually changed. A route
+    # edit should not redeploy documentation that did not move.
+    paths:
+      - docs/**
+      - mkdocs.yml
+      - pyproject.toml
+      - uv.lock
+      - .github/workflows/docs.yml
+  pull_request:
+    paths:
+      - docs/**
+      - mkdocs.yml
+      - pyproject.toml
+      - uv.lock
+      - .github/workflows/docs.yml
+  # So the site can be republished without an empty commit - useful the first
+  # time, right after Pages is switched on in the repository settings.
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      # --strict promotes warnings to errors, so a link to a page that does not
+      # exist fails here rather than reaching a reader. This runs on pull
+      # requests too: a broken link is worth catching before it is merged, not
+      # after it is published.
+      - name: Build
+        run: uv run --group docs mkdocs build --strict
+
+      - name: Upload the site
+        if: github.event_name != 'pull_request'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    name: Deploy
+    # Never from a pull request: a fork's branch must not be able to publish to
+    # the project's own domain.
+    if: github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-latest
+
+    permissions:
+      pages: write
+      id-token: write
+
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      # Requires Pages to be enabled with "GitHub Actions" as the source, under
+      # Settings -> Pages. Until someone does that, this step is where the run
+      # fails, and it fails loudly rather than deploying nowhere.
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
