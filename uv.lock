@@ -9,11 +9,11 @@ resolution-markers = [
 
 [manifest]
 members = [
+    "seskit",
     "seskit-api",
     "seskit-core",
     "seskit-provider-aws-ses",
     "seskit-provider-smtp",
-    "seskit-sdk",
     "seskit-worker",
     "seskit-workspace",
 ]
@@ -1608,6 +1608,17 @@ wheels = [
 ]
 
 [[package]]
+name = "seskit"
+version = "0.0.1"
+source = { editable = "packages/sdk-python" }
+dependencies = [
+    { name = "httpx" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "httpx", specifier = ">=0.27" }]
+
+[[package]]
 name = "seskit-api"
 version = "0.1.0"
 source = { editable = "apps/api" }
@@ -1694,17 +1705,6 @@ requires-dist = [
     { name = "aiosmtplib", specifier = ">=3.0" },
     { name = "seskit-core", editable = "packages/core" },
 ]
-
-[[package]]
-name = "seskit-sdk"
-version = "0.1.0"
-source = { editable = "packages/sdk-python" }
-dependencies = [
-    { name = "httpx" },
-]
-
-[package.metadata]
-requires-dist = [{ name = "httpx", specifier = ">=0.27" }]
 
 [[package]]
 name = "seskit-worker"

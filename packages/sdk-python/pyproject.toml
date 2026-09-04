@@ -1,11 +1,34 @@
 [project]
-name = "seskit-sdk"
-version = "0.1.0"
-description = "SESKit Python SDK - a thin client over the SESKit HTTP API (implemented in Phase 10)"
+# The distribution name matches the import name, so "pip install seskit" and
+# "from seskit import SesKit" agree. Published at 0.0.x as a placeholder while
+# the client is written, which keeps 0.1.0 free for the first working release.
+name = "seskit"
+version = "0.0.1"
+description = "Python SDK for SESKit, a self-hosted developer email platform built on Amazon SES"
+readme = "README.md"
 requires-python = ">=3.12"
+license = { file = "LICENSE" }
+authors = [{ name = "SESKit Contributors" }]
+keywords = ["email", "ses", "aws", "smtp", "transactional-email"]
+classifiers = [
+    # Honest about the state of it: this release is a reserved name, not a client.
+    "Development Status :: 1 - Planning",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Communications :: Email",
+    "Typing :: Typed",
+]
 dependencies = [
     "httpx>=0.27",
 ]
+
+[project.urls]
+Homepage = "https://github.com/Otitodev/seskit"
+Repository = "https://github.com/Otitodev/seskit"
+Issues = "https://github.com/Otitodev/seskit/issues"
 
 [build-system]
 requires = ["hatchling"]
