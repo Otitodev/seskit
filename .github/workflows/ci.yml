@@ -67,6 +67,13 @@ jobs:
       - name: Type-check
         run: uv run mypy .
 
+      # The API reference is generated from the OpenAPI schema. This fails if a
+      # route changed and the committed copy did not, which is the only way a
+      # generated file goes stale - nobody notices documentation that is merely
+      # out of date.
+      - name: Check the API reference is current
+        run: uv run python scripts/export_openapi.py --check
+
       - name: Run migrations
         run: uv run alembic upgrade head
 
