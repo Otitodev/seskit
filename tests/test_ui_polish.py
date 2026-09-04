@@ -17,17 +17,6 @@ from seskit_core.models import APIKey, WebhookEndpoint
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-PASSWORD = "correct-horse-battery"
-
-
-async def _sign_in(client: AsyncClient) -> None:
-    response = await client.post(
-        "/signup",
-        data={"email": "owner@example.com", "password": PASSWORD},
-        follow_redirects=False,
-    )
-    assert response.status_code == 303, response.text
-
 
 async def _csrf(client: AsyncClient, path: str) -> str:
     page = await client.get(path)
@@ -39,25 +28,21 @@ async def _csrf(client: AsyncClient, path: str) -> str:
 # ------------------------------------------------------------------ toast ---
 
 
-async def test_a_page_view_says_nothing(app_client: AsyncClient) -> None:
+async def test_a_page_view_says_nothing(signed_in_client: AsyncClient) -> None:
     """A toast belongs to an action. Arriving on a page is not one, and a
     confirmation with nothing behind it teaches people to ignore the next one.
     """
-    await _sign_in(app_client)
-
-    page = await app_client.get("/webhooks")
+    page = await signed_in_client.get("/webhooks")
 
     assert "data-toast" not in page.text
 
 
-async def test_an_action_confirms_itself(app_client: AsyncClient) -> None:
-    await _sign_in(app_client)
-
-    response = await app_client.post(
+async def test_an_action_confirms_itself(signed_in_client: AsyncClient) -> None:
+    response = await signed_in_client.post(
         "/webhooks",
         data={
             "url": "https://hooks.example.com/seskit",
-            "csrf_token": await _csrf(app_client, "/webhooks"),
+            "csrf_token": await _csrf(signed_in_client, "/webhooks"),
         },
     )
 
@@ -66,15 +51,19 @@ async def test_an_action_confirms_itself(app_client: AsyncClient) -> None:
     assert "Endpoint added." in response.text
 
 
-async def test_a_refused_action_does_not_confirm(app_client: AsyncClient) -> None:
+async def test_a_refused_action_does_not_confirm(signed_in_client: AsyncClient) -> None:
     """The refusal is the message. A toast beside it would be two answers to
     one question, and the reassuring one is the wrong one.
     """
-    await _sign_in(app_client)
-
-    response = await app_client.post(
+    response = await signed_in_client.post(
         "/webhooks",
-        data={"url": "http://127.0.0.1/hook", "csrf_token": await _csrf(app_client, "/webhooks")},
+        # A scheme refused in every environment. A private address would not
+        # do: the test environment is local, where those are allowed on purpose
+        # so a developer can point a webhook at their own machine.
+        data={
+            "url": "ftp://example.com/x",
+            "csrf_token": await _csrf(signed_in_client, "/webhooks"),
+        },
     )
 
     assert response.status_code == 400
@@ -82,18 +71,16 @@ async def test_a_refused_action_does_not_confirm(app_client: AsyncClient) -> Non
 
 
 async def test_the_toast_announces_itself_without_stealing_focus(
-    app_client: AsyncClient,
+    signed_in_client: AsyncClient,
 ) -> None:
     """`role="status"` is announced politely. `alert` would interrupt, and the
     user is usually still on the control they just pressed.
     """
-    await _sign_in(app_client)
-
-    response = await app_client.post(
+    response = await signed_in_client.post(
         "/webhooks",
         data={
             "url": "https://hooks.example.com/seskit",
-            "csrf_token": await _csrf(app_client, "/webhooks"),
+            "csrf_token": await _csrf(signed_in_client, "/webhooks"),
         },
     )
 
@@ -102,18 +89,16 @@ async def test_the_toast_announces_itself_without_stealing_focus(
 
 
 async def test_the_message_is_in_the_html_not_built_by_javascript(
-    app_client: AsyncClient,
+    signed_in_client: AsyncClient,
 ) -> None:
     """It is rendered server-side and floated afterwards, so it survives a page
     that loads with scripts blocked rather than existing only if they arrive.
     """
-    await _sign_in(app_client)
-
-    response = await app_client.post(
+    response = await signed_in_client.post(
         "/webhooks",
         data={
             "url": "https://hooks.example.com/seskit",
-            "csrf_token": await _csrf(app_client, "/webhooks"),
+            "csrf_token": await _csrf(signed_in_client, "/webhooks"),
         },
     )
 
@@ -126,7 +111,7 @@ async def test_the_message_is_in_the_html_not_built_by_javascript(
 
 
 async def test_a_confirmation_quoting_the_user_escapes_it(
-    app_client: AsyncClient, db_session: AsyncSession
+    signed_in_client: AsyncClient, db_session: AsyncSession
 ) -> None:
     """The API key name reaches the confirmation, so it reaches the page.
 
@@ -134,21 +119,20 @@ async def test_a_confirmation_quoting_the_user_escapes_it(
     someone with dashboard access, and rendering it unescaped would run their
     markup inside an authenticated session.
     """
-    await _sign_in(app_client)
     payload = '<script>alert("xss")</script>'
 
-    created = await app_client.post(
+    created = await signed_in_client.post(
         "/api-keys",
-        data={"name": payload, "csrf_token": await _csrf(app_client, "/api-keys")},
+        data={"name": payload, "csrf_token": await _csrf(signed_in_client, "/api-keys")},
     )
     assert created.status_code == 200
 
     key_id = await db_session.scalar(select(APIKey.id))
     assert key_id is not None
 
-    revoked = await app_client.post(
+    revoked = await signed_in_client.post(
         f"/api-keys/{key_id}/revoke",
-        data={"csrf_token": await _csrf(app_client, "/api-keys")},
+        data={"csrf_token": await _csrf(signed_in_client, "/api-keys")},
     )
 
     assert "Revoked" in revoked.text
@@ -160,56 +144,55 @@ async def test_a_confirmation_quoting_the_user_escapes_it(
 
 
 async def test_an_unchanged_url_does_not_claim_to_have_changed(
-    app_client: AsyncClient, db_session: AsyncSession
+    signed_in_client: AsyncClient, db_session: AsyncSession
 ) -> None:
     """Resubmitting the same address is the case where a user is checking
     carefully that what they typed is what is stored. Saying "changed" there is
     a small lie in the one place it would be noticed.
     """
-    await _sign_in(app_client)
     url = "https://hooks.example.com/seskit"
 
-    await app_client.post(
-        "/webhooks", data={"url": url, "csrf_token": await _csrf(app_client, "/webhooks")}
+    await signed_in_client.post(
+        "/webhooks", data={"url": url, "csrf_token": await _csrf(signed_in_client, "/webhooks")}
     )
 
     endpoint_id = await db_session.scalar(select(WebhookEndpoint.id))
     assert endpoint_id is not None
 
-    response = await app_client.post(
+    response = await signed_in_client.post(
         f"/webhooks/{endpoint_id}/url",
-        data={"url": url, "csrf_token": await _csrf(app_client, "/webhooks")},
+        data={"url": url, "csrf_token": await _csrf(signed_in_client, "/webhooks")},
     )
 
-    assert "already the endpoint's URL" in response.text
+    # Not the whole sentence: the apostrophe in "endpoint's" is escaped to
+    # &#39; on the way out, which is the autoescaping doing its job.
+    assert "already the endpoint" in response.text
     assert "Endpoint URL changed." not in response.text
 
 
 async def test_pausing_and_resuming_say_which_one_happened(
-    app_client: AsyncClient, db_session: AsyncSession
+    signed_in_client: AsyncClient, db_session: AsyncSession
 ) -> None:
-    await _sign_in(app_client)
-
-    await app_client.post(
+    await signed_in_client.post(
         "/webhooks",
         data={
             "url": "https://hooks.example.com/seskit",
-            "csrf_token": await _csrf(app_client, "/webhooks"),
+            "csrf_token": await _csrf(signed_in_client, "/webhooks"),
         },
     )
 
     endpoint_id = await db_session.scalar(select(WebhookEndpoint.id))
     assert endpoint_id is not None
 
-    paused = await app_client.post(
+    paused = await signed_in_client.post(
         f"/webhooks/{endpoint_id}/enabled",
-        data={"enabled": "", "csrf_token": await _csrf(app_client, "/webhooks")},
+        data={"enabled": "", "csrf_token": await _csrf(signed_in_client, "/webhooks")},
     )
     assert "Endpoint paused." in paused.text
 
-    resumed = await app_client.post(
+    resumed = await signed_in_client.post(
         f"/webhooks/{endpoint_id}/enabled",
-        data={"enabled": "on", "csrf_token": await _csrf(app_client, "/webhooks")},
+        data={"enabled": "on", "csrf_token": await _csrf(signed_in_client, "/webhooks")},
     )
     assert "Endpoint enabled." in resumed.text
 
@@ -347,16 +330,14 @@ def test_the_active_nav_item_is_marked_for_assistive_technology() -> None:
 # ----------------------------------------------------------- the skip link ---
 
 
-async def test_the_skip_link_can_be_seen_when_focused(app_client: AsyncClient) -> None:
+async def test_the_skip_link_can_be_seen_when_focused(signed_in_client: AsyncClient) -> None:
     """It was in the DOM already, wearing `.visually-hidden` - which has no
     `:focus` escape, so a sighted keyboard user tabbed to it and saw nothing.
 
     `.visually-hidden` must not grow one either: it is also what hides the
     "View " prefix inside the Emails table links.
     """
-    await _sign_in(app_client)
-
-    page = await app_client.get("/")
+    page = await signed_in_client.get("/")
 
     assert 'class="skip-link" href="#main"' in page.text
     assert 'id="main"' in page.text
