@@ -1,0 +1,90 @@
+{# The Emails table and its status filter (§17).
+
+   A partial so the filter can swap just this fragment over HTMX rather than
+   reloading, the same pattern the Overview's range control uses. Rendered
+   standalone on those responses, so it carries everything it needs.
+
+   The filter is links, not buttons: a filtered list is a view, and a view
+   should be linkable and survive a refresh. Without JavaScript they are
+   ordinary navigation that still works. #}
+{% from "components/ui.html" import badge %}
+
+<div id="email-table">
+  <nav class="segmented" aria-label="Filter by status">
+    {% for option in statuses %}
+      <a class="segmented__item{{ ' is-active' if option == selected_status else '' }}"
+         href="/emails{{ '?status=' ~ option.value if option else '' }}"
+         hx-get="/partials/emails{{ '?status=' ~ option.value if option else '' }}"
+         hx-target="#email-table"
+         hx-swap="outerHTML"
+         hx-push-url="/emails{{ '?status=' ~ option.value if option else '' }}"
+         {% if option == selected_status %}aria-current="page"{% endif %}>
+        {{ option.value | capitalize if option else "All" }}
+      </a>
+    {% endfor %}
+  </nav>
+
+  {% if emails %}
+    <div class="table-wrap">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Status</th>
+            <th>To</th>
+            <th>Subject</th>
+            <th>Sent</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for email in emails %}
+            <tr>
+              {# The id is the link, so the row does not carry two links to the
+                 same page. The hidden word is what a screen reader announces:
+                 a link list full of bare ULIDs says nothing about where any of
+                 them go. #}
+              <td class="table__mono">
+                <a class="link" href="/emails/{{ email.id }}">
+                  <span class="visually-hidden">View </span>{{ email.id }}
+                </a>
+              </td>
+              <td>
+                {% if email.status == "sent" %}
+                  {{ badge("Sent", tone="success") }}
+                {% elif email.status == "failed" %}
+                  {{ badge("Failed", tone="danger") }}
+                {% elif email.status == "sending" %}
+                  {{ badge("Sending", tone="warning") }}
+                {% else %}
+                  {{ badge("Queued", tone="warning") }}
+                {% endif %}
+              </td>
+              {# Bcc is deliberately not here. It is recorded, but a blind copy
+                 listed beside the other recipients is not blind. #}
+              <td class="table__mono">{{ email.to_addresses | join(", ") }}</td>
+              <td>{{ email.subject }}</td>
+              <td class="muted">
+                {% if email.sent_at %}
+                  {{ email.sent_at.strftime("%Y-%m-%d %H:%M UTC") }}
+                {% else %}
+                  —
+                {% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    {# Its own state, not the onboarding one. A project with four hundred sent
+       messages and no failures is not a new install, and telling it to create
+       its first API key would be nonsense. #}
+    {% if selected_status %}
+      <p class="muted">No {{ selected_status.value }} messages. <a class="link" href="/emails">Show all messages</a>.</p>
+    {% else %}
+      {# Reachable through the fragment route on an empty project; the page
+         itself shows the onboarding block instead of ever rendering this. #}
+      <p class="muted">Nothing sent yet.</p>
+    {% endif %}
+  {% endif %}
+</div>

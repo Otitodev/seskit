@@ -269,6 +269,145 @@ async def test_re_enabling_clears_the_failure_count(
     assert endpoint.is_enabled is True
 
 
+# ------------------------------------------------------------------ editing ---
+
+
+async def test_the_url_can_be_changed_and_the_secret_survives(
+    signed_in_client: AsyncClient, db_session: AsyncSession
+) -> None:
+    """The assertion that carries the promise.
+
+    Editing exists rather than delete-and-re-add for exactly one reason: a
+    customer who moves their receiver should not have to re-key verification on
+    both sides at the same moment.
+    """
+    endpoint = await _endpoint(db_session)
+    secret = endpoint.secret
+    token = await _csrf(signed_in_client)
+
+    page = await signed_in_client.post(
+        f"/webhooks/{endpoint.id}/url",
+        data={"csrf_token": token, "url": "https://moved.example.com/seskit"},
+    )
+
+    assert page.status_code == 200
+    await db_session.refresh(endpoint)
+    assert endpoint.url == "https://moved.example.com/seskit"
+    assert endpoint.secret == secret
+
+
+async def test_a_refused_new_url_leaves_the_old_one_alone(
+    signed_in_client: AsyncClient, db_session: AsyncSession
+) -> None:
+    """A rejected edit must not be a half-applied one.
+
+    As with registering, the test environment is local - where private
+    addresses are allowed - so this uses a scheme refused everywhere.
+    """
+    endpoint = await _endpoint(db_session)
+    token = await _csrf(signed_in_client)
+
+    page = await signed_in_client.post(
+        f"/webhooks/{endpoint.id}/url", data={"csrf_token": token, "url": "ftp://example.com/x"}
+    )
+
+    assert page.status_code == 400
+    assert "cannot be used for webhooks" in page.text
+    await db_session.refresh(endpoint)
+    assert endpoint.url == URL
+
+
+async def test_changing_the_url_needs_a_csrf_token(
+    signed_in_client: AsyncClient, db_session: AsyncSession
+) -> None:
+    endpoint = await _endpoint(db_session)
+
+    page = await signed_in_client.post(
+        f"/webhooks/{endpoint.id}/url",
+        data={"csrf_token": "forged", "url": "https://moved.example.com/x"},
+    )
+
+    assert page.status_code == 403
+    await db_session.refresh(endpoint)
+    assert endpoint.url == URL
+
+
+async def test_changing_the_url_clears_failures_but_does_not_re_enable(
+    signed_in_client: AsyncClient, db_session: AsyncSession
+) -> None:
+    """The count described the old address and means nothing against a new one.
+
+    The status deliberately does not move with it: turning an endpoint on
+    resumes outbound requests, which is a larger act than editing a field and
+    should stay something the user does on purpose.
+    """
+    endpoint = await _endpoint(
+        db_session, status=WebhookStatus.DISABLED_AFTER_FAILURES, failures=10
+    )
+    token = await _csrf(signed_in_client)
+
+    await signed_in_client.post(
+        f"/webhooks/{endpoint.id}/url",
+        data={"csrf_token": token, "url": "https://moved.example.com/seskit"},
+    )
+
+    await db_session.refresh(endpoint)
+    assert endpoint.consecutive_failures == 0
+    assert endpoint.is_enabled is False
+    assert endpoint.was_disabled_by_failures is True
+
+
+async def test_the_stale_failure_banner_gives_way_once_the_url_changes(
+    signed_in_client: AsyncClient, db_session: AsyncSession
+) -> None:
+    """ "It failed 10 times in a row" is about an address that is gone.
+
+    Leaving that on the page would be the interface lying about somewhere the
+    endpoint no longer points.
+    """
+    endpoint = await _endpoint(
+        db_session, status=WebhookStatus.DISABLED_AFTER_FAILURES, failures=10
+    )
+    token = await _csrf(signed_in_client)
+
+    page = await signed_in_client.post(
+        f"/webhooks/{endpoint.id}/url",
+        data={"csrf_token": token, "url": "https://moved.example.com/seskit"},
+    )
+
+    assert "failed 10 times in a row" not in page.text
+    assert "This endpoint is still paused" in page.text
+
+
+async def test_another_projects_endpoint_cannot_be_re_pointed(
+    signed_in_client: AsyncClient, db_session: AsyncSession
+) -> None:
+    """The one that would matter most if ownership were checked after the fact:
+    re-pointing someone else's endpoint would send their events to an address
+    of the attacker's choosing.
+    """
+    from seskit_core.services import create_project, register_user
+
+    stranger = await register_user(
+        db_session, email="repoint@example.com", password="correct-horse-battery", allow_signup=True
+    )
+    other = await create_project(db_session, user_id=stranger.id, name="Theirs")
+    theirs = WebhookEndpoint(
+        project_id=other.id, url="https://theirs.example.com/x", secret="whsec_theirs"
+    )
+    db_session.add(theirs)
+    await db_session.flush()
+    token = await _csrf(signed_in_client)
+
+    await signed_in_client.post(
+        f"/webhooks/{theirs.id}/url",
+        data={"csrf_token": token, "url": "https://attacker.example.com/collect"},
+    )
+
+    await db_session.refresh(theirs)
+    assert theirs.url == "https://theirs.example.com/x"
+
+
 # ------------------------------------------------------------------ history ---
 
 
