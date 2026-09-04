@@ -62,6 +62,7 @@ async def _page(
     project: Project,
     *,
     error: str | None = None,
+    flash: str | None = None,
     status_code: int = 200,
 ) -> HTMLResponse:
     connection = await get_connection(db, project.id)
@@ -70,6 +71,7 @@ async def _page(
         "pages/domains.html",
         status_code=status_code,
         current=current,
+        flash=flash,
         nav_active="domains",
         project=project,
         projects=await list_projects(db, current.user.id),
@@ -135,7 +137,9 @@ async def add(
         )
 
     await db.commit()
-    return await _page(request, db, current, project)
+    # Naming it back is the confirmation: the form takes a domain or an address
+    # without asking which, so echoing the value shows how it was read.
+    return await _page(request, db, current, project, flash=f"Added {value.strip()}.")
 
 
 @router.post(
@@ -157,17 +161,21 @@ async def refresh(
     """Ask SES about one identity now, rather than waiting for the schedule."""
     identity = await get_owned_identity(db, identity_id=identity_id, project_id=project.id)
 
-    if identity is not None:
-        await refresh_identity(
-            db,
-            redis,
-            provider_factory,
-            identity,
-            interval_seconds=settings.IDENTITY_REFRESH_INTERVAL_SECONDS,
-        )
-        await db.commit()
+    if identity is None:
+        return await _page(request, db, current, project)
 
-    return await _page(request, db, current, project)
+    await refresh_identity(
+        db,
+        redis,
+        provider_factory,
+        identity,
+        interval_seconds=settings.IDENTITY_REFRESH_INTERVAL_SECONDS,
+    )
+    await db.commit()
+
+    # Deliberately not "verified": the rate limiter may have skipped the call,
+    # and the row's own status is what answers that question honestly.
+    return await _page(request, db, current, project, flash="Checked with SES.")
 
 
 @router.post(
@@ -192,16 +200,22 @@ async def delete(
     """
     identity = await get_owned_identity(db, identity_id=identity_id, project_id=project.id)
 
-    if identity is not None:
-        try:
-            await remove_identity(db, provider_factory, identity)
-        except APIError as error:
-            return await _page(
-                request, db, current, project, error=error.message, status_code=_status_for(error)
-            )
-        await db.commit()
+    if identity is None:
+        return await _page(request, db, current, project)
 
-    return await _page(request, db, current, project)
+    # Read before the delete: afterwards the row is gone, and touching an
+    # expired attribute would send SQLAlchemy looking for it.
+    removed = identity.value
+
+    try:
+        await remove_identity(db, provider_factory, identity)
+    except APIError as error:
+        return await _page(
+            request, db, current, project, error=error.message, status_code=_status_for(error)
+        )
+    await db.commit()
+
+    return await _page(request, db, current, project, flash=f"Removed {removed}.")
 
 
 def _status_for(error: APIError) -> int:

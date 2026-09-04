@@ -85,6 +85,7 @@ async def _page(
     project: Project,
     *,
     error: str | None = None,
+    flash: str | None = None,
     status_code: int = 200,
 ) -> HTMLResponse:
     endpoints = await list_endpoints(db, project.id)
@@ -93,6 +94,7 @@ async def _page(
         "pages/webhooks.html",
         status_code=status_code,
         current=current,
+        flash=flash,
         nav_active="webhooks",
         project=project,
         projects=await list_projects(db, current.user.id),
@@ -151,7 +153,7 @@ async def create(
         return await _page(request, db, current, project, error=error.message, status_code=400)
 
     await db.commit()
-    return await _page(request, db, current, project)
+    return await _page(request, db, current, project, flash="Endpoint added.")
 
 
 @router.post(
@@ -181,7 +183,7 @@ async def change_url(
         return await _page(request, db, current, project)
 
     try:
-        await update_endpoint_url(
+        changed = await update_endpoint_url(
             db,
             endpoint,
             url=url,
@@ -195,7 +197,11 @@ async def change_url(
         return await _page(request, db, current, project, error=error.message, status_code=400)
 
     await db.commit()
-    return await _page(request, db, current, project)
+    # Saying "changed" about a resubmitted identical URL would be a small lie,
+    # and this is the one page where a user is checking carefully that the
+    # address they typed is the one now stored.
+    message = "Endpoint URL changed." if changed else "That is already the endpoint's URL."
+    return await _page(request, db, current, project, flash=message)
 
 
 @router.post(
@@ -219,11 +225,20 @@ async def change_enabled(
     one attempt before it goes off again.
     """
     endpoint = await get_owned_endpoint(db, project_id=project.id, endpoint_id=endpoint_id)
-    if endpoint is not None:
-        await set_enabled(db, endpoint, enabled=enabled == "on")
-        await db.commit()
+    if endpoint is None:
+        return await _page(request, db, current, project)
 
-    return await _page(request, db, current, project)
+    on = enabled == "on"
+    await set_enabled(db, endpoint, enabled=on)
+    await db.commit()
+
+    return await _page(
+        request,
+        db,
+        current,
+        project,
+        flash="Endpoint enabled." if on else "Endpoint paused.",
+    )
 
 
 @router.post(
@@ -246,11 +261,17 @@ async def rotate(
     being rotated because it leaked, and the page says so before the button.
     """
     endpoint = await get_owned_endpoint(db, project_id=project.id, endpoint_id=endpoint_id)
-    if endpoint is not None:
-        await rotate_secret(db, endpoint)
-        await db.commit()
+    if endpoint is None:
+        return await _page(request, db, current, project)
 
-    return await _page(request, db, current, project)
+    await rotate_secret(db, endpoint)
+    await db.commit()
+
+    # Says what it did *to the old one*, because that is the consequence the
+    # user has to act on: every receiver still holding it starts failing now.
+    return await _page(
+        request, db, current, project, flash="New signing secret issued. The old one is dead."
+    )
 
 
 @router.post(
@@ -272,8 +293,12 @@ async def remove(
     resolves to nothing rather than to someone else's endpoint.
     """
     endpoint = await get_owned_endpoint(db, project_id=project.id, endpoint_id=endpoint_id)
-    if endpoint is not None:
-        await delete_endpoint(db, endpoint)
-        await db.commit()
+    if endpoint is None:
+        return await _page(request, db, current, project)
 
-    return await _page(request, db, current, project)
+    await delete_endpoint(db, endpoint)
+    await db.commit()
+
+    return await _page(
+        request, db, current, project, flash="Endpoint deleted, along with its delivery history."
+    )

@@ -72,6 +72,7 @@ async def _page(
     *,
     settings: Settings | None = None,
     error: str | None = None,
+    flash: str | None = None,
     status_code: int = 200,
 ) -> HTMLResponse:
     """Render the page from whatever the project's current state is."""
@@ -81,6 +82,7 @@ async def _page(
         "pages/aws.html",
         status_code=status_code,
         current=current,
+        flash=flash,
         nav_active="aws",
         project=project,
         projects=await list_projects(db, current.user.id),
@@ -146,7 +148,7 @@ async def connect(
         )
 
     await db.commit()
-    return await _page(request, db, current, project)
+    return await _page(request, db, current, project, flash=f"Connected to AWS in {region}.")
 
 
 @router.post(
@@ -188,7 +190,7 @@ async def refresh(
         )
 
     await db.commit()
-    return await _page(request, db, current, project)
+    return await _page(request, db, current, project, flash="Connection re-checked.")
 
 
 @router.post(
@@ -212,12 +214,15 @@ async def disconnect(
     with.
     """
     connection = await get_connection(db, project.id)
+    if connection is None:
+        return await _page(request, db, current, project)
 
-    if connection is not None:
-        await disconnect_aws(db, redis, connection, provisioner_factory=provisioners)
-        await db.commit()
+    await disconnect_aws(db, redis, connection, provisioner_factory=provisioners)
+    await db.commit()
 
-    return await _page(request, db, current, project)
+    # §9: SESKit never held the credentials, so this removes what it recorded
+    # about them and nothing in the user's AWS account.
+    return await _page(request, db, current, project, flash="AWS connection removed from SESKit.")
 
 
 @router.post(
@@ -268,7 +273,16 @@ async def setup_event_reporting(
         )
 
     await db.commit()
-    return await _page(request, db, current, project, settings=settings)
+    # Names the resources because they are in the user's own account and now
+    # appear on their AWS bill.
+    return await _page(
+        request,
+        db,
+        current,
+        project,
+        settings=settings,
+        flash="Event reporting set up. SESKit created a queue, a topic and a configuration set.",
+    )
 
 
 @router.post(
@@ -309,7 +323,14 @@ async def remove_event_reporting(
         )
 
     await db.commit()
-    return await _page(request, db, current, project, settings=settings)
+    return await _page(
+        request,
+        db,
+        current,
+        project,
+        settings=settings,
+        flash="Event reporting removed.",
+    )
 
 
 @router.post(
@@ -337,8 +358,10 @@ async def change_tracking(
     if connection is None:
         return await _page(request, db, current, project, settings=settings)
 
+    on = enabled == "on"
+
     try:
-        await set_open_click_tracking(db, provisioners, connection, enabled=enabled == "on")
+        await set_open_click_tracking(db, provisioners, connection, enabled=on)
     except APIError as error:
         await db.rollback()
         return await _page(
@@ -352,7 +375,14 @@ async def change_tracking(
         )
 
     await db.commit()
-    return await _page(request, db, current, project, settings=settings)
+    # Says what changes in the mail itself, not just that a setting moved: this
+    # rewrites every link and adds a pixel to the customer's own product.
+    message = (
+        "Open and click tracking on. SES will rewrite links and add a tracking pixel."
+        if on
+        else "Open and click tracking off."
+    )
+    return await _page(request, db, current, project, settings=settings, flash=message)
 
 
 def _status_for(error: APIError) -> int:

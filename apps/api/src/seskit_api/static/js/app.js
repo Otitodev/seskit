@@ -87,6 +87,46 @@
     });
   }
 
+  /* Toast ------------------------------------------------------------------
+   * The server renders the message into the document; this floats it and takes
+   * it away again. Doing it in this order means the text is in the HTML for a
+   * screen reader and for anyone with scripts blocked, rather than existing
+   * only if JavaScript arrives.
+   */
+
+  var TOAST_VISIBLE_MS = 5000;
+
+  function dismissToast(toast) {
+    if (toast && toast.parentNode) toast.parentNode.removeChild(toast);
+  }
+
+  function initToast() {
+    var toast = document.querySelector("[data-toast]");
+    if (!toast) return;
+
+    // Only now does it become a floating element. Until this attribute lands
+    // it is an ordinary block at the top of the page, which is what a
+    // scripts-blocked reader sees.
+    toast.setAttribute("data-toast-floating", "");
+
+    var timer = setTimeout(function () {
+      dismissToast(toast);
+    }, TOAST_VISIBLE_MS);
+
+    toast.addEventListener("click", function (event) {
+      if (!event.target.closest("[data-toast-dismiss]")) return;
+      clearTimeout(timer);
+      dismissToast(toast);
+    });
+
+    // A message that disappears while being read is worse than one that
+    // overstays, and a pointer resting on it is the clearest signal that it is
+    // being read.
+    toast.addEventListener("mouseenter", function () {
+      clearTimeout(timer);
+    });
+  }
+
   /* Init ------------------------------------------------------------------ */
 
   applyTheme(storedTheme());
@@ -94,6 +134,7 @@
   document.addEventListener("DOMContentLoaded", function () {
     syncToggleLabel();
     initCopy();
+    initToast();
 
     var toggle = document.querySelector("[data-theme-toggle]");
     if (toggle) toggle.addEventListener("click", toggleTheme);

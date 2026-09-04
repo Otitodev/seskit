@@ -127,15 +127,21 @@ async def revoke_key(
     """
     api_key = await get_owned_api_key(db, key_id=key_id, project_id=project.id)
 
+    flash: str | None = None
     if api_key is not None:
+        name = api_key.name
         await revoke_api_key(db, redis, api_key)
         await db.commit()
         logger.info("api_key_revoked", key_id=api_key.id, project_id=project.id)
+        # Says it took effect now, because the cache invalidation is the part a
+        # user cannot see and the part they most need to trust.
+        flash = f"Revoked {name}. Requests using it start failing immediately."
 
     return render(
         request,
         "pages/api_keys.html",
         current=current,
+        flash=flash,
         nav_active="api keys",
         project=project,
         projects=await list_projects(db, current.user.id),

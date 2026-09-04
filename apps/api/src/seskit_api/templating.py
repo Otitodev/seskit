@@ -55,17 +55,31 @@ def render(
     status_code: int = 200,
     current: CurrentUser | None = None,
     nav_active: str = "",
+    flash: str | None = None,
     **context: Any,
 ) -> HTMLResponse:
     """Render a template with the shared dashboard context.
 
     ``current`` carries both the signed-in user and their CSRF token, so a page
     that renders a form only has to be given the user.
+
+    ``flash`` is what an action says about itself once it has happened - "API
+    key revoked", "Endpoint URL changed". A plain argument rather than anything
+    stored, because outside ``auth.py`` every POST here re-renders its own page
+    instead of redirecting, so there is no round trip for a message to survive.
+    The day one of them does redirect, that route needs somewhere to put this;
+    until then, storing it would be machinery for a problem nobody has.
+
+    It is deliberately separate from ``error``, which each page renders in its
+    own layout because a failure belongs next to the control that caused it. A
+    confirmation has no such anchor - the control it refers to may no longer be
+    on screen - so it goes to one shared place.
     """
     shared: dict[str, Any] = {
         "nav_active": nav_active,
         "current_user": current.user if current else None,
         "csrf_token": current.session.csrf_token if current else None,
+        "flash": flash,
     }
     response = templates.TemplateResponse(
         request=request,
