@@ -25,6 +25,8 @@ docs = [
     # with the site in front of you - not one to inherit from a resolver.
     "mkdocs>=1.6,<2",
     "mkdocs-material>=9.5,<10",
+    # llms.txt and llms-full.txt, generated at build time from the nav.
+    "mkdocs-llmstxt>=0.2",
 ]
 dev = [
     "pytest>=8.0",
