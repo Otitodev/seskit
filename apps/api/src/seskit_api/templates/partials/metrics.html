@@ -22,11 +22,16 @@
            hx-target="#metrics"
            hx-swap="outerHTML"
            hx-push-url="/?range={{ option.value }}"
+           hx-indicator="#metrics-busy"
            {% if option == metrics.range %}aria-current="page"{% endif %}>
           {{ option.value }}
         </a>
       {% endfor %}
     </nav>
+    {# aria-hidden: the numbers arriving are the announcement. #}
+    <span class="segmented-busy htmx-indicator" id="metrics-busy" aria-hidden="true">
+      <span class="spinner"></span>
+    </span>
   </div>
 
   {# §18's six counts. #}

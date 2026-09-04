@@ -214,6 +214,60 @@ async def test_pausing_and_resuming_say_which_one_happened(
     assert "Endpoint enabled." in resumed.text
 
 
+# --------------------------------------------------------- loading states ---
+
+
+def test_every_htmx_swap_says_it_is_working() -> None:
+    """Read against the templates themselves rather than a rendered page.
+
+    The point is not the two swaps that exist now - it is the third one, added
+    later by someone who has not read this file. `.spinner` and `.skeleton` sat
+    in the stylesheet unused since Phase 1 precisely because nothing failed
+    when they were skipped.
+    """
+    import re
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[1] / "apps/api/src/seskit_api/templates"
+
+    missing: list[str] = []
+    for template in sorted(root.rglob("*.html")):
+        markup = template.read_text(encoding="utf-8")
+        # Each tag that opens a request. hx-post on a form is the same promise
+        # as hx-get on a link.
+        for tag in re.findall(r"<[^>]*\bhx-(?:get|post)=[^>]*>", markup, re.DOTALL):
+            if "hx-indicator" in tag:
+                continue
+            # A poll is exempt, and only a poll. The rule is about answering a
+            # click: nobody asked for the 30-second status refresh in
+            # base.html, and a spinner blinking on it twice a minute is noise
+            # attached to a request the user did not make. It carries its own
+            # "Checking" badge, which is the state that does belong there.
+            if re.search(r'hx-trigger="[^"]*\bevery\b', tag):
+                continue
+            missing.append(f"{template.relative_to(root).as_posix()}: {tag[:70]}...")
+
+    assert not missing, "HTMX requests with no loading state:\n" + "\n".join(missing)
+
+
+def test_the_indicator_uses_the_styles_that_already_existed() -> None:
+    """`.htmx-indicator` fades opacity instead of toggling display, so the row
+    does not jump when a spinner appears. Asserted because a future spinner
+    added without the class would look correct until someone clicked it.
+    """
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[1] / "apps/api/src/seskit_api"
+    css = (root / "static/css/app.css").read_text(encoding="utf-8")
+    assert ".htmx-indicator" in css
+    assert ".spinner" in css
+
+    for name in ("partials/email_table.html", "partials/metrics.html"):
+        markup = (root / "templates" / name).read_text(encoding="utf-8")
+        assert "htmx-indicator" in markup, name
+        assert "spinner" in markup, name
+
+
 # ----------------------------------------------------------- the skip link ---
 
 

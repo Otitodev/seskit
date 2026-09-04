@@ -1091,10 +1091,17 @@ svg {
   }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .toast[data-toast-floating] {
-    animation: none;
-  }
+/* No reduced-motion block for the toast: the global reset near the top of the
+   file already flattens every animation, and a second rule saying so invites
+   the belief that animations elsewhere are unguarded. */
+
+/* Sits beside a segmented control, so it needs to not shift the row when it
+   appears - .htmx-indicator fades opacity rather than toggling display for
+   exactly that reason. */
+.segmented-busy {
+  display: inline-flex;
+  align-items: center;
+  margin-left: var(--space-3);
 }
 
 /* ------------------------------------------------------------ 5. Utilities */
