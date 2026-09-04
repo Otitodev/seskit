@@ -268,6 +268,82 @@ def test_the_indicator_uses_the_styles_that_already_existed() -> None:
         assert "spinner" in markup, name
 
 
+# ---------------------------------------------------- accessibility floor ---
+
+# `design-system.md` calls these non-negotiable and every one of them was
+# already true, apart from the skip link. They are asserted rather than left as
+# prose because each is the kind of thing a single later template quietly
+# breaks - and nothing else in the suite would notice.
+
+
+def _templates() -> list[tuple[str, str]]:
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[1] / "apps/api/src/seskit_api/templates"
+    return [
+        (path.relative_to(root).as_posix(), path.read_text(encoding="utf-8"))
+        for path in sorted(root.rglob("*.html"))
+    ]
+
+
+def _stylesheet() -> str:
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[1] / "apps/api/src/seskit_api"
+    return (root / "static/css/app.css").read_text(encoding="utf-8")
+
+
+def test_no_table_can_scroll_the_page_sideways() -> None:
+    """Wide content scrolls inside `.table-wrap`; the body never does.
+
+    A table that widens the document breaks every other page on a phone, not
+    just its own.
+    """
+    import re
+
+    unwrapped: list[str] = []
+    for name, markup in _templates():
+        for match in re.finditer(r"<table\b", markup):
+            if "table-wrap" not in markup[: match.start()].rsplit("<div", 1)[-1]:
+                unwrapped.append(name)
+
+    assert not unwrapped, f"tables not inside .table-wrap: {unwrapped}"
+
+
+def test_a_badge_that_means_something_by_colour_also_says_it_by_shape() -> None:
+    """State is encoded in form as well as hue - the dot is the form.
+
+    `dot=False` is legitimate for a badge with no tone, which is a plain label
+    carrying no colour meaning. It is not legitimate on a toned one, because
+    then the colour is the only thing saying what the badge means.
+    """
+    import re
+
+    offenders: list[str] = []
+    for name, markup in _templates():
+        for call in re.findall(r"badge\((.*?)\)", markup, re.DOTALL):
+            if "dot=False" in call and "tone=" in call:
+                offenders.append(f"{name}: badge({call.strip()[:60]}...)")
+
+    assert not offenders, "toned badges relying on colour alone:\n" + "\n".join(offenders)
+
+
+def test_there_is_one_focus_treatment_and_it_is_not_switched_off() -> None:
+    css = _stylesheet()
+
+    assert ":focus-visible {" in css
+    assert "outline:" in css.split(":focus-visible {", 1)[1][:200]
+    # Removing the outline for mouse focus is fine; removing it outright is the
+    # regression this guards.
+    assert ":focus:not(:focus-visible)" in css
+
+
+def test_the_active_nav_item_is_marked_for_assistive_technology() -> None:
+    markup = dict(_templates())["base.html"]
+
+    assert 'aria-current="page"' in markup
+
+
 # ----------------------------------------------------------- the skip link ---
 
 
