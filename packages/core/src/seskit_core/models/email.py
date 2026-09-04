@@ -7,7 +7,7 @@ says `queued`, rather than the request vanishing with nothing to show a user.
 
 Bodies are stored because the dashboard shows them and Phase 7 correlates events
 against them. §6 asks for configurable retention of that content, which is a
-Phase 11 concern - the column exists now, the sweeper does not.
+Phase 13 concern - the column exists now, the sweeper does not.
 """
 
 from __future__ import annotations

@@ -6,7 +6,7 @@ drag megabytes of binary through the query. The relationship on ``Email`` is
 rather than a join that multiplies the row.
 
 There is no retention sweeper yet. §6 raises retention for body content and the
-same argument applies harder here; it belongs with the Phase 11 hardening rather
+same argument applies harder here; it belongs with the Phase 13 hardening rather
 than bolted on now.
 """
 

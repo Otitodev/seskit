@@ -4,7 +4,7 @@ Every ``/v1`` failure leaves the building in one shape::
 
     {"error": {"type": "domain_not_verified", "message": "..."}}
 
-Defined here, in core rather than in the API app, because the SDK (Phase 10)
+Defined here, in core rather than in the API app, because the SDK (Phase 12)
 and any future CLI (§24) need the same vocabulary and must not each invent
 their own spelling of it.
 

@@ -4,7 +4,7 @@ The Python SDK for [SESKit](https://github.com/Otitodev/seskit) — a
 Python-native, self-hosted developer email platform built on Amazon SES.
 
 > **Status: placeholder.** This release reserves the name and carries no
-> working client yet. The SDK is built in Phase 10; until then, talk to the
+> working client yet. The SDK is built in Phase 12; until then, talk to the
 > HTTP API directly. Watch the repository for the first functional release.
 
 ## What SESKit is

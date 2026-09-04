@@ -1355,7 +1355,48 @@ not restyle per page, and read `docs/design-system.md` first.
 - basic analytics
 - vendor Alpine.js and Chart.js at this point, when there is finally something that needs them
 
-## Phase 10 — Python SDK
+## Phase 10 — Documentation and UI polish
+
+The README reached 690 lines doing a documentation site's job, and Phase 9 gave
+the pages real data while deliberately not restyling them. Both debts come due
+here, and in this order: the polish lands first, because screenshots taken of
+an unfinished interface are screenshots to retake.
+
+- finish the component layer `docs/design-system.md` already specifies —
+  loading states on every HTMX swap, copy affordances, toasts, the skip link
+- documentation site (MkDocs + Material, GitHub Pages; no Node, per §5)
+- move the guides out of the README, leaving a storefront
+- API reference generated from `openapi.json`, never hand-written
+- operating SESKit — deploying, upgrading, backup, troubleshooting
+- make `docs/prior-art.md`, the design brief and the design system reachable
+- agent-readable docs: `llms.txt`, `llms-full.txt`, `AGENTS.md`
+- the documentation's code samples run in CI rather than being proofread
+
+## Phase 11 — Suppression and sender reputation
+
+Promoted from §34's V1.2 list, because Phase 9 changed the argument. The
+dashboard now reports bounce and complaint rates against the 5% and 0.1%
+thresholds AWS reviews accounts on — so the product measures the risk that
+suspends an account while offering nothing to act on it. Measurement without
+mitigation is the wrong half to ship first.
+
+`security/webhooks.py` already reasons about "suppressing an address" as the
+consequence of a forged bounce, and Phase 7's SNS signature verification was
+justified partly on that basis. The security work anticipated this phase.
+
+- decide **SES account-level suppression** (`PutSuppressedDestination`) versus
+  a SESKit-owned list — the SES-native option fits §35 and is far less code,
+  but cannot express per-project scope, which is the whole question
+- automatic suppression on hard bounce and on complaint
+- suppression visible and reversible in the dashboard; a suppressed address is
+  a support question, so removing one has to be self-serve
+- sends to a suppressed address fail closed, with a domain-shaped error (§19)
+- `List-Unsubscribe` and `List-Unsubscribe-Post` headers (RFC 8058 one-click).
+  Gmail and Yahoo require these of bulk senders; SESKit is transactional-first,
+  so this is about not being classified as a bulk sender by accident
+- suppression events surfaced through the existing webhook vocabulary
+
+## Phase 12 — Python SDK
 
 - package
 - authentication
@@ -1365,7 +1406,7 @@ not restyle per page, and read `docs/design-system.md` first.
 - documentation
 - tests
 
-## Phase 11 — Hardening
+## Phase 13 — Hardening
 
 - security review
 - rate limits
@@ -1443,9 +1484,12 @@ After MVP:
 - Contacts
 - Audiences
 - Broadcasts
-- Suppression management
 - Advanced webhook management
 - CLI
+
+*Suppression management was promoted out of this list into the MVP build order
+(Phase 11) once Phase 9 shipped the bounce and complaint rates that make its
+absence a live risk rather than a missing convenience.*
 
 ### V2
 
@@ -1467,6 +1511,8 @@ Distinct from the MVP non-goal "AI email generation" (§3, which refers to AI-au
 - **"Why did this bounce" event assistant.** A natural-language query surface over `EmailEvent` (§6) and SES bounce/complaint payloads — e.g. "why is delivery to this domain failing" — summarizing patterns (hard vs. soft bounces, a specific recipient domain rejecting mail, a spike in complaints) that are currently just rows in a table. Also grounded in existing data; no content-generation surface, so it doesn't reopen the "AI email generation" non-goal.
 
 None of these belong in MVP — they're listed here so they're on the roadmap rather than rediscovered later, and so implementation of §6's data model (Domain, Email, EmailEvent) keeps them in mind (e.g. don't discard raw SES error payloads needed for the diagnostic assistant's explanations).
+
+**The unanswered question is where the LLM credential lives, and it is not a detail.** A bring-your-own-key model storing each project's provider key encrypted in the database would make it the first user-supplied secret SESKit ever persists — §9 deliberately refuses to do this even for AWS keys, resolving them from the environment instead. "Same pattern as AWS credentials" is therefore an argument *against* per-project storage, not for it. The cheaper starting point is one operator-supplied key resolved exactly like every other setting, with the feature simply absent when it is unset; per-project keys, encryption at rest, rotation and a KMS decision are a separate piece of work that should be argued on its own merits when a customer actually needs isolation. Whichever way it goes, every AI feature stays opt-in per project — compliance-sensitive users are core ICP, and silently sending their bounce payloads to a third party would be a betrayal of the data-control pitch that brought them.
 
 ### Long-term
 

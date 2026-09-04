@@ -71,7 +71,7 @@ feat(api)!: drop the v0 send endpoint            # ! marks a breaking change
 
 Not ceremony for its own sake. Two concrete payoffs for this project:
 
-- **Releases.** The Python SDK ships to PyPI (Phase 10) and the roadmap runs
+- **Releases.** The Python SDK ships to PyPI (Phase 12) and the roadmap runs
   through V1.1, V1.2, and V2 (§34). Typed commits let a changelog and a semver
   bump be derived rather than hand-assembled.
 - **A monorepo needs scopes.** `git log --oneline -- apps/api` answers "what

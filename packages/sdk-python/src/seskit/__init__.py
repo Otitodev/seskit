@@ -1,6 +1,6 @@
 """SESKit Python SDK.
 
-Implemented in Phase 10 (see SESKit_MVP.md §31). The SDK is a thin client over
+Implemented in Phase 12 (see SESKit_MVP.md §31). The SDK is a thin client over
 the HTTP API - business logic lives in the API, never duplicated here (§13).
 
 Target surface:
