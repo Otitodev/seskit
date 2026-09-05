@@ -77,7 +77,7 @@ curl -X POST http://localhost:8000/v1/emails \
        "subject":"Hello from SESKit","html":"<h1>It works</h1>"}'
 ```
 
-Full walkthrough: [Your first email](docs/getting-started/first-email.md).
+Full walkthrough: [Your first email](https://otitodev.github.io/seskit/getting-started/first-email/).
 
 ## What works today
 
@@ -101,34 +101,39 @@ Build order: [`SESKit_MVP.md`](SESKit_MVP.md) §31.
 
 ## Documentation
 
-The full documentation lives in [`docs/`](docs/index.md).
+The full documentation is at
+**[otitodev.github.io/seskit](https://otitodev.github.io/seskit/)** — searchable,
+and the same pages that live in [`docs/`](docs/) if you would rather read them
+in the tree.
 
-**Getting started** — [install and run](docs/getting-started/installation.md) ·
-[your first email](docs/getting-started/first-email.md) ·
-[sending from your app](docs/getting-started/sending-from-your-app.md) ·
-[the dashboard](docs/getting-started/dashboard-tour.md)
+**Getting started** — [install and run](https://otitodev.github.io/seskit/getting-started/installation/) ·
+[your first email](https://otitodev.github.io/seskit/getting-started/first-email/) ·
+[sending from your app](https://otitodev.github.io/seskit/getting-started/sending-from-your-app/) ·
+[the dashboard](https://otitodev.github.io/seskit/getting-started/dashboard-tour/)
 
-**Guides** — [no AWS account yet?](docs/guides/no-aws-account-yet.md) ·
-[connect AWS](docs/guides/connect-aws.md) ·
-[IAM policies](docs/guides/iam-policies.md) ·
-[verify a sender](docs/guides/verify-a-sender.md) ·
-[the SES sandbox](docs/guides/ses-sandbox.md) ·
-[delivery events](docs/guides/delivery-events.md) ·
-[webhooks](docs/guides/webhooks.md) ·
-[reading your metrics](docs/guides/metrics.md)
+**Guides** — [no AWS account yet?](https://otitodev.github.io/seskit/guides/no-aws-account-yet/) ·
+[connect AWS](https://otitodev.github.io/seskit/guides/connect-aws/) ·
+[IAM policies](https://otitodev.github.io/seskit/guides/iam-policies/) ·
+[verify a sender](https://otitodev.github.io/seskit/guides/verify-a-sender/) ·
+[the SES sandbox](https://otitodev.github.io/seskit/guides/ses-sandbox/) ·
+[delivery events](https://otitodev.github.io/seskit/guides/delivery-events/) ·
+[webhooks](https://otitodev.github.io/seskit/guides/webhooks/) ·
+[reading your metrics](https://otitodev.github.io/seskit/guides/metrics/)
 
-**Reference** — [HTTP API](docs/reference/api.md) ·
-[configuration](docs/reference/configuration.md) ·
-[events](docs/reference/events.md) · [errors](docs/reference/errors.md)
+**Reference** — [HTTP API](https://otitodev.github.io/seskit/reference/api/) ·
+[Python SDK](https://otitodev.github.io/seskit/reference/sdk/) ·
+[configuration](https://otitodev.github.io/seskit/reference/configuration/) ·
+[events](https://otitodev.github.io/seskit/reference/events/) ·
+[errors](https://otitodev.github.io/seskit/reference/errors/)
 
-**Operating** — [deploying](docs/operating/deploying.md) ·
-[upgrading](docs/operating/upgrading.md) ·
-[backup](docs/operating/backup.md) ·
-[troubleshooting](docs/operating/troubleshooting.md)
+**Operating** — [deploying](https://otitodev.github.io/seskit/operating/deploying/) ·
+[upgrading](https://otitodev.github.io/seskit/operating/upgrading/) ·
+[backup](https://otitodev.github.io/seskit/operating/backup/) ·
+[troubleshooting](https://otitodev.github.io/seskit/operating/troubleshooting/)
 
-**Design notes** — [why SES-native](docs/design/why-ses.md) ·
-[security model](docs/design/security-model.md) ·
-[prior art](docs/design/prior-art.md)
+**Design notes** — [why SES-native](https://otitodev.github.io/seskit/design/why-ses/) ·
+[security model](https://otitodev.github.io/seskit/design/security-model/) ·
+[prior art](https://otitodev.github.io/seskit/design/prior-art/)
 
 **Reading this with an agent?** The site publishes
 [`llms.txt`](https://otitodev.github.io/seskit/llms.txt) — every page with a
@@ -142,11 +147,11 @@ it, [`AGENTS.md`](AGENTS.md) is the orientation.
 
 - **What permissions does it need?** Six SES actions to send, nine more for
   delivery events, and never `AdministratorAccess` —
-  [IAM policies](docs/guides/iam-policies.md).
+  [IAM policies](https://otitodev.github.io/seskit/guides/iam-policies/).
 - **Can I send straight away?** Not to arbitrary recipients: every new AWS
   account is in the SES sandbox for roughly 24 hours. Which is why the
   quickstart above needs no AWS account at all —
-  [the SES sandbox](docs/guides/ses-sandbox.md).
+  [the SES sandbox](https://otitodev.github.io/seskit/guides/ses-sandbox/).
 
 ## Architecture
 
@@ -185,7 +190,7 @@ uv run mypy .                  # type-check
 ```
 
 Before changing the dashboard, read
-[`docs/design/system.md`](docs/design/system.md).
+[the design system](https://otitodev.github.io/seskit/design/system/).
 
 Security issues: see [SECURITY.md](SECURITY.md) rather than opening a public
 issue.
