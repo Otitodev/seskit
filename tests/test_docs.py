@@ -111,6 +111,56 @@ def test_every_listed_page_carries_a_description() -> None:
     assert not bare, f"listed without a description: {bare}"
 
 
+def _front_matter(page: str) -> dict[str, Any]:
+    """A page's YAML front matter, or an empty mapping if it has none."""
+    yaml = pytest.importorskip("yaml", reason="pyyaml arrives with the docs group")
+    text = (ROOT / "docs" / page).read_text(encoding="utf-8")
+    if not text.startswith("---\n"):
+        return {}
+    _, _, rest = text.partition("---\n")
+    block, _, _ = rest.partition("\n---")
+    parsed: dict[str, Any] | None = yaml.safe_load(block)
+    return parsed or {}
+
+
+def test_pages_kept_out_of_the_nav_are_kept_out_of_search() -> None:
+    """Unlisting a page from the nav is only half of hiding it.
+
+    Search indexes the whole site regardless of the nav, so a page removed from
+    the navigation still surfaces in results - and does it with no breadcrumb
+    to explain what it is or why it is there. `commit-conventions.md` came back
+    for "idempotency", ahead of neither of the two pages that answer it but
+    among them, which is the shape of the problem: contributor documentation
+    interleaved with user documentation in the one place a user is asking a
+    question.
+
+    Excluded from the index, not from the site. The page still builds and its
+    URL still works for anyone sent the link.
+    """
+    # not_in_nav takes gitignore-style patterns, so a line is not necessarily a
+    # filename. Expanded here rather than assumed literal, because the day
+    # somebody writes "internal/*.md" this should keep checking rather than
+    # start erroring on a path that was never meant to be one.
+    unlisted: list[str] = []
+    for line in (_config().get("not_in_nav") or "").splitlines():
+        pattern = line.strip()
+        if not pattern:
+            continue
+        if any(char in pattern for char in "*?["):
+            unlisted += [
+                match.relative_to(ROOT / "docs").as_posix()
+                for match in sorted((ROOT / "docs").glob(pattern))
+            ]
+        else:
+            unlisted.append(pattern)
+    assert unlisted, "nothing is unlisted; has not_in_nav been removed?"
+
+    missing = [
+        page for page in unlisted if not (_front_matter(page).get("search") or {}).get("exclude")
+    ]
+    assert not missing, f"absent from the nav but still in the search index: {missing}"
+
+
 # ---------------------------------------------------------- code samples ---
 
 #: Put immediately before a fence to say the block is not meant to work as

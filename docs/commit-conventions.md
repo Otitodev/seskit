@@ -1,3 +1,15 @@
+---
+# Contributor documentation, not user documentation. It is already absent from
+# the nav; leaving it in the search index put it in front of users looking for
+# something else - "idempotency" returned this page's hook-checking section
+# alongside the two pages that actually explain idempotency keys.
+#
+# Excluded from the index rather than removed from the site: anyone sent the
+# link still gets the page.
+search:
+  exclude: true
+---
+
 # Commit conventions
 
 The full reference for SESKit commit messages, the hooks that enforce them, and
