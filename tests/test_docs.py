@@ -111,6 +111,25 @@ def test_every_listed_page_carries_a_description() -> None:
     assert not bare, f"listed without a description: {bare}"
 
 
+def test_both_probes_are_documented_where_operators_look() -> None:
+    """`/readyz` was missing from the prose entirely, and `/healthz` was
+    described as the readiness probe in its place.
+
+    That is the worst shape this mistake can take. `/healthz` deliberately
+    checks nothing, so an orchestrator pointed at it keeps an instance in
+    rotation with its database unreachable - verified against a running stack:
+    Postgres stopped, `/healthz` still answered 200 while `/readyz` answered
+    503 with `database: false`.
+
+    Naming both here because the failure was an endpoint nobody wrote down,
+    not a sentence somebody phrased badly.
+    """
+    deploying = (ROOT / "docs" / "operating" / "deploying.md").read_text(encoding="utf-8")
+
+    for probe in ("/healthz", "/readyz"):
+        assert probe in deploying, f"{probe} is not documented in operating/deploying.md"
+
+
 def _front_matter(page: str) -> dict[str, Any]:
     """A page's YAML front matter, or an empty mapping if it has none."""
     yaml = pytest.importorskip("yaml", reason="pyyaml arrives with the docs group")

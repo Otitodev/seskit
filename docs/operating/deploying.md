@@ -56,12 +56,26 @@ See [upgrading](upgrading.md) for the ordering that matters.
 
 ## Health
 
-`GET /healthz` is the readiness probe. It checks the database and Redis, so a
-green response means the process can actually do its job rather than merely
-that it is listening.
+There are two probes and they answer different questions. Pointing the wrong
+one at your orchestrator is the mistake worth avoiding, because it fails in the
+direction that sends traffic to an instance that cannot serve it.
 
-Point your orchestrator's readiness check at it, and give the container a start
-period — the first boot runs migrations and is slower than the rest.
+| Probe | Checks | Point your… |
+|---|---|---|
+| `GET /healthz` | Nothing. Returns 200 whenever the process is running. | **liveness** check at it |
+| `GET /readyz` | Round-trips Postgres and Redis. Returns **503** if either is unreachable, with a `dependencies` object saying which. | **readiness** check at it |
+
+`/healthz` answers "is this process alive, or should it be restarted?" It
+deliberately touches no dependencies: a liveness probe that fails when the
+database is briefly unavailable restarts a perfectly healthy process and makes
+an outage worse.
+
+`/readyz` answers "can this instance serve a request?" Use it for readiness and
+for load-balancer health, so an instance that has lost its database is taken
+out of rotation instead of being sent work it cannot do.
+
+Give the container a start period — the first boot runs migrations and is
+slower than the rest.
 
 ## Reachability
 

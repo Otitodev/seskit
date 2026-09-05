@@ -58,7 +58,9 @@ backward-compatible, and SESKit's are not audited for that yet.
 
 ## After upgrading
 
-- `GET /healthz` returns 200.
+- `GET /readyz` returns 200. Not `/healthz`, which returns 200 as long as the
+  process is running and so would pass with the database still unreachable —
+  exactly the state an upgrade can leave behind.
 - The worker is running. Send a test message and confirm it leaves `queued`.
 - If you use [delivery events](../guides/delivery-events.md), confirm the
   worker is still consuming the queue rather than silently failing to.
