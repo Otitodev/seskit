@@ -31,7 +31,7 @@ from seskit_api.main import create_app
 from seskit_api.queue import get_queue
 from seskit_core.config import EventIngestion, Settings
 from seskit_core.db import get_session
-from seskit_core.models import Email, EmailEvent, EmailStatus
+from seskit_core.models import Email, EmailEvent, EmailStatus, EventType
 from seskit_core.redis import get_redis
 from seskit_core.services import create_project, register_user
 from seskit_provider_aws_ses import sns_signature
@@ -146,8 +146,18 @@ async def _sent_email(session: AsyncSession) -> Email:
     return email
 
 
-async def _count(session: AsyncSession) -> int:
-    return int(await session.scalar(select(func.count()).select_from(EmailEvent)) or 0)
+async def _count(session: AsyncSession, event_type: EventType | None = None) -> int:
+    """How many events are recorded, optionally of one type.
+
+    The filter earns its place since suppression: a permanent bounce records
+    the bounce *and* the `email.suppressed` it causes, so a bare total stopped
+    answering "was this notification recorded once?" - which is what every
+    caller here is actually asking.
+    """
+    query = select(func.count()).select_from(EmailEvent)
+    if event_type is not None:
+        query = query.where(EmailEvent.event_type == event_type.value)
+    return int(await session.scalar(query) or 0)
 
 
 # ---------------------------------------------------------------- accepted ---
@@ -182,7 +192,7 @@ async def test_the_same_notification_twice_records_one_event(
     second = await receiver.post(ENDPOINT, json=body)
 
     assert (first.status_code, second.status_code) == (204, 204)
-    assert await _count(db_session) == 1
+    assert await _count(db_session, EventType.BOUNCED) == 1
 
 
 async def test_an_event_for_an_unknown_message_is_settled(
