@@ -125,6 +125,10 @@ async def send_email(
         subject=payload.subject,
         html_body=payload.html,
         text_body=payload.text,
+        # Stored, not just validated above. The worker assembles the message
+        # from this row, so a header that does not reach the row is a header
+        # the caller was told we would send and we did not.
+        headers=payload.headers,
         status=EmailStatus.QUEUED.value,
         idempotency_key=idempotency_key,
         provider=provider.value,
