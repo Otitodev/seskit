@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+{% from "components/ui.html" import button, card_open, card_close, empty, field, badge %}
+
+{% block title %}Suppressions · SESKit{% endblock %}
+
+{% block content %}
+  <div class="page-header">
+    <h1>Suppressions</h1>
+    <p class="page-header__subtitle">
+      Addresses <code>{{ project.name }}</code> will not send to. Sending to one
+      is refused before it reaches SES, so a dead address stops counting against
+      your bounce rate.
+    </p>
+  </div>
+
+  {% if error %}
+    <div class="alert alert--danger" role="alert">
+      <p>{{ error }}</p>
+    </div>
+  {% endif %}
+
+  {{ card_open("Suppress an address") }}
+    <form class="row row--end" method="post" action="/suppressions">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <div class="grow">
+        {{ field("address", "Email address", type="email",
+                 placeholder="someone@example.com",
+                 hint="For when a person asks not to be emailed. Bounces and
+                       complaints are added here automatically.",
+                 attrs='maxlength="320" autocomplete="off"') }}
+      </div>
+      <div class="grow">
+        {{ field("note", "Note", placeholder="Asked us to stop, ticket #4412",
+                 hint="Optional. The next person to read this will want to know
+                       why.",
+                 attrs='maxlength="500" autocomplete="off"') }}
+      </div>
+      {{ button("Suppress", variant="primary", type="submit") }}
+    </form>
+  {{ card_close() }}
+
+  {{ card_open("Suppressed", flush=True) }}
+    {% if suppressions %}
+      {# Scrolls inside its own container: a narrow window must not push the
+         whole page sideways. #}
+      <div class="table-wrap">
+        <table class="table">
+          <thead>
+            <tr>
+              <th>Address</th>
+              <th>Why</th>
+              <th>Since</th>
+              <th><span class="visually-hidden">Actions</span></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in suppressions %}
+              <tr>
+                <td><code>{{ row.address }}</code></td>
+                <td>
+                  {% if row.reason == "bounce" %}
+                    {{ badge("Hard bounce", tone="danger") }}
+                  {% elif row.reason == "complaint" %}
+                    {{ badge("Marked as spam", tone="danger") }}
+                  {% elif row.reason == "unsubscribe" %}
+                    {{ badge("Unsubscribed", tone="warning") }}
+                  {% else %}
+                    {{ badge("Added by hand", tone="") }}
+                  {% endif %}
+                  {% if row.note %}
+                    <p class="muted">{{ row.note }}</p>
+                  {% endif %}
+                  {% if row.source_event %}
+                    {# The message that caused it. Every removal request starts
+                       with "why", and this is the answer without a log dive. #}
+                    <p class="muted">
+                      <a href="/emails/{{ row.source_event.email_id }}">The message that caused it</a>
+                    </p>
+                  {% endif %}
+                </td>
+                <td>
+                  <time datetime="{{ row.created_at.isoformat() }}">
+                    {{ row.created_at.strftime("%d %b %Y, %H:%M") }}
+                  </time>
+                </td>
+                <td class="table__actions">
+                  <form method="post" action="/suppressions/remove">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                    <input type="hidden" name="address" value="{{ row.address }}">
+                    {{ button("Allow again", size="sm", type="submit") }}
+                  </form>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      {# An empty list is the healthy state, not a setup step. Saying "get
+         started" here would invite someone to create a problem they do not
+         have. #}
+      {{ empty(
+        "Nothing is suppressed",
+        "Addresses are added here automatically when a message hard-bounces or
+         is marked as spam. An empty list means neither has happened.",
+        icon_name="check"
+      ) }}
+    {% endif %}
+  {{ card_close() }}
+{% endblock %}
