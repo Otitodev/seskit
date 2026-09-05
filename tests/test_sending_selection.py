@@ -11,7 +11,7 @@ from __future__ import annotations
 import pytest
 from fakes.ses import FakeProviderFactory
 from seskit_core.errors import APIError, ErrorType
-from seskit_core.models import EmailProvider
+from seskit_core.models import Email, EmailProvider
 from seskit_core.services import (
     add_identity,
     choose_provider,
@@ -21,6 +21,7 @@ from seskit_core.services import (
     sender_is_verified,
 )
 from seskit_core.services.identities import check_identity
+from seskit_core.services.sending import to_outbound
 from sqlalchemy.ext.asyncio import AsyncSession
 
 PASSWORD = "correct-horse-battery"
@@ -249,3 +250,72 @@ async def test_a_subdomain_does_not_qualify_on_its_own(
     )
 
     assert verified is False
+
+
+# ------------------------------------------------- the row as a provider sees it ---
+
+
+def _row(**kwargs: object) -> Email:
+    """An unsaved ``Email``, which is all ``to_outbound`` needs.
+
+    No session: this is a pure translation from the row to the vocabulary a
+    provider speaks, and giving it a database would hide that.
+    """
+    defaults: dict[str, object] = {
+        "project_id": "proj_test",
+        "from_address": "Acme <hello@example.com>",
+        "to_addresses": ["user@example.com"],
+        "cc_addresses": [],
+        "bcc_addresses": [],
+        "reply_to": [],
+        "subject": "Welcome",
+        "html_body": "<h1>Hello</h1>",
+        "text_body": "Hello",
+        "headers": {},
+    }
+    defaults.update(kwargs)
+    return Email(**defaults)
+
+
+def test_the_custom_headers_on_the_row_reach_the_provider() -> None:
+    """The seam this whole commit exists for.
+
+    `build_message` has always carried `OutboundEmail.headers` and had a test
+    saying so. Nothing tested the step before it, so the API validated a
+    caller's headers, answered 201 and dropped them, and both halves looked
+    covered.
+    """
+    outbound = to_outbound(_row(headers={"X-Entity-Ref-Id": "order-1234"}))
+
+    assert outbound.headers == {"X-Entity-Ref-Id": "order-1234"}
+
+
+def test_a_row_written_before_the_column_existed_still_sends() -> None:
+    """`headers` arrived after messages already existed.
+
+    A row from before the migration reads back as NULL rather than `{}`, and a
+    queued message that cannot be assembled is one nobody can retry.
+    """
+    row = _row()
+    row.headers = None  # type: ignore[assignment]
+
+    assert to_outbound(row).headers == {}
+
+
+def test_the_row_is_translated_whole() -> None:
+    """Guards the shape rather than one field: every recipient list the row
+    carries has been dropped on this path at least once.
+    """
+    outbound = to_outbound(
+        _row(
+            cc_addresses=["cc@example.com"],
+            bcc_addresses=["quiet@example.com"],
+            reply_to=["reply@example.com"],
+        )
+    )
+
+    assert outbound.to == ["user@example.com"]
+    assert outbound.cc == ["cc@example.com"]
+    assert outbound.bcc == ["quiet@example.com"]
+    assert outbound.reply_to == ["reply@example.com"]
+    assert outbound.subject == "Welcome"

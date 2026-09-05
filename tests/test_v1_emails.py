@@ -251,6 +251,51 @@ async def test_an_attachment_is_stored_for_the_worker(
     assert stored.size_bytes == 8
 
 
+async def test_custom_headers_are_stored_for_the_worker(
+    app_client: AsyncClient, db_session: AsyncSession
+) -> None:
+    """For the same reason attachments are, and for a while they were not.
+
+    §11 accepts a `headers` object and this endpoint validated it against
+    header injection - then had nowhere to put it, so the caller was told 201
+    and nothing was sent. A queued message is assembled from the row, so the
+    row is the only place a header can survive the response.
+    """
+    from seskit_core.models import Email
+    from sqlalchemy import select
+
+    raw_key = await _key(db_session)
+
+    response = await app_client.post(
+        EMAILS_URL,
+        json={**BODY, "headers": {"X-Entity-Ref-Id": "order-1234"}},
+        headers=_auth(raw_key),
+    )
+
+    assert response.status_code == 201
+    stored = await db_session.scalar(select(Email))
+    assert stored is not None
+    assert stored.headers == {"X-Entity-Ref-Id": "order-1234"}
+
+
+async def test_a_send_without_headers_stores_an_empty_object(
+    app_client: AsyncClient, db_session: AsyncSession
+) -> None:
+    """Not NULL. The column says what the message was sent with, and "we did
+    not record them" is a different claim from "there were none".
+    """
+    from seskit_core.models import Email
+    from sqlalchemy import select
+
+    raw_key = await _key(db_session)
+
+    await app_client.post(EMAILS_URL, json=BODY, headers=_auth(raw_key))
+
+    stored = await db_session.scalar(select(Email))
+    assert stored is not None
+    assert stored.headers == {}
+
+
 # ---------------------------------------------------------- idempotency ---
 
 

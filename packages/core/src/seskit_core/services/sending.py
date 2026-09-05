@@ -143,6 +143,7 @@ def to_outbound(email: Email) -> OutboundEmail:
         cc=list(email.cc_addresses),
         bcc=list(email.bcc_addresses),
         reply_to=list(email.reply_to),
+        headers=dict(email.headers or {}),
         attachments=[
             Attachment(
                 filename=item.filename,

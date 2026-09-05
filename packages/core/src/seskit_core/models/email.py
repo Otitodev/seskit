@@ -105,6 +105,13 @@ class Email(Base, TimestampMixin):
     html_body: Mapped[str | None] = mapped_column(Text, nullable=True)
     text_body: Mapped[str | None] = mapped_column(Text, nullable=True)
 
+    #: The custom headers §11 lets a caller set. Stored rather than validated
+    #: and discarded: the API accepts them at this end and the worker assembles
+    #: the message at the other, so a header that is not on the row is a header
+    #: that was never sent. They are also what the message was *actually* sent
+    #: with, which is the question asked when a receiver did something odd.
+    headers: Mapped[dict[str, str]] = mapped_column(JSON, nullable=False, default=dict)
+
     status: Mapped[str] = mapped_column(
         String(16), nullable=False, default=EmailStatus.QUEUED.value, index=True
     )
