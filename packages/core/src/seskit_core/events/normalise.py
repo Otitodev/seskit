@@ -17,6 +17,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from seskit_core.models.email_event import EventType
+from seskit_core.models.suppression import SuppressionReason
 
 #: SES event names to ours. Written out rather than lower-cased so an
 #: unrecognised name is a decision rather than an accident - AWS adds event
@@ -114,6 +115,39 @@ def _parse_timestamp(value: Any) -> datetime | None:
     except ValueError:
         return None
     return parsed if parsed.tzinfo else parsed.replace(tzinfo=UTC)
+
+
+#: The only bounce SES reports that means the address will never accept mail.
+#:
+#: The other two must not suppress. ``Transient`` is a full mailbox, a
+#: greylist or a server having a bad afternoon, and the address works again
+#: tomorrow. ``Undetermined`` means SES could not tell, which is not evidence
+#: of anything. Suppressing on either would quietly delete a customer's real
+#: recipients over weeks, and they would have no way to know why their mail
+#: stopped arriving.
+PERMANENT_BOUNCE = "Permanent"
+
+
+def suppression_reason(payload: dict[str, Any], event_type: EventType) -> SuppressionReason | None:
+    """Whether this event means "never send here again", and on what grounds.
+
+    ``None`` for everything else, so the caller has no vocabulary of its own to
+    get wrong - the judgement lives here, next to the payload shapes it reads.
+    """
+    detail = payload.get(_DETAIL_KEY.get(event_type, "")) or {}
+
+    if event_type is EventType.BOUNCED:
+        if detail.get("bounceType") == PERMANENT_BOUNCE:
+            return SuppressionReason.BOUNCE
+        return None
+
+    if event_type is EventType.COMPLAINED:
+        # Every complaint, with no equivalent of the transient/permanent split.
+        # Someone pressed "this is spam"; continuing to mail them is how an
+        # account gets reviewed at 0.1%.
+        return SuppressionReason.COMPLAINT
+
+    return None
 
 
 def recipients(payload: dict[str, Any], event_type: EventType) -> list[str]:

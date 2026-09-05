@@ -19,9 +19,10 @@ from seskit_core.events import (
     provider_message_id,
     recipients,
     summarise,
+    suppression_reason,
     to_public,
 )
-from seskit_core.models import EventType
+from seskit_core.models import EventType, SuppressionReason
 
 # ------------------------------------------------------------------- types ---
 
@@ -202,3 +203,63 @@ def test_the_public_event_uses_the_dotted_type() -> None:
     assert event["id"] == "evt_1"
     assert event["email_id"] == "email_1"
     assert event["data"] == {"to": ["user@example.com"]}
+
+
+# ------------------------------------------------ what condemns an address ---
+
+
+@pytest.mark.parametrize(
+    ("bounce_type", "expected"),
+    [
+        ("Permanent", SuppressionReason.BOUNCE),
+        ("Transient", None),
+        ("Undetermined", None),
+        ("", None),
+        ("permanent", None),
+    ],
+)
+def test_only_a_permanent_bounce_condemns_an_address(
+    bounce_type: str, expected: SuppressionReason | None
+) -> None:
+    """Pure, so this runs anywhere - and it is the rule most worth being able
+    to check without a database in front of you.
+
+    ``"permanent"`` in lower case is deliberately *not* a match. SES sends
+    ``Permanent``; accepting a case variant would mean guessing at a vocabulary
+    rather than reading it, and a silent case change upstream should show up as
+    a failure here rather than as suppression quietly stopping.
+    """
+    payload = ses_events.bounce()
+    payload["bounce"]["bounceType"] = bounce_type
+
+    assert suppression_reason(payload, EventType.BOUNCED) is expected
+
+
+def test_every_complaint_condemns_an_address() -> None:
+    assert suppression_reason(ses_events.complaint(), EventType.COMPLAINED) is (
+        SuppressionReason.COMPLAINT
+    )
+
+
+@pytest.mark.parametrize(
+    ("payload", "event_type"),
+    [
+        (ses_events.delivery(), EventType.DELIVERED),
+        (ses_events.opened(), EventType.OPENED),
+        (ses_events.clicked(), EventType.CLICKED),
+        (ses_events.rejected(), EventType.REJECTED),
+    ],
+)
+def test_nothing_else_condemns_an_address(payload: dict[str, Any], event_type: EventType) -> None:
+    """A delivery, an open, a click and a rejection are not evidence against an
+    address. The
+    rule is a whitelist of two, not a blacklist of everything known today.
+    """
+    assert suppression_reason(payload, event_type) is None
+
+
+def test_a_bounce_with_no_detail_condemns_nothing() -> None:
+    """A malformed payload must fail closed towards *not* suppressing. Being
+    wrong in this direction costs a bounce; the other costs a recipient.
+    """
+    assert suppression_reason({"eventType": "Bounce"}, EventType.BOUNCED) is None

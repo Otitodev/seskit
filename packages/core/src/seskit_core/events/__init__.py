@@ -22,6 +22,7 @@ from seskit_core.events.normalise import (
     provider_message_id,
     recipients,
     summarise,
+    suppression_reason,
     to_public,
 )
 
@@ -41,6 +42,7 @@ __all__ = [
     "provider_message_id",
     "recipients",
     "summarise",
+    "suppression_reason",
     "to_public",
     "unwrap",
 ]
