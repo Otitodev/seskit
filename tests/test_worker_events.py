@@ -80,8 +80,18 @@ async def _sent_email(session: AsyncSession, *, email: str = "owner@example.com"
     return row
 
 
-async def _count(session: AsyncSession) -> int:
-    return int(await session.scalar(select(func.count()).select_from(EmailEvent)) or 0)
+async def _count(session: AsyncSession, event_type: EventType | None = None) -> int:
+    """How many events are recorded, optionally of one type.
+
+    The filter earns its place since suppression: a permanent bounce records
+    the bounce *and* the `email.suppressed` it causes, so a bare total stopped
+    answering "was this notification recorded once?" - which is what every
+    caller here is actually asking.
+    """
+    query = select(func.count()).select_from(EmailEvent)
+    if event_type is not None:
+        query = query.where(EmailEvent.event_type == event_type.value)
+    return int(await session.scalar(query) or 0)
 
 
 # ------------------------------------------------------------------ recording ---
@@ -129,7 +139,7 @@ async def test_the_envelope_id_is_what_deduplicates(
         visibility_timeout=30,
     )
 
-    assert await _count(db_session) == 1
+    assert await _count(db_session, EventType.BOUNCED) == 1
     # Both are acknowledged: the duplicate is settled, not left to come back.
     assert queue.deleted == ["receipt-0", "receipt-1"]
 
