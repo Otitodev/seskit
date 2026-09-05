@@ -25,6 +25,7 @@ from email.utils import parseaddr
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from seskit_core.email import bare_address
 from seskit_core.errors import APIError, ErrorType
 from seskit_core.models import (
     AWSConnection,
@@ -47,11 +48,6 @@ def _domain_of(address: str) -> str:
     return addr.rpartition("@")[2].lower()
 
 
-def _bare(address: str) -> str:
-    _, addr = parseaddr(address)
-    return addr.lower()
-
-
 async def sender_is_verified(session: AsyncSession, *, project_id: str, sender: str) -> bool:
     """Whether SES will accept this address as a ``From:``.
 
@@ -59,7 +55,7 @@ async def sender_is_verified(session: AsyncSession, *, project_id: str, sender: 
     domain is a verified domain identity. The second is why a verified domain
     lets a project send as anything on it.
     """
-    address, domain = _bare(sender), _domain_of(sender)
+    address, domain = bare_address(sender), _domain_of(sender)
     if not domain:
         return False
 
@@ -95,7 +91,7 @@ async def choose_provider(
             return EmailProvider.SES
         raise APIError(
             ErrorType.DOMAIN_NOT_VERIFIED,
-            f"{_bare(sender) or sender!r} is not a verified sender for this project. "
+            f"{bare_address(sender) or sender!r} is not a verified sender for this project. "
             f"Verify the address or its domain on the Domains page before sending.",
         )
 

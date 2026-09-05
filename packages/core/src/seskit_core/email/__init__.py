@@ -7,6 +7,7 @@ content are the same bytes, built once.
 from seskit_core.email.message import (
     RESERVED_HEADERS,
     assert_within_size,
+    bare_address,
     build_message,
     envelope_recipients,
     message_bytes,
@@ -15,6 +16,7 @@ from seskit_core.email.message import (
 __all__ = [
     "RESERVED_HEADERS",
     "assert_within_size",
+    "bare_address",
     "build_message",
     "envelope_recipients",
     "message_bytes",
