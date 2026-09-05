@@ -12,6 +12,7 @@ from collections.abc import Iterable
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from seskit_core.email import bare_address
 from seskit_core.logging import get_logger
@@ -137,7 +138,13 @@ async def list_suppressions(
     "who am I not sending to", and answering it with rows that no longer apply
     would make the page read as worse than the truth.
     """
-    query = select(SuppressedAddress).where(SuppressedAddress.project_id == project_id)
+    query = (
+        select(SuppressedAddress)
+        # Eager, because the dashboard shows which message caused each entry and
+        # a lazy load on an async session raises rather than quietly querying.
+        .options(selectinload(SuppressedAddress.source_event))
+        .where(SuppressedAddress.project_id == project_id)
+    )
     if not include_removed:
         query = query.where(SuppressedAddress.removed_at.is_(None))
 
