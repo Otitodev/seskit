@@ -32,6 +32,7 @@ class ErrorType(StrEnum):
     RATE_LIMIT_EXCEEDED = "rate_limit_exceeded"
     PROVIDER_ERROR = "provider_error"
     INVALID_RECIPIENT = "invalid_recipient"
+    SUPPRESSED_RECIPIENT = "suppressed_recipient"
     ATTACHMENT_TOO_LARGE = "attachment_too_large"
     EMAIL_REJECTED = "email_rejected"
     NOT_FOUND = "not_found"
@@ -47,6 +48,10 @@ STATUS_FOR_TYPE: dict[ErrorType, int] = {
     ErrorType.NOT_FOUND: 404,
     ErrorType.DOMAIN_NOT_VERIFIED: 422,
     ErrorType.INVALID_RECIPIENT: 422,
+    # 422 rather than 400, with the other recipient failures. The request is
+    # well formed and was understood; SESKit is declining to act on it, which
+    # is the same shape of answer as an unverified domain.
+    ErrorType.SUPPRESSED_RECIPIENT: 422,
     ErrorType.ATTACHMENT_TOO_LARGE: 413,
     ErrorType.EMAIL_REJECTED: 422,
     ErrorType.RATE_LIMIT_EXCEEDED: 429,

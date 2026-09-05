@@ -25,6 +25,7 @@ from seskit_core.services import (
     choose_provider,
     configuration_set_for,
     find_by_idempotency_key,
+    suppressed_among,
 )
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -44,6 +45,47 @@ logger = get_logger(__name__)
 router = APIRouter(tags=["emails"])
 
 SEND_JOB = "send_email"
+
+
+async def _refuse_suppressed(
+    db: AsyncSession, *, project_id: str, payload: SendEmailRequest
+) -> None:
+    """Stop a message aimed at an address this project has suppressed.
+
+    **Fails the whole request**, not the suppressed recipients. Sending to the
+    rest would need a second response shape saying who was dropped, and a
+    caller who did not read it would believe everyone got the message. §31 asks
+    for closed rather than partial, and refusing is the answer a retry loop can
+    act on.
+
+    Bcc is checked too. A suppressed address is suppressed however it was
+    reached, and a blind copy is still a send.
+
+    Before `choose_provider` deliberately: a project with no AWS connection is
+    told what SESKit already knows about its own list rather than being sent
+    away to configure sending first.
+    """
+    blocked = await suppressed_among(
+        db,
+        project_id=project_id,
+        addresses=[*payload.to_list, *payload.cc_list, *payload.bcc_list],
+    )
+    if not blocked:
+        return
+
+    ordered = sorted(blocked)
+    if len(ordered) == 1:
+        named, verb, pronoun = ordered[0], "is", "it"
+    else:
+        named = f"{', '.join(ordered[:-1])} and {ordered[-1]}"
+        verb, pronoun = "are", "them"
+
+    raise APIError(
+        ErrorType.SUPPRESSED_RECIPIENT,
+        f"{named} {verb} on this project's suppression list, so nothing was sent. "
+        "Addresses are added after a hard bounce or a complaint. "
+        f"Take {pronoun} off the list if you believe mail can be delivered there again.",
+    )
 
 
 @router.post(
@@ -82,6 +124,8 @@ async def send_email(
         existing = await find_by_idempotency_key(db, project_id=project_id, key=idempotency_key)
         if existing is not None:
             return SendEmailResponse(id=existing.id, status=existing.status)
+
+    await _refuse_suppressed(db, project_id=project_id, payload=payload)
 
     provider = await choose_provider(
         db,
