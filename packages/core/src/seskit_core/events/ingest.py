@@ -39,8 +39,9 @@ from seskit_core.events.normalise import (
 )
 from seskit_core.ids import IDPrefix, generate_id
 from seskit_core.logging import get_logger
-from seskit_core.models import Email, EmailEvent, EventType
-from seskit_core.services.suppression import suppress
+from seskit_core.models import Email, EmailEvent, EventType, SuppressionReason
+from seskit_core.models.base import utcnow
+from seskit_core.services.suppression import suppress, suppressed_among
 from seskit_core.services.webhooks import queue_deliveries
 
 logger = get_logger(__name__)
@@ -139,17 +140,20 @@ async def ingest_event(
         )
         return Outcome.DUPLICATE, existing
 
-    # The Phase 11 seam, before the webhook rather than after it. Both land in
-    # the same transaction, so a customer never observes one without the other
-    # - but an application that reacts to `email.bounced` by asking what SESKit
-    # now thinks should not be able to win that race in a later refactoring.
-    await _apply_suppression(session, email=email, event=event, payload=payload)
-
     # The Phase 8 seam. Queueing is durable - a row per enabled endpoint - so a
     # webhook survives the process dying between here and the delivery attempt.
     # Deliberately after the flush: a delivery pointing at an event that was
     # never committed would be one nothing can ever send.
     await queue_deliveries(session, event)
+
+    # The Phase 11 seam, after the cause has been queued so that the bounce is
+    # attempted before the suppression it produced. Best effort only: deliveries
+    # retry independently and per endpoint, so webhook *arrival* order is not
+    # something SESKit can promise and applications must not rely on it.
+    #
+    # Both land in the same transaction either way, so no observer ever sees the
+    # suppression without the bounce that explains it.
+    await _apply_suppression(session, email=email, event=event, payload=payload)
 
     logger.info(
         "event_recorded",
@@ -177,18 +181,85 @@ async def _apply_suppression(
     Scoped to the message's own project. That is the point of SESKit holding
     this list rather than SES, whose equivalent is account-wide.
     """
-    reason = suppression_reason(payload, EventType(event.event_type))
+    event_type = EventType(event.event_type)
+    reason = suppression_reason(payload, event_type)
     if reason is None:
         return
 
-    for address in recipients(payload, EventType(event.event_type)):
-        await suppress(
+    named = recipients(payload, event_type)
+    # Asked before writing, so the event below reports what actually changed.
+    # An address suppressed last week bouncing again is not news, and an
+    # integration that received `email.suppressed` for it twice would have to
+    # deduplicate something SESKit already knows.
+    already = await suppressed_among(session, project_id=email.project_id, addresses=named)
+
+    added: list[str] = []
+    for address in named:
+        row = await suppress(
             session,
             project_id=email.project_id,
             address=address,
             reason=reason,
             source_event_id=event.id,
         )
+        if row.address not in already:
+            added.append(row.address)
+
+    if added:
+        await _record_suppression_event(
+            session, email=email, cause=event, addresses=added, reason=reason
+        )
+
+
+async def _record_suppression_event(
+    session: AsyncSession,
+    *,
+    email: Email,
+    cause: EmailEvent,
+    addresses: list[str],
+    reason: SuppressionReason,
+) -> None:
+    """Tell the customer's application what SESKit just decided.
+
+    One event for the addresses this notification condemned, rather than one
+    per address: they share a cause, and a bounce naming three dead mailboxes
+    is one thing that happened.
+
+    ``provider_event_id`` is null because no provider sent this - SESKit did.
+    Nulls do not collide in a unique index, so that costs no deduplication that
+    was ever available here.
+
+    ``occurred_at`` is now rather than the cause's timestamp. SESKit suppressed
+    the address when it processed the notification, and a bounce that sat in a
+    queue for an hour did not suppress anything an hour ago.
+    """
+    event_id = generate_id(IDPrefix.EVENT)
+    occurred = utcnow()
+
+    event = EmailEvent(
+        id=event_id,
+        email_id=email.id,
+        event_type=EventType.SUPPRESSED.value,
+        provider_event_id=None,
+        occurred_at=occurred,
+        payload=to_public(
+            event_id=event_id,
+            event_type=EventType.SUPPRESSED,
+            email_id=email.id,
+            occurred=occurred,
+            data={"to": addresses, "reason": reason.value, "caused_by": cause.id},
+        ),
+    )
+    session.add(event)
+    await session.flush()
+
+    await queue_deliveries(session, event)
+    logger.info(
+        "suppression_reported",
+        event_id=event.id,
+        caused_by=cause.id,
+        count=len(addresses),
+    )
 
 
 def apply_to_email(email: Email, event_type: EventType, payload: dict[str, Any]) -> None:

@@ -44,13 +44,24 @@ class EventType(StrEnum):
     OPENED = "opened"
     CLICKED = "clicked"
 
+    #: SESKit's own, not a provider's. Everything else here is something SES
+    #: reported; this is what SESKit decided in response, and it is delivered
+    #: so an application can mirror the list rather than infer it by watching
+    #: bounces and reimplementing the permanent/transient rule.
+    SUPPRESSED = "suppressed"
+
     REJECTED = "rejected"
     DELIVERY_DELAYED = "delivery_delayed"
     RENDERING_FAILED = "rendering_failed"
 
 
-#: §6's six. Anything outside this set is recorded but is not part of what the
-#: public API or the SDK commit to.
+#: What the public API and the SDK commit to: §6's six, plus `suppressed`.
+#: Anything outside this set is recorded but not delivered.
+#:
+#: `suppressed` is the one addition and it is deliberate. §31 asks for
+#: suppression to reach applications through the existing vocabulary, and
+#: the alternative is every integration watching bounces and reimplementing
+#: the permanent/transient rule to guess what SESKit did.
 PUBLIC_EVENT_TYPES = frozenset(
     {
         EventType.SENT,
@@ -59,6 +70,7 @@ PUBLIC_EVENT_TYPES = frozenset(
         EventType.COMPLAINED,
         EventType.OPENED,
         EventType.CLICKED,
+        EventType.SUPPRESSED,
     }
 )
 
@@ -72,6 +84,7 @@ EVENT_LABELS: dict[EventType, str] = {
     EventType.COMPLAINED: "Marked as spam",
     EventType.OPENED: "Opened",
     EventType.CLICKED: "Link clicked",
+    EventType.SUPPRESSED: "Added to the suppression list",
     EventType.REJECTED: "Rejected by SES",
     EventType.DELIVERY_DELAYED: "Delivery delayed",
     EventType.RENDERING_FAILED: "Template rendering failed",
