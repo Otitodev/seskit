@@ -411,6 +411,54 @@ def test_the_readme_does_not_link_to_markdown_that_is_published() -> None:
 
 # ------------------------------------------------------------- generated ---
 
+#: FastAPI generates these from its own request-validation machinery. We do not
+#: declare them, so there is no `Field` to hang a description on without
+#: subclassing framework internals. Named rather than pattern-matched, so a
+#: model of ours can never quietly join the exemption.
+_FRAMEWORK_MODELS = {"ValidationError", "HTTPValidationError"}
+
+
+def test_every_field_we_own_is_described() -> None:
+    """An undescribed field renders as an empty cell in the API reference.
+
+    That was the state of the whole request body - `from`, `to` and `subject`
+    all arrived at the reader with nothing beside them - which reads as an
+    unfinished page rather than a simple field, and sends them to the source.
+
+    Reading the committed schema rather than building the app, so this runs
+    without a database and fails in the same place CI regenerates the file.
+    """
+    schema = json.loads((ROOT / "docs" / "reference" / "openapi.json").read_text(encoding="utf-8"))
+
+    missing = [
+        f"{model}.{field}"
+        for model, definition in sorted(schema["components"]["schemas"].items())
+        if model not in _FRAMEWORK_MODELS
+        for field, spec in (definition.get("properties") or {}).items()
+        if not spec.get("description")
+    ]
+    assert not missing, f"fields with no description: {missing}"
+
+
+def test_every_parameter_we_own_is_described() -> None:
+    """Headers and path parameters render in the same table and were missed.
+
+    The first version of the check above looked only at component schemas, so
+    it passed while `Idempotency-Key` - the header that decides whether a retry
+    sends a second message - sat in the reference with an empty cell beside it.
+    A parameter is not a field, and the reader cannot tell the difference.
+    """
+    schema = json.loads((ROOT / "docs" / "reference" / "openapi.json").read_text(encoding="utf-8"))
+
+    missing = [
+        f"{method.upper()} {path} ({parameter.get('in')} {parameter.get('name')})"
+        for path, operations in sorted(schema["paths"].items())
+        for method, operation in operations.items()
+        for parameter in operation.get("parameters") or []
+        if not parameter.get("description")
+    ]
+    assert not missing, f"parameters with no description: {missing}"
+
 
 def test_the_api_reference_is_not_hand_edited() -> None:
     """It carries a header saying so, and CI regenerates it to check.

@@ -110,22 +110,22 @@ Accept a message for sending.
 
 | Name | In | | |
 |---|---|---|---|
-| `Idempotency-Key` | header | optional |  |
+| `Idempotency-Key` | header | optional | Repeat a request safely. A second send with the same key returns the first message's id and sends nothing further, so a retry after a timeout cannot deliver twice. Scoped to the project. |
 
 **Request body**
 
 | Field | Type | | |
 |---|---|---|---|
-| `from` | string | required |  |
-| `to` | string[] or string | required |  |
-| `subject` | string | required |  |
-| `html` | string | optional |  |
-| `text` | string | optional |  |
-| `cc` | string[] or string | optional |  |
-| `bcc` | string[] or string | optional |  |
-| `reply_to` | string[] or string | optional |  |
-| `headers` | object | optional |  |
-| `attachments` | AttachmentRequest[] | optional |  |
+| `from` | string | required | The sender, optionally with a display name. The address or its domain must be verified in SES — an unverified sender is refused by SES, not by SESKit, so it fails at send time rather than here. |
+| `to` | string[] or string | required | One recipient, or a list of them. While your account is in the SES sandbox every recipient must also be verified. |
+| `subject` | string | required | Max 998 characters, which is the RFC 5322 line limit. |
+| `html` | string | optional | HTML body. Provide `html`, `text`, or both; a message with neither is refused. |
+| `text` | string | optional | Plain-text body. Sending both makes a multipart message, which is what clients that will not render HTML fall back to. |
+| `cc` | string[] or string | optional | Visible to every recipient. |
+| `bcc` | string[] or string | optional | Hidden from every recipient. Recorded, but never returned by the API — a blind copy readable from a `GET` is not blind. |
+| `reply_to` | string[] or string | optional | Where replies go, if not to `from`. Needs no SES verification. |
+| `headers` | object | optional | Custom headers to add to the message. |
+| `attachments` | AttachmentRequest[] | optional | The size limit applies to the assembled message, not to each file: base64 inflates content by about a third, and it is the assembled size SES rejects. See `EMAIL_MAX_MESSAGE_BYTES` (10 MiB by default). |
 
 **Responses**
 
@@ -152,7 +152,7 @@ rather than a 403 - which would confirm the id exists.
 
 | Name | In | | |
 |---|---|---|---|
-| `email_id` | path | required |  |
+| `email_id` | path | required | The id returned when the message was accepted. |
 
 **Responses**
 
@@ -201,7 +201,7 @@ time it is next due.
 
 | Name | In | | |
 |---|---|---|---|
-| `endpoint_id` | path | required |  |
+| `endpoint_id` | path | required | The endpoint whose deliveries to list. |
 
 **Responses**
 
@@ -227,6 +227,6 @@ content by about a third and it is the assembled size SES rejects.
 
 | Field | Type | | |
 |---|---|---|---|
-| `filename` | string | required |  |
+| `filename` | string | required | The name the recipient sees. Max 255 characters. |
 | `content` | string | required | Base64-encoded file content. |
-| `content_type` | string | optional | Defaults to `"application/octet-stream"` |
+| `content_type` | string | optional | MIME type. Defaults to `application/octet-stream`, which most clients offer as a download rather than displaying. |

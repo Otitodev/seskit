@@ -12,7 +12,7 @@ from __future__ import annotations
 from typing import Annotated
 
 from arq.connections import ArqRedis
-from fastapi import APIRouter, Depends, Header, Response, status
+from fastapi import APIRouter, Depends, Header, Path, Response, status
 from seskit_core.config import Settings
 from seskit_core.db import get_session
 from seskit_core.email import assert_within_size
@@ -60,7 +60,17 @@ async def send_email(
     queue: Annotated[ArqRedis, Depends(get_queue)],
     settings: Annotated[Settings, Depends(get_app_settings)],
     context: Annotated[APIContext, Depends(require_api_key)],
-    idempotency_key: Annotated[str | None, Header(alias="Idempotency-Key")] = None,
+    idempotency_key: Annotated[
+        str | None,
+        Header(
+            alias="Idempotency-Key",
+            description=(
+                "Repeat a request safely. A second send with the same key returns the "
+                "first message's id and sends nothing further, so a retry after a "
+                "timeout cannot deliver twice. Scoped to the project."
+            ),
+        ),
+    ] = None,
 ) -> SendEmailResponse:
     """Accept a message for sending."""
     apply_rate_limit_headers(response, context)
@@ -156,7 +166,7 @@ async def send_email(
 )
 async def get_email(
     response: Response,
-    email_id: str,
+    email_id: Annotated[str, Path(description="The id returned when the message was accepted.")],
     db: Annotated[AsyncSession, Depends(get_session)],
     context: Annotated[APIContext, Depends(require_api_key)],
 ) -> Email:

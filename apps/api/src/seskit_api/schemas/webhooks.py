@@ -26,19 +26,45 @@ class WebhookEndpointResponse(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
 
-    id: str = Field(examples=["wh_01J8XQ2K3M4N5P6Q7R8S9T0V1W"])
-    url: str = Field(examples=["https://example.com/webhooks/email"])
-    #: ``active`` | ``disabled_by_user`` | ``disabled_after_failures``. Three
-    #: values rather than a boolean, because "SESKit gave up on it" and "you
-    #: turned it off" are different facts and an integration should be able to
-    #: tell them apart without asking a human.
-    status: str = Field(examples=["active"])
-    consecutive_failures: int = Field(default=0, examples=[0])
-    created_at: datetime
+    id: str = Field(
+        description="Opaque and stable, prefixed `wh_`.",
+        examples=["wh_01J8XQ2K3M4N5P6Q7R8S9T0V1W"],
+    )
+    url: str = Field(
+        description=(
+            "Where SESKit POSTs events. Must be https, and must not resolve to a "
+            "loopback, private or link-local address — delivery responses are shown "
+            "in the dashboard, so an internal URL would turn a webhook into a read "
+            "primitive against your own network. Local development relaxes both rules "
+            "so you can point one at your own machine."
+        ),
+        examples=["https://example.com/webhooks/email"],
+    )
+    status: str = Field(
+        description=(
+            "`active`, `disabled_by_user` or `disabled_after_failures`. Three values "
+            "rather than a boolean, because *SESKit gave up on it* and *you turned it "
+            "off* are different facts and an integration should be able to tell them "
+            "apart without asking a human."
+        ),
+        examples=["active"],
+    )
+    consecutive_failures: int = Field(
+        default=0,
+        description=(
+            "Deliveries that gave up after exhausting their retries, counted since the "
+            "last success — one success clears it. Exposed so an application can watch "
+            "this climbing before SESKit switches the endpoint off."
+        ),
+        examples=[0],
+    )
+    created_at: datetime = Field(description="UTC.")
 
 
 class WebhookEndpointList(BaseModel):
-    data: list[WebhookEndpointResponse]
+    data: list[WebhookEndpointResponse] = Field(
+        description="Every endpoint on the project, disabled ones included."
+    )
 
 
 class WebhookDeliveryResponse(BaseModel):
@@ -46,21 +72,46 @@ class WebhookDeliveryResponse(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
 
-    id: str = Field(examples=["whd_01J8XQ2K3M4N5P6Q7R8S9T0V1W"])
-    event_id: str = Field(examples=["evt_01J8XQ2K3M4N5P6Q7R8S9T0V1W"])
-    #: ``pending`` | ``delivered`` | ``failed``.
-    status: str = Field(examples=["delivered"])
-    attempt_count: int = Field(examples=[1])
-    #: What the endpoint answered. Null when the request never got that far -
-    #: a timeout, a refused connection, a destination that failed validation.
-    response_status: int | None = Field(default=None, examples=[200])
-    #: The transport failure, normalised. Never a raw exception, which can
-    #: carry an address or a URL.
-    error: str | None = Field(default=None, examples=[None])
-    last_attempt_at: datetime | None = None
-    next_attempt_at: datetime | None = None
-    created_at: datetime
+    id: str = Field(
+        description="Opaque and stable, prefixed `whd_`.",
+        examples=["whd_01J8XQ2K3M4N5P6Q7R8S9T0V1W"],
+    )
+    event_id: str = Field(
+        description="The event being delivered. The same event to two endpoints is two deliveries.",
+        examples=["evt_01J8XQ2K3M4N5P6Q7R8S9T0V1W"],
+    )
+    status: str = Field(
+        description="`pending`, `delivered` or `failed`. `failed` means the retries are exhausted.",
+        examples=["delivered"],
+    )
+    attempt_count: int = Field(
+        description="Attempts made so far, including the first.", examples=[1]
+    )
+    response_status: int | None = Field(
+        default=None,
+        description=(
+            "What the endpoint answered. Null when the request never got that far — a "
+            "timeout, a refused connection, a destination that failed validation."
+        ),
+        examples=[200],
+    )
+    error: str | None = Field(
+        default=None,
+        description=(
+            "The transport failure, normalised. Never a raw exception, which can carry "
+            "an address or a URL."
+        ),
+        examples=[None],
+    )
+    last_attempt_at: datetime | None = Field(
+        default=None, description="Null until the first attempt. UTC."
+    )
+    next_attempt_at: datetime | None = Field(
+        default=None,
+        description="When the next retry is due. Null once the delivery has settled. UTC.",
+    )
+    created_at: datetime = Field(description="UTC.")
 
 
 class WebhookDeliveryList(BaseModel):
-    data: list[WebhookDeliveryResponse]
+    data: list[WebhookDeliveryResponse] = Field(description="Most recent first.")

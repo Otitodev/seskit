@@ -22,9 +22,21 @@ class DnsRecordResponse(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
 
-    record_type: str = Field(examples=["CNAME"])
-    name: str = Field(examples=["abc123._domainkey.example.com"])
-    value: str = Field(examples=["abc123.dkim.amazonses.com"])
+    record_type: str = Field(
+        description="`CNAME` — the three records SES Easy DKIM needs are all CNAMEs.",
+        examples=["CNAME"],
+    )
+    name: str = Field(
+        description=(
+            "The fully-qualified record name. Some DNS providers want only the part "
+            "before your domain, so check whether yours appends it for you."
+        ),
+        examples=["abc123._domainkey.example.com"],
+    )
+    value: str = Field(
+        description="What the record should point at.",
+        examples=["abc123.dkim.amazonses.com"],
+    )
 
 
 class DomainResponse(BaseModel):
@@ -32,20 +44,53 @@ class DomainResponse(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
 
-    id: str = Field(examples=["dom_01J8XQ2K3M4N5P6Q7R8S9T0V1W"])
-    #: The domain itself. Named ``name`` rather than ``value`` because that is
-    #: what it is to a caller reading the API.
-    value: str = Field(examples=["example.com"])
-    region: str = Field(examples=["us-east-1"])
-    verification_status: str = Field(examples=["success"])
-    dkim_status: str | None = Field(default=None, examples=["success"])
-    mail_from_status: str | None = Field(default=None, examples=["not_started"])
-    #: Built from the stored DKIM tokens, so a caller can render setup
-    #: instructions without a second request.
-    dns_records: list[DnsRecordResponse] = Field(default_factory=list)
-    last_checked_at: datetime | None = None
-    created_at: datetime
+    id: str = Field(
+        description="Opaque and stable, prefixed `dom_`.",
+        examples=["dom_01J8XQ2K3M4N5P6Q7R8S9T0V1W"],
+    )
+    value: str = Field(description="The domain itself.", examples=["example.com"])
+    region: str = Field(
+        description=(
+            "The AWS region the identity lives in. SES identities are per-region, so a "
+            "domain verified in one region is not verified in another."
+        ),
+        examples=["us-east-1"],
+    )
+    #: The three status fields share SES's own vocabulary, kept verbatim so a
+    #: status never has to be translated twice.
+    verification_status: str = Field(
+        description=(
+            "`pending`, `success`, `failed`, `temporary_failure` or `not_started`. "
+            "You can only send from the domain once this is `success`."
+        ),
+        examples=["success"],
+    )
+    dkim_status: str | None = Field(
+        default=None,
+        description=(
+            "Same vocabulary. Mail sends without DKIM, but signing it is what stops "
+            "receivers treating it as unauthenticated."
+        ),
+        examples=["success"],
+    )
+    mail_from_status: str | None = Field(
+        default=None,
+        description="Same vocabulary, for a custom MAIL FROM domain. Optional.",
+        examples=["not_started"],
+    )
+    dns_records: list[DnsRecordResponse] = Field(
+        default_factory=list,
+        description=(
+            "The records to publish, built from the stored DKIM tokens so you can render "
+            "setup instructions without a second request."
+        ),
+    )
+    last_checked_at: datetime | None = Field(
+        default=None,
+        description="When SESKit last asked SES about this domain. Null until first checked. UTC.",
+    )
+    created_at: datetime = Field(description="UTC.")
 
 
 class DomainList(BaseModel):
-    data: list[DomainResponse]
+    data: list[DomainResponse] = Field(description="Every domain on the project.")

@@ -17,7 +17,7 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Response
+from fastapi import APIRouter, Depends, Path, Response
 from seskit_core.db import get_session
 from seskit_core.errors import APIError, ErrorType
 from seskit_core.services import get_owned_endpoint, list_deliveries, list_endpoints
@@ -72,7 +72,7 @@ async def list_webhook_endpoints(
     summary="List recent webhook deliveries",
 )
 async def list_webhook_deliveries(
-    endpoint_id: str,
+    endpoint_id: Annotated[str, Path(description="The endpoint whose deliveries to list.")],
     response: Response,
     db: Annotated[AsyncSession, Depends(get_session)],
     context: Annotated[APIContext, Depends(require_api_key)],
