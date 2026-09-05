@@ -10,9 +10,11 @@ made in this file.
 
 from __future__ import annotations
 
+from typing import Any, cast
+
 from fakes import ses_events
 from seskit_core.events import ingest_event
-from seskit_core.models import Email, EmailStatus, SuppressedAddress
+from seskit_core.models import Email, EmailEvent, EmailStatus, SuppressedAddress
 from seskit_core.services import create_project, find_suppression, list_suppressions, register_user
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -169,3 +171,107 @@ async def test_a_redelivered_bounce_does_not_suppress_twice(db_session: AsyncSes
         )
     )
     assert len(rows) == 1
+
+
+# ------------------------------------------------------ telling the customer ---
+
+
+def _data(event: EmailEvent) -> dict[str, Any]:
+    """The `data` half of a recorded event, typed enough to index."""
+    payload = cast(dict[str, Any], event.payload)
+    return cast(dict[str, Any], payload["data"])
+
+
+async def _events(session: AsyncSession, email_id: str, event_type: str) -> list[EmailEvent]:
+    rows = await session.scalars(
+        select(EmailEvent).where(
+            EmailEvent.email_id == email_id, EmailEvent.event_type == event_type
+        )
+    )
+    return list(rows)
+
+
+async def test_a_suppression_produces_its_own_event(db_session: AsyncSession) -> None:
+    """So an application can mirror the list rather than watching bounces and
+    reimplementing the permanent/transient rule to guess what SESKit did.
+    """
+    email = await _sent_email(db_session)
+
+    await ingest_event(db_session, ses_events.bounce(), provider_event_id="sns-1")
+
+    events = await _events(db_session, email.id, "suppressed")
+    assert len(events) == 1
+    assert events[0].payload["type"] == "email.suppressed"
+    assert _data(events[0])["to"] == [BOUNCED]
+    assert _data(events[0])["reason"] == "bounce"
+
+
+async def test_the_suppression_event_names_the_event_that_caused_it(
+    db_session: AsyncSession,
+) -> None:
+    email = await _sent_email(db_session)
+
+    _, cause = await ingest_event(db_session, ses_events.bounce(), provider_event_id="sns-1")
+
+    events = await _events(db_session, email.id, "suppressed")
+    assert cause is not None
+    assert _data(events[0])["caused_by"] == cause.id
+
+
+async def test_a_transient_bounce_produces_no_suppression_event(
+    db_session: AsyncSession,
+) -> None:
+    email = await _sent_email(db_session)
+
+    await ingest_event(db_session, ses_events.bounce(permanent=False), provider_event_id="sns-1")
+
+    assert await _events(db_session, email.id, "suppressed") == []
+
+
+async def test_re_suppressing_an_address_says_nothing(db_session: AsyncSession) -> None:
+    """An address suppressed last week bouncing again is not news. Reporting it
+    every time would make an integration deduplicate what SESKit already knows.
+    """
+    email = await _sent_email(db_session)
+    await ingest_event(db_session, ses_events.bounce(), provider_event_id="sns-1")
+
+    await ingest_event(db_session, ses_events.bounce(), provider_event_id="sns-2")
+
+    assert len(await _events(db_session, email.id, "suppressed")) == 1
+
+
+async def test_the_suppression_event_is_delivered_to_webhooks(
+    db_session: AsyncSession,
+) -> None:
+    """It is in PUBLIC_EVENT_TYPES, so it reaches endpoints rather than only
+    the database - which is the entire point of emitting it.
+    """
+    from seskit_core.models import WebhookDelivery, WebhookEndpoint, WebhookStatus
+
+    email = await _sent_email(db_session)
+    db_session.add(
+        WebhookEndpoint(
+            project_id=email.project_id,
+            url="https://example.com/hook",
+            secret="whsec_test",
+            status=WebhookStatus.ACTIVE.value,
+        )
+    )
+    await db_session.flush()
+
+    await ingest_event(db_session, ses_events.bounce(), provider_event_id="sns-1")
+
+    suppressed = (await _events(db_session, email.id, "suppressed"))[0]
+    deliveries = await db_session.scalars(
+        select(WebhookDelivery).where(WebhookDelivery.event_id == suppressed.id)
+    )
+    assert len(list(deliveries)) == 1
+
+
+async def test_a_suppression_is_not_counted_as_a_failure(db_session: AsyncSession) -> None:
+    """The bounce already counted. Counting the suppression too would inflate
+    every rate §18 computes against the thresholds this phase exists to protect.
+    """
+    from seskit_core.models import FAILURE_EVENT_TYPES, EventType
+
+    assert EventType.SUPPRESSED not in FAILURE_EVENT_TYPES
