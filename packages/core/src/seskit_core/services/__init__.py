@@ -70,6 +70,13 @@ from seskit_core.services.sending import (
     sender_is_verified,
     to_outbound,
 )
+from seskit_core.services.suppression import (
+    find_suppression,
+    list_suppressions,
+    remove_suppression,
+    suppress,
+    suppressed_among,
+)
 from seskit_core.services.users import (
     EmailAlreadyRegistered,
     SignupClosed,
@@ -133,6 +140,7 @@ __all__ = [
     "distinct_event_queues",
     "find_by_idempotency_key",
     "find_identity",
+    "find_suppression",
     "get_connection",
     "get_default_project",
     "get_owned_api_key",
@@ -150,6 +158,7 @@ __all__ = [
     "list_events",
     "list_identities",
     "list_projects",
+    "list_suppressions",
     "payload_bytes",
     "pending_delivery_ids",
     "policy_from",
@@ -163,6 +172,7 @@ __all__ = [
     "refresh_identity",
     "register_user",
     "remove_identity",
+    "remove_suppression",
     "revoke_api_key",
     "rotate_secret",
     "sender_is_verified",
@@ -170,6 +180,8 @@ __all__ = [
     "set_open_click_tracking",
     "setup_events",
     "signup_allowed",
+    "suppress",
+    "suppressed_among",
     "teardown_events",
     "to_outbound",
     "topic_name_for",

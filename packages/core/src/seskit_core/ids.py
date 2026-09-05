@@ -40,6 +40,7 @@ class IDPrefix(StrEnum):
     EVENT = "evt"
     WEBHOOK = "wh"
     WEBHOOK_DELIVERY = "whd"
+    SUPPRESSION = "supp"
 
 
 def generate_id(prefix: IDPrefix) -> str:

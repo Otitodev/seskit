@@ -57,6 +57,24 @@ def _reject_header_injection(name: str, value: str) -> None:
         )
 
 
+def bare_address(value: str) -> str:
+    """The mailbox out of ``Display Name <a@b.com>``, lower-cased.
+
+    Public because more than one thing has to agree on what an address *is*.
+    Sender verification already reduced addresses this way; suppression has to
+    reduce them identically, or `Bob <bob@example.com>` would slip past a list
+    holding `bob@example.com` and adding a display name would defeat it.
+
+    Normalises rather than validates. ``parseaddr`` hands back text it cannot
+    make sense of unchanged, so ``"nonsense"`` normalises to ``"nonsense"`` and
+    not to ``""``. That is the right split: two callers agreeing on the same
+    reduction is what matters here, and whether an address is *valid* is
+    `_address`'s question, which raises.
+    """
+    _, addr = parseaddr(value)
+    return addr.strip().lower()
+
+
 def _address(value: str) -> Address:
     """Parse ``Display Name <a@b.com>`` or a bare address.
 
