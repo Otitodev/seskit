@@ -4,6 +4,7 @@
       "APIKeyList": {
         "properties": {
           "data": {
+            "description": "Every key on the project, revoked ones included.",
             "items": {
               "$ref": "#/components/schemas/APIKeyResponse"
             },
@@ -21,11 +22,13 @@
         "description": "A key as the API describes it - prefix only, never the secret.",
         "properties": {
           "created_at": {
+            "description": "UTC.",
             "format": "date-time",
             "title": "Created At",
             "type": "string"
           },
           "id": {
+            "description": "Opaque and stable, prefixed `key_`. Not the key itself.",
             "examples": [
               "key_01J8XQ2K3M4N5P6Q7R8S9T0V1W"
             ],
@@ -54,6 +57,7 @@
             "title": "Last Used At"
           },
           "name": {
+            "description": "Whatever you called it. Only ever for your own recognition.",
             "examples": [
               "production"
             ],
@@ -93,6 +97,7 @@
           },
           "content_type": {
             "default": "application/octet-stream",
+            "description": "MIME type. Defaults to `application/octet-stream`, which most clients offer as a download rather than displaying.",
             "examples": [
               "text/csv"
             ],
@@ -100,6 +105,7 @@
             "type": "string"
           },
           "filename": {
+            "description": "The name the recipient sees. Max 255 characters.",
             "examples": [
               "report.csv"
             ],
@@ -118,10 +124,12 @@
       "DependencyStatus": {
         "properties": {
           "database": {
+            "description": "Whether Postgres answered.",
             "title": "Database",
             "type": "boolean"
           },
           "redis": {
+            "description": "Whether Redis answered.",
             "title": "Redis",
             "type": "boolean"
           }
@@ -137,6 +145,7 @@
         "description": "One record the customer has to publish.\n\n``from_attributes`` because the source is a frozen dataclass, not a dict -\npydantic will not read a nested dataclass by attribute without it.",
         "properties": {
           "name": {
+            "description": "The fully-qualified record name. Some DNS providers want only the part before your domain, so check whether yours appends it for you.",
             "examples": [
               "abc123._domainkey.example.com"
             ],
@@ -144,6 +153,7 @@
             "type": "string"
           },
           "record_type": {
+            "description": "`CNAME` \u2014 the three records SES Easy DKIM needs are all CNAMEs.",
             "examples": [
               "CNAME"
             ],
@@ -151,6 +161,7 @@
             "type": "string"
           },
           "value": {
+            "description": "What the record should point at.",
             "examples": [
               "abc123.dkim.amazonses.com"
             ],
@@ -169,6 +180,7 @@
       "DomainList": {
         "properties": {
           "data": {
+            "description": "Every domain on the project.",
             "items": {
               "$ref": "#/components/schemas/DomainResponse"
             },
@@ -186,6 +198,7 @@
         "description": "A sending domain and where its verification has got to.",
         "properties": {
           "created_at": {
+            "description": "UTC.",
             "format": "date-time",
             "title": "Created At",
             "type": "string"
@@ -199,12 +212,14 @@
                 "type": "null"
               }
             ],
+            "description": "Same vocabulary. Mail sends without DKIM, but signing it is what stops receivers treating it as unauthenticated.",
             "examples": [
               "success"
             ],
             "title": "Dkim Status"
           },
           "dns_records": {
+            "description": "The records to publish, built from the stored DKIM tokens so you can render setup instructions without a second request.",
             "items": {
               "$ref": "#/components/schemas/DnsRecordResponse"
             },
@@ -212,6 +227,7 @@
             "type": "array"
           },
           "id": {
+            "description": "Opaque and stable, prefixed `dom_`.",
             "examples": [
               "dom_01J8XQ2K3M4N5P6Q7R8S9T0V1W"
             ],
@@ -228,6 +244,7 @@
                 "type": "null"
               }
             ],
+            "description": "When SESKit last asked SES about this domain. Null until first checked. UTC.",
             "title": "Last Checked At"
           },
           "mail_from_status": {
@@ -239,12 +256,14 @@
                 "type": "null"
               }
             ],
+            "description": "Same vocabulary, for a custom MAIL FROM domain. Optional.",
             "examples": [
               "not_started"
             ],
             "title": "Mail From Status"
           },
           "region": {
+            "description": "The AWS region the identity lives in. SES identities are per-region, so a domain verified in one region is not verified in another.",
             "examples": [
               "us-east-1"
             ],
@@ -252,6 +271,7 @@
             "type": "string"
           },
           "value": {
+            "description": "The domain itself.",
             "examples": [
               "example.com"
             ],
@@ -259,6 +279,7 @@
             "type": "string"
           },
           "verification_status": {
+            "description": "`pending`, `success`, `failed`, `temporary_failure` or `not_started`. You can only send from the domain once this is `success`.",
             "examples": [
               "success"
             ],
@@ -280,6 +301,7 @@
         "description": "A stored message, as a customer sees it.\n\nBcc is deliberately absent. It is recorded - support gets asked - but a\nblind copy readable from the API is not blind.",
         "properties": {
           "cc": {
+            "description": "Empty when the message had none. Bcc is never returned.",
             "items": {
               "type": "string"
             },
@@ -287,6 +309,7 @@
             "type": "array"
           },
           "created_at": {
+            "description": "When SESKit accepted the message. UTC.",
             "format": "date-time",
             "title": "Created At",
             "type": "string"
@@ -301,9 +324,11 @@
                 "type": "null"
               }
             ],
+            "description": "When the receiving server accepted it. Null unless a delivery event has arrived, which needs event reporting to be set up. UTC.",
             "title": "Delivered At"
           },
           "from": {
+            "description": "As sent, display name included.",
             "examples": [
               "hello@example.com"
             ],
@@ -319,9 +344,14 @@
                 "type": "null"
               }
             ],
+            "description": "Null when the message was text only.",
             "title": "Html"
           },
           "id": {
+            "description": "Opaque and stable, prefixed `email_`.",
+            "examples": [
+              "email_01J8XQ2K3M4N5P6Q7R8S9T0V1W"
+            ],
             "title": "Id",
             "type": "string"
           },
@@ -334,6 +364,7 @@
                 "type": "null"
               }
             ],
+            "description": "Why the last attempt failed, normalised. Null unless `status` is `failed`.",
             "title": "Last Error"
           },
           "provider_message_id": {
@@ -345,9 +376,11 @@
                 "type": "null"
               }
             ],
+            "description": "The id SES gave the message. Null until it is accepted. This is the id to quote to AWS support, and the one delivery events carry.",
             "title": "Provider Message Id"
           },
           "reply_to": {
+            "description": "Empty when the message did not set one.",
             "items": {
               "type": "string"
             },
@@ -364,9 +397,11 @@
                 "type": "null"
               }
             ],
+            "description": "When SES accepted it. Null while queued. UTC.",
             "title": "Sent At"
           },
           "status": {
+            "description": "`queued`, `sending`, `sent` or `failed`. Note that `sent` is the end of this vocabulary: it means a provider accepted the message, which is the last thing SESKit can observe by itself. Whether it *arrived* is a delivery event, so read `delivered_at` rather than expecting a `delivered` status.",
             "examples": [
               "sent"
             ],
@@ -374,6 +409,7 @@
             "type": "string"
           },
           "subject": {
+            "description": "As sent.",
             "title": "Subject",
             "type": "string"
           },
@@ -386,9 +422,11 @@
                 "type": "null"
               }
             ],
+            "description": "Null when the message was HTML only.",
             "title": "Text"
           },
           "to": {
+            "description": "Always a list here, even if one address was sent.",
             "items": {
               "type": "string"
             },
@@ -438,7 +476,8 @@
       "ErrorResponse": {
         "properties": {
           "error": {
-            "$ref": "#/components/schemas/ErrorBody"
+            "$ref": "#/components/schemas/ErrorBody",
+            "description": "Every error from this API has this shape, whatever the status code."
           }
         },
         "required": [
@@ -464,6 +503,7 @@
         "properties": {
           "status": {
             "const": "ok",
+            "description": "Always `ok`. This endpoint reports that the process is running and deliberately checks nothing else, so it never reports anything but this.",
             "title": "Status",
             "type": "string"
           }
@@ -477,9 +517,11 @@
       "ReadinessResponse": {
         "properties": {
           "dependencies": {
-            "$ref": "#/components/schemas/DependencyStatus"
+            "$ref": "#/components/schemas/DependencyStatus",
+            "description": "Which dependency is at fault, so a failing probe does not need a log dive."
           },
           "status": {
+            "description": "`not_ready` is returned with a 503, so status code alone is enough to act on.",
             "enum": [
               "ready",
               "not_ready"
@@ -499,6 +541,7 @@
         "description": "\u00a711's request body.",
         "properties": {
           "attachments": {
+            "description": "The size limit applies to the assembled message, not to each file: base64 inflates content by about a third, and it is the assembled size SES rejects. See `EMAIL_MAX_MESSAGE_BYTES` (10 MiB by default).",
             "items": {
               "$ref": "#/components/schemas/AttachmentRequest"
             },
@@ -529,6 +572,7 @@
                 "type": "null"
               }
             ],
+            "description": "Hidden from every recipient. Recorded, but never returned by the API \u2014 a blind copy readable from a `GET` is not blind.",
             "title": "Bcc"
           },
           "cc": {
@@ -555,9 +599,11 @@
                 "type": "null"
               }
             ],
+            "description": "Visible to every recipient.",
             "title": "Cc"
           },
           "from": {
+            "description": "The sender, optionally with a display name. The address or its domain must be verified in SES \u2014 an unverified sender is refused by SES, not by SESKit, so it fails at send time rather than here.",
             "examples": [
               "Acme <hello@example.com>"
             ],
@@ -569,6 +615,12 @@
             "additionalProperties": {
               "type": "string"
             },
+            "description": "Custom headers to add to the message.",
+            "examples": [
+              {
+                "X-Entity-Ref-Id": "order-1234"
+              }
+            ],
             "title": "Headers",
             "type": "object"
           },
@@ -581,6 +633,7 @@
                 "type": "null"
               }
             ],
+            "description": "HTML body. Provide `html`, `text`, or both; a message with neither is refused.",
             "examples": [
               "<h1>Welcome!</h1>"
             ],
@@ -610,9 +663,11 @@
                 "type": "null"
               }
             ],
+            "description": "Where replies go, if not to `from`. Needs no SES verification.",
             "title": "Reply To"
           },
           "subject": {
+            "description": "Max 998 characters, which is the RFC 5322 line limit.",
             "examples": [
               "Welcome to Acme"
             ],
@@ -629,6 +684,7 @@
                 "type": "null"
               }
             ],
+            "description": "Plain-text body. Sending both makes a multipart message, which is what clients that will not render HTML fall back to.",
             "examples": [
               "Welcome to Acme"
             ],
@@ -646,6 +702,7 @@
                 "type": "string"
               }
             ],
+            "description": "One recipient, or a list of them. While your account is in the SES sandbox every recipient must also be verified.",
             "examples": [
               [
                 "user@example.com"
@@ -666,6 +723,7 @@
         "description": "\u00a711's response: the id, and that it was accepted.\n\n``queued`` rather than ``sent`` because that is what has happened. The\nmessage is durable and will be attempted; claiming it had gone out would be\na promise this response cannot make.",
         "properties": {
           "id": {
+            "description": "Use it to fetch the message later, and to match delivery events to it.",
             "examples": [
               "email_01J8XQ2K3M4N5P6Q7R8S9T0V1W"
             ],
@@ -673,6 +731,7 @@
             "type": "string"
           },
           "status": {
+            "description": "Always `queued` here. The message is durable and will be attempted; whether it was accepted by SES is reported later, through events.",
             "examples": [
               "queued"
             ],
@@ -730,6 +789,7 @@
       "WebhookDeliveryList": {
         "properties": {
           "data": {
+            "description": "Most recent first.",
             "items": {
               "$ref": "#/components/schemas/WebhookDeliveryResponse"
             },
@@ -747,6 +807,7 @@
         "description": "One attempt to deliver one event to one endpoint.",
         "properties": {
           "attempt_count": {
+            "description": "Attempts made so far, including the first.",
             "examples": [
               1
             ],
@@ -754,6 +815,7 @@
             "type": "integer"
           },
           "created_at": {
+            "description": "UTC.",
             "format": "date-time",
             "title": "Created At",
             "type": "string"
@@ -767,12 +829,14 @@
                 "type": "null"
               }
             ],
+            "description": "The transport failure, normalised. Never a raw exception, which can carry an address or a URL.",
             "examples": [
               null
             ],
             "title": "Error"
           },
           "event_id": {
+            "description": "The event being delivered. The same event to two endpoints is two deliveries.",
             "examples": [
               "evt_01J8XQ2K3M4N5P6Q7R8S9T0V1W"
             ],
@@ -780,6 +844,7 @@
             "type": "string"
           },
           "id": {
+            "description": "Opaque and stable, prefixed `whd_`.",
             "examples": [
               "whd_01J8XQ2K3M4N5P6Q7R8S9T0V1W"
             ],
@@ -796,6 +861,7 @@
                 "type": "null"
               }
             ],
+            "description": "Null until the first attempt. UTC.",
             "title": "Last Attempt At"
           },
           "next_attempt_at": {
@@ -808,6 +874,7 @@
                 "type": "null"
               }
             ],
+            "description": "When the next retry is due. Null once the delivery has settled. UTC.",
             "title": "Next Attempt At"
           },
           "response_status": {
@@ -819,12 +886,14 @@
                 "type": "null"
               }
             ],
+            "description": "What the endpoint answered. Null when the request never got that far \u2014 a timeout, a refused connection, a destination that failed validation.",
             "examples": [
               200
             ],
             "title": "Response Status"
           },
           "status": {
+            "description": "`pending`, `delivered` or `failed`. `failed` means the retries are exhausted.",
             "examples": [
               "delivered"
             ],
@@ -845,6 +914,7 @@
       "WebhookEndpointList": {
         "properties": {
           "data": {
+            "description": "Every endpoint on the project, disabled ones included.",
             "items": {
               "$ref": "#/components/schemas/WebhookEndpointResponse"
             },
@@ -863,6 +933,7 @@
         "properties": {
           "consecutive_failures": {
             "default": 0,
+            "description": "Deliveries that gave up after exhausting their retries, counted since the last success \u2014 one success clears it. Exposed so an application can watch this climbing before SESKit switches the endpoint off.",
             "examples": [
               0
             ],
@@ -870,11 +941,13 @@
             "type": "integer"
           },
           "created_at": {
+            "description": "UTC.",
             "format": "date-time",
             "title": "Created At",
             "type": "string"
           },
           "id": {
+            "description": "Opaque and stable, prefixed `wh_`.",
             "examples": [
               "wh_01J8XQ2K3M4N5P6Q7R8S9T0V1W"
             ],
@@ -882,6 +955,7 @@
             "type": "string"
           },
           "status": {
+            "description": "`active`, `disabled_by_user` or `disabled_after_failures`. Three values rather than a boolean, because *SESKit gave up on it* and *you turned it off* are different facts and an integration should be able to tell them apart without asking a human.",
             "examples": [
               "active"
             ],
@@ -889,6 +963,7 @@
             "type": "string"
           },
           "url": {
+            "description": "Where SESKit POSTs events. Must be https, and must not resolve to a loopback, private or link-local address \u2014 delivery responses are shown in the dashboard, so an internal URL would turn a webhook into a read primitive against your own network. Local development relaxes both rules so you can point one at your own machine.",
             "examples": [
               "https://example.com/webhooks/email"
             ],
@@ -1058,6 +1133,7 @@
         "operationId": "send_email_v1_emails_post",
         "parameters": [
           {
+            "description": "Repeat a request safely. A second send with the same key returns the first message's id and sends nothing further, so a retry after a timeout cannot deliver twice. Scoped to the project.",
             "in": "header",
             "name": "Idempotency-Key",
             "required": false,
@@ -1070,6 +1146,7 @@
                   "type": "null"
                 }
               ],
+              "description": "Repeat a request safely. A second send with the same key returns the first message's id and sends nothing further, so a retry after a timeout cannot deliver twice. Scoped to the project.",
               "title": "Idempotency-Key"
             }
           }
@@ -1138,10 +1215,12 @@
         "operationId": "get_email_v1_emails__email_id__get",
         "parameters": [
           {
+            "description": "The id returned when the message was accepted.",
             "in": "path",
             "name": "email_id",
             "required": true,
             "schema": {
+              "description": "The id returned when the message was accepted.",
               "title": "Email Id",
               "type": "string"
             }
@@ -1243,10 +1322,12 @@
         "operationId": "list_webhook_deliveries_v1_webhooks__endpoint_id__deliveries_get",
         "parameters": [
           {
+            "description": "The endpoint whose deliveries to list.",
             "in": "path",
             "name": "endpoint_id",
             "required": true,
             "schema": {
+              "description": "The endpoint whose deliveries to list.",
               "title": "Endpoint Id",
               "type": "string"
             }

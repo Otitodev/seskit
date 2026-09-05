@@ -20,4 +20,6 @@ class ErrorBody(BaseModel):
 
 
 class ErrorResponse(BaseModel):
-    error: ErrorBody
+    error: ErrorBody = Field(
+        description="Every error from this API has this shape, whatever the status code."
+    )

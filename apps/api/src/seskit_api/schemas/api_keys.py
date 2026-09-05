@@ -16,13 +16,19 @@ class APIKeyResponse(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
 
-    id: str = Field(examples=["key_01J8XQ2K3M4N5P6Q7R8S9T0V1W"])
-    name: str = Field(examples=["production"])
+    id: str = Field(
+        description="Opaque and stable, prefixed `key_`. Not the key itself.",
+        examples=["key_01J8XQ2K3M4N5P6Q7R8S9T0V1W"],
+    )
+    name: str = Field(
+        description="Whatever you called it. Only ever for your own recognition.",
+        examples=["production"],
+    )
     key_prefix: str = Field(
         description="The first characters of the key, for recognising it in a list.",
         examples=["sk_3nK9vQ2m"],
     )
-    created_at: datetime
+    created_at: datetime = Field(description="UTC.")
     last_used_at: datetime | None = Field(
         default=None,
         description="Accurate to the minute; not updated on every request.",
@@ -33,4 +39,6 @@ class APIKeyResponse(BaseModel):
 
 
 class APIKeyList(BaseModel):
-    data: list[APIKeyResponse]
+    data: list[APIKeyResponse] = Field(
+        description="Every key on the project, revoked ones included."
+    )

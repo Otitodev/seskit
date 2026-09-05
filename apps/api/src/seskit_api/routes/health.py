@@ -10,7 +10,7 @@ from __future__ import annotations
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, Response, status
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from redis.asyncio import Redis
 from seskit_core.db import check_database, get_session
 from seskit_core.logging import get_logger
@@ -22,17 +22,26 @@ logger = get_logger(__name__)
 
 
 class HealthResponse(BaseModel):
-    status: Literal["ok"]
+    status: Literal["ok"] = Field(
+        description=(
+            "Always `ok`. This endpoint reports that the process is running and "
+            "deliberately checks nothing else, so it never reports anything but this."
+        )
+    )
 
 
 class DependencyStatus(BaseModel):
-    database: bool
-    redis: bool
+    database: bool = Field(description="Whether Postgres answered.")
+    redis: bool = Field(description="Whether Redis answered.")
 
 
 class ReadinessResponse(BaseModel):
-    status: Literal["ready", "not_ready"]
-    dependencies: DependencyStatus
+    status: Literal["ready", "not_ready"] = Field(
+        description="`not_ready` is returned with a 503, so status code alone is enough to act on."
+    )
+    dependencies: DependencyStatus = Field(
+        description="Which dependency is at fault, so a failing probe does not need a log dive."
+    )
 
 
 @router.get("/healthz", response_model=HealthResponse, summary="Liveness probe")
