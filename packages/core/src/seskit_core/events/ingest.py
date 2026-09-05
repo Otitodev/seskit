@@ -32,12 +32,15 @@ from seskit_core.events.normalise import (
     occurred_at,
     parse_event_type,
     provider_message_id,
+    recipients,
     summarise,
+    suppression_reason,
     to_public,
 )
 from seskit_core.ids import IDPrefix, generate_id
 from seskit_core.logging import get_logger
 from seskit_core.models import Email, EmailEvent, EventType
+from seskit_core.services.suppression import suppress
 from seskit_core.services.webhooks import queue_deliveries
 
 logger = get_logger(__name__)
@@ -136,6 +139,12 @@ async def ingest_event(
         )
         return Outcome.DUPLICATE, existing
 
+    # The Phase 11 seam, before the webhook rather than after it. Both land in
+    # the same transaction, so a customer never observes one without the other
+    # - but an application that reacts to `email.bounced` by asking what SESKit
+    # now thinks should not be able to win that race in a later refactoring.
+    await _apply_suppression(session, email=email, event=event, payload=payload)
+
     # The Phase 8 seam. Queueing is durable - a row per enabled endpoint - so a
     # webhook survives the process dying between here and the delivery attempt.
     # Deliberately after the flush: a delivery pointing at an event that was
@@ -149,6 +158,37 @@ async def ingest_event(
         event_type=event_type.value,
     )
     return Outcome.RECORDED, event
+
+
+async def _apply_suppression(
+    session: AsyncSession,
+    *,
+    email: Email,
+    event: EmailEvent,
+    payload: dict[str, Any],
+) -> None:
+    """Add the addresses this event condemns to the project's list.
+
+    Only the recipients the event actually names, which for a bounce is not
+    necessarily everyone the message went to - suppressing the whole
+    destination list because one address is dead would take out colleagues who
+    received it perfectly well.
+
+    Scoped to the message's own project. That is the point of SESKit holding
+    this list rather than SES, whose equivalent is account-wide.
+    """
+    reason = suppression_reason(payload, EventType(event.event_type))
+    if reason is None:
+        return
+
+    for address in recipients(payload, EventType(event.event_type)):
+        await suppress(
+            session,
+            project_id=email.project_id,
+            address=address,
+            reason=reason,
+            source_event_id=event.id,
+        )
 
 
 def apply_to_email(email: Email, event_type: EventType, payload: dict[str, Any]) -> None:
