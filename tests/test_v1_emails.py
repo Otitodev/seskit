@@ -375,3 +375,123 @@ async def test_the_endpoints_are_documented(app_client: AsyncClient) -> None:
     body_schema = schema["components"]["schemas"]["SendEmailRequest"]
     assert "from" in body_schema["properties"]
     assert "sender" not in body_schema["properties"]
+
+
+# ---------------------------------------------------------- suppression ---
+
+
+async def _suppress(session: AsyncSession, address: str) -> None:
+    """Suppress an address on the project `_key` just created."""
+    from seskit_core.models import APIKey, SuppressionReason
+    from seskit_core.services import suppress
+    from sqlalchemy import select
+
+    key = await session.scalar(select(APIKey))
+    assert key is not None
+    await suppress(
+        session, project_id=key.project_id, address=address, reason=SuppressionReason.BOUNCE
+    )
+
+
+async def test_a_send_to_a_suppressed_address_is_refused(
+    app_client: AsyncClient, db_session: AsyncSession, queue: FakeQueue
+) -> None:
+    """The list is only worth having if it stops a send."""
+    raw_key = await _key(db_session)
+    await _suppress(db_session, "user@example.com")
+
+    response = await app_client.post(EMAILS_URL, json=BODY, headers=_auth(raw_key))
+
+    assert response.status_code == 422
+    assert response.json()["error"]["type"] == "suppressed_recipient"
+    assert not queue.jobs, "nothing may be queued for a refused send"
+
+
+async def test_the_refusal_names_the_address_and_how_to_undo_it(
+    app_client: AsyncClient, db_session: AsyncSession
+) -> None:
+    """A developer meeting this in staging needs to know it is their own list
+    refusing them rather than AWS, and where to go about it.
+    """
+    raw_key = await _key(db_session)
+    await _suppress(db_session, "user@example.com")
+
+    response = await app_client.post(EMAILS_URL, json=BODY, headers=_auth(raw_key))
+
+    message = response.json()["error"]["message"]
+    assert "user@example.com" in message
+    assert "suppression list" in message
+
+
+async def test_a_suppressed_address_cannot_be_reached_through_cc_or_bcc(
+    app_client: AsyncClient, db_session: AsyncSession
+) -> None:
+    """Suppressed however it is reached. A blind copy is still a send, and a
+    check that only read `to` would be trivial to walk around.
+    """
+    raw_key = await _key(db_session)
+    await _suppress(db_session, "quiet@example.com")
+
+    through_cc = await app_client.post(
+        EMAILS_URL, json={**BODY, "cc": ["quiet@example.com"]}, headers=_auth(raw_key)
+    )
+    through_bcc = await app_client.post(
+        EMAILS_URL, json={**BODY, "bcc": ["quiet@example.com"]}, headers=_auth(raw_key)
+    )
+
+    assert through_cc.status_code == 422
+    assert through_bcc.status_code == 422
+
+
+async def test_a_display_name_does_not_get_past_the_list(
+    app_client: AsyncClient, db_session: AsyncSession
+) -> None:
+    """The bypass worth naming a test after: if `Bob <user@example.com>` sent
+    while `user@example.com` was suppressed, the list would be a suggestion.
+    """
+    raw_key = await _key(db_session)
+    await _suppress(db_session, "user@example.com")
+
+    response = await app_client.post(
+        EMAILS_URL, json={**BODY, "to": ["Bob <USER@Example.com>"]}, headers=_auth(raw_key)
+    )
+
+    assert response.status_code == 422
+
+
+async def test_an_unsuppressed_recipient_still_sends(
+    app_client: AsyncClient, db_session: AsyncSession, queue: FakeQueue
+) -> None:
+    """The other half. A list that refused everything would pass every test
+    above and be useless.
+    """
+    raw_key = await _key(db_session)
+    await _suppress(db_session, "someone-else@example.com")
+
+    response = await app_client.post(EMAILS_URL, json=BODY, headers=_auth(raw_key))
+
+    assert response.status_code == 201
+    assert queue.jobs
+
+
+async def test_a_removed_suppression_lets_mail_through_again(
+    app_client: AsyncClient, db_session: AsyncSession
+) -> None:
+    """Reversible in effect, not only in the table."""
+    from seskit_core.models import APIKey
+    from seskit_core.services import remove_suppression
+    from sqlalchemy import select
+
+    raw_key = await _key(db_session)
+    await _suppress(db_session, "user@example.com")
+    refused = await app_client.post(EMAILS_URL, json=BODY, headers=_auth(raw_key))
+
+    key = await db_session.scalar(select(APIKey))
+    assert key is not None
+    await remove_suppression(db_session, project_id=key.project_id, address="user@example.com")
+    await db_session.commit()
+
+    allowed = await app_client.post(EMAILS_URL, json=BODY, headers=_auth(raw_key))
+
+    assert refused.status_code == 422
+    assert allowed.status_code == 201
