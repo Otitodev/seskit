@@ -123,6 +123,7 @@ plugins:
           - guides/delivery-events.md: How SES reports deliveries and bounces, SQS versus HTTPS ingestion, and open/click tracking.
           - guides/webhooks.md: Registering endpoints, verifying the HMAC signature, retries, and the SSRF rules.
           - guides/metrics.md: The six counts and five rates, and what each rate divides by.
+          - guides/suppression.md: What lands on the suppression list, what a suppressed send answers, and one-click unsubscribe.
         Reference:
           - reference/api.md: Every HTTP endpoint, generated from the OpenAPI schema.
           - reference/sdk.md: The Python SDK, why it is optional, and that it is not written yet.
@@ -176,6 +177,7 @@ nav:
       - Leave the SES sandbox: guides/ses-sandbox.md
       - Delivery events: guides/delivery-events.md
       - Webhooks: guides/webhooks.md
+      - Suppression: guides/suppression.md
       - Reading your metrics: guides/metrics.md
   - Reference:
       - HTTP API: reference/api.md

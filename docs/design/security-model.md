@@ -119,8 +119,9 @@ omits its subject and addresses, because reprs end up in logs.
 
 Stated plainly rather than left to be discovered:
 
-- **No automatic suppression of bounced addresses.** SESKit shows the rates;
-  acting on them is currently your job. Phase 11.
+- **No HTTP API for the suppression list.** Addresses are suppressed
+  automatically and managed on the dashboard; there is no `/v1` endpoint to
+  read or bulk-load the list. See [suppression](../guides/suppression.md).
 - **No RBAC.** An account owns its projects; there are no roles or team
   members.
 - **Migrations are not audited for backward compatibility**, so rolling

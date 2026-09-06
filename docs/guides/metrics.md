@@ -82,3 +82,25 @@ and gets reviewed at 5% without anything visibly changing.
 
 Complaint rate has less headroom than it looks — 0.1% is one complaint in a
 thousand messages.
+
+## What to do about a bad rate
+
+The rate is the symptom. The addresses are the cause, and SESKit now acts on
+them for you: a hard bounce or a complaint puts the address on the project's
+[suppression list](suppression.md), and later sends to it are refused before
+they reach SES.
+
+That is what stops a rate climbing. A message SES never sees cannot bounce, so
+a dead address costs you reputation once rather than on every retry.
+
+Two things are still yours to do:
+
+1. **Look at what is on the list.** A page of addresses at one domain is a DNS
+   or reputation problem with that domain, not a list-quality problem.
+2. **Fix where the addresses come from.** Suppression stops the bleeding; a
+   signup form with no confirmation step keeps producing dead addresses, and
+   the list will just keep growing.
+
+If a rate is already high, note that it is measured over a
+[time range](#time-ranges) — it falls as clean sends age into the window, not
+the moment you fix the cause.
