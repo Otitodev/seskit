@@ -491,3 +491,54 @@ def test_the_api_reference_links_resolve_to_its_own_headings() -> None:
 
     assert links, "the endpoint index has no anchor links at all"
     assert links <= headings, f"links with no matching heading: {sorted(links - headings)}"
+
+
+# ---------------------------------------------------------------- errors ---
+
+ERRORS_DOC = ROOT / "docs" / "reference" / "errors.md"
+
+#: A row of the Types table: `| \`type\` | 422 | means |`.
+_ERROR_ROW = re.compile(r"^\|\s*`([a-z_]+)`\s*\|\s*(\d{3})\s*\|", re.MULTILINE)
+
+
+def _documented_errors() -> dict[str, int]:
+    text = ERRORS_DOC.read_text(encoding="utf-8")
+    return {name: int(status) for name, status in _ERROR_ROW.findall(text)}
+
+
+def test_every_error_the_api_can_raise_is_documented() -> None:
+    """The page tells a reader to branch on `type`. A type it does not list is
+    one their code will not have a branch for.
+    """
+    from seskit_core.errors import ErrorType
+
+    documented = _documented_errors()
+    missing = sorted(item.value for item in ErrorType if item.value not in documented)
+
+    assert not missing, f"error types with no row in errors.md: {missing}"
+
+
+def test_the_errors_page_does_not_invent_types() -> None:
+    """The failure that prompted this guard: the page listed `unauthorized`,
+    `forbidden`, `validation_error`, `rate_limited` and `aws_not_connected`,
+    none of which the API has ever returned. A reader branching on those names
+    would have written five branches that can never run.
+    """
+    from seskit_core.errors import ErrorType
+
+    real = {item.value for item in ErrorType}
+    invented = sorted(name for name in _documented_errors() if name not in real)
+
+    assert not invented, f"errors.md names types the API cannot return: {invented}"
+
+
+def test_the_documented_status_is_the_status_returned() -> None:
+    from seskit_core.errors import STATUS_FOR_TYPE, ErrorType
+
+    wrong = {
+        name: (status, STATUS_FOR_TYPE[ErrorType(name)])
+        for name, status in _documented_errors().items()
+        if STATUS_FOR_TYPE[ErrorType(name)] != status
+    }
+
+    assert not wrong, f"errors.md status does not match the code {{name: (doc, code)}}: {wrong}"
