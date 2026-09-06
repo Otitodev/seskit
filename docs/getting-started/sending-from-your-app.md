@@ -14,14 +14,30 @@ your application                   your SESKit server
 Usually a different machine, often a different codebase. Nothing about your
 application needs to know SESKit exists beyond a base URL and an API key.
 
-!!! warning "There is no SDK yet"
-    The `seskit` package on PyPI reserves the name and contains no working
-    client. Call the HTTP API directly — that is the supported path, and it is
-    what every example here uses. See [Python SDK](../reference/sdk.md).
+## Python, with the SDK
 
-## Python
+```python
+from seskit import SesKit
 
-No dependency beyond an HTTP client you almost certainly already have.
+client = SesKit(api_key="sk_live_...", base_url="https://seskit.internal.example.com")
+
+sent = client.emails.send(
+    from_="hello@example.com",
+    to=["user@example.com"],
+    subject="Welcome",
+    html="<h1>Welcome!</h1>",
+)
+```
+
+`pip install seskit`. It retries safely, raises a class per error type, and has
+an async client for handlers that must not block. Full surface:
+[Python SDK](../reference/sdk.md).
+
+## Python, without it
+
+The examples below use no dependency beyond an HTTP client you almost certainly
+already have. Everything the SDK does, it does over these same calls — it can
+never do anything a `curl` command cannot.
 
 ```python
 import httpx
