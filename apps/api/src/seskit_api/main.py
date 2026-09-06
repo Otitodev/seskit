@@ -18,7 +18,11 @@ from seskit_core.logging import configure_logging, get_logger
 from seskit_core.redis import close_redis
 
 from seskit_api.dependencies import AuthenticationRequired
-from seskit_api.middleware import RequestContextMiddleware, SecurityHeadersMiddleware
+from seskit_api.middleware import (
+    BodyLimitMiddleware,
+    RequestContextMiddleware,
+    SecurityHeadersMiddleware,
+)
 from seskit_api.queue import create_queue
 from seskit_api.routes import (
     api_keys,
@@ -105,10 +109,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
     app.state.settings = settings
 
-    # Added first, so it runs outermost and its headers are on every response -
-    # including the ones the exception handlers below produce.
-    app.add_middleware(SecurityHeadersMiddleware, settings=settings)
+    # Starlette wraps the last one added outermost, so this list runs bottom to
+    # top. The size cap goes on before the application reads anything, and the
+    # headers go on outside everything - including the 413 the cap produces.
+    app.add_middleware(BodyLimitMiddleware, max_bytes=settings.max_request_bytes)
     app.add_middleware(RequestContextMiddleware)
+    app.add_middleware(SecurityHeadersMiddleware, settings=settings)
 
     STATIC_DIR.mkdir(parents=True, exist_ok=True)
     app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
