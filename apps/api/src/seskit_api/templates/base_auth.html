@@ -18,7 +18,7 @@
   <meta name="theme-color" content="#0166f8">
 
   {# Before the stylesheet, so a dark-theme visitor never sees a white flash. #}
-  <script>
+  <script nonce="{{ csp_nonce }}">
     (function () {
       try {
         var t = localStorage.getItem("seskit-theme");

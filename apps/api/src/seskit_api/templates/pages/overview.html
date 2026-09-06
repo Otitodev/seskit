@@ -33,7 +33,7 @@
         {# `tojson` rather than `safe`: Jinja's filter escapes <, > and &
            for a script context, so a value can never close the tag early or
            break out of a string literal and become code. #}
-        <script type="application/json" id="activity-data">{{ activity | tojson }}</script>
+        <script nonce="{{ csp_nonce }}" type="application/json" id="activity-data">{{ activity | tojson }}</script>
       {{ card_close() }}
     {% endif %}
   {% else %}

@@ -18,7 +18,7 @@ from seskit_core.logging import configure_logging, get_logger
 from seskit_core.redis import close_redis
 
 from seskit_api.dependencies import AuthenticationRequired
-from seskit_api.middleware import RequestContextMiddleware
+from seskit_api.middleware import RequestContextMiddleware, SecurityHeadersMiddleware
 from seskit_api.queue import create_queue
 from seskit_api.routes import (
     api_keys,
@@ -105,6 +105,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
     app.state.settings = settings
 
+    # Added first, so it runs outermost and its headers are on every response -
+    # including the ones the exception handlers below produce.
+    app.add_middleware(SecurityHeadersMiddleware, settings=settings)
     app.add_middleware(RequestContextMiddleware)
 
     STATIC_DIR.mkdir(parents=True, exist_ok=True)
