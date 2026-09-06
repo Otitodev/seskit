@@ -31,6 +31,7 @@ from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse
 from seskit_core.config import Settings
 from seskit_core.db import get_session
+from seskit_core.email import bare_address
 from seskit_core.events import record_suppression_event
 from seskit_core.logging import get_logger
 from seskit_core.models import Email, SuppressionReason
@@ -74,6 +75,18 @@ async def _resolve(db: AsyncSession, settings: Settings, token: str) -> tuple[Em
 
     if not token_matches(settings.SECRET_KEY, project_id=email.project_id, token=token):
         return None
+
+    # A signature says SESKit wrote the token; this says the token means what
+    # it claims. Nothing issues a link for a non-recipient today - only the
+    # send path signs one, and only for the single address it went to - so this
+    # never fires. It is here so that if something one day signs an address
+    # from somewhere else, the link does not silently suppress a stranger.
+    if address not in {
+        bare_address(value)
+        for value in (*email.to_addresses, *email.cc_addresses, *email.bcc_addresses)
+    }:
+        return None
+
     return email, address
 
 
