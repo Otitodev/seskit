@@ -15,6 +15,7 @@ list lives in
 | `EVENT_RESOURCE_PREFIX` | `seskit` | Names the SQS queue and SNS topic |
 | `EVENT_CONFIGURATION_SET` | `seskit` | The SES configuration set sends go through |
 | `PUBLIC_BASE_URL` | — | Where this instance is reachable from outside. Needed for `https` event ingestion, and for [one-click unsubscribe](../guides/suppression.md#one-click-unsubscribe) links — without it those headers are left off messages entirely |
+| `MAX_REQUEST_BYTES` | — | The most one request body may be, refused before it is read. Defaults to half again `EMAIL_MAX_MESSAGE_BYTES` |
 | `WEBHOOK_ALLOWED_CIDRS` | — | Internal ranges webhooks may reach in production |
 | `WEBHOOK_MAX_ATTEMPTS` | `6` | Delivery attempts before a webhook is abandoned |
 | `SMTP_HOST` | — | Local delivery target. Points at Mailpit in development |

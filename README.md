@@ -95,7 +95,7 @@ SESKit is in active development. This is honest about what is built:
 | ✅ | Analytics dashboard | Six counts, five rates, activity chart |
 | ✅ | Suppression list | Hard bounces and complaints stop future sends; one-click unsubscribe |
 | ✅ | Python SDK | `pip install seskit` — sync and async, typed, retrying |
-| ⬜ | Production hardening | |
+| ✅ | Production hardening | Strict CSP, request size cap, `doctor.py` setup check |
 
 Build order: [`SESKit_MVP.md`](SESKit_MVP.md) §31.
 
