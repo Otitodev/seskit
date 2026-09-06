@@ -69,6 +69,7 @@ from seskit_core.services.sending import (
     record_sent,
     sender_is_verified,
     to_outbound,
+    unsubscribe_link,
 )
 from seskit_core.services.suppression import (
     find_suppression,
@@ -186,6 +187,7 @@ __all__ = [
     "to_outbound",
     "topic_name_for",
     "touch_last_used",
+    "unsubscribe_link",
     "update_endpoint_url",
     "verify_api_key",
 ]

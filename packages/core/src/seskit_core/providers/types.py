@@ -185,6 +185,12 @@ class OutboundEmail:
     #: the difference between a delivery receipt and permanent silence. A
     #: provider with no such concept ignores it.
     configuration_set: str | None = None
+    #: Where this recipient can unsubscribe themselves (RFC 8058). Carried on
+    #: the message rather than stored on the row, because it is derived from
+    #: the instance's secret and public URL - both of which can change without
+    #: any message changing, and neither of which belongs in a column that
+    #: would then hold a link nobody can open.
+    unsubscribe_url: str | None = None
 
 
 @dataclass(frozen=True, slots=True)

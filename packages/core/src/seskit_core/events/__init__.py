@@ -5,6 +5,7 @@ which is what lets Phase 8 deliver webhooks without customers learning SES's
 vocabulary.
 """
 
+from seskit_core.events.emit import record_suppression_event
 from seskit_core.events.envelope import (
     NOTIFICATION,
     SUBSCRIPTION_CONFIRMATION,
@@ -41,6 +42,7 @@ __all__ = [
     "parse_event_type",
     "provider_message_id",
     "recipients",
+    "record_suppression_event",
     "summarise",
     "suppression_reason",
     "to_public",

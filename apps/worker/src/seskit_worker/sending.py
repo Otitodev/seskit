@@ -25,7 +25,13 @@ from seskit_core.errors import APIError
 from seskit_core.logging import get_logger
 from seskit_core.models import Email, EmailProvider, EmailStatus
 from seskit_core.providers import EmailProvider as EmailProviderProtocol
-from seskit_core.services import is_retryable, record_failure, record_sent, to_outbound
+from seskit_core.services import (
+    is_retryable,
+    record_failure,
+    record_sent,
+    to_outbound,
+    unsubscribe_link,
+)
 from seskit_provider_aws_ses import SESProvider
 from seskit_provider_smtp import SMTPProvider, SMTPSettings
 from sqlalchemy import select
@@ -108,7 +114,18 @@ async def send_one(
     await session.commit()
 
     try:
-        result = await provider.send_email(to_outbound(email))
+        # Derived at send time rather than stored: the link is a function of
+        # the instance's secret and public URL, and a column holding a URL from
+        # before the instance moved would be a link nobody can open.
+        outbound = to_outbound(
+            email,
+            unsubscribe_url=unsubscribe_link(
+                email,
+                secret=settings.SECRET_KEY,
+                base_url=settings.unsubscribe_base_url,
+            ),
+        )
+        result = await provider.send_email(outbound)
     except APIError as error:
         record_failure(email, error)
         await session.commit()
