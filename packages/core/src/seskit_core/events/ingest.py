@@ -26,6 +26,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from seskit_core.events.emit import record_suppression_event
 from seskit_core.events.normalise import (
     UnknownEventType,
     event_name,
@@ -39,8 +40,7 @@ from seskit_core.events.normalise import (
 )
 from seskit_core.ids import IDPrefix, generate_id
 from seskit_core.logging import get_logger
-from seskit_core.models import Email, EmailEvent, EventType, SuppressionReason
-from seskit_core.models.base import utcnow
+from seskit_core.models import Email, EmailEvent, EventType
 from seskit_core.services.suppression import suppress, suppressed_among
 from seskit_core.services.webhooks import queue_deliveries
 
@@ -206,60 +206,13 @@ async def _apply_suppression(
             added.append(row.address)
 
     if added:
-        await _record_suppression_event(
-            session, email=email, cause=event, addresses=added, reason=reason
-        )
-
-
-async def _record_suppression_event(
-    session: AsyncSession,
-    *,
-    email: Email,
-    cause: EmailEvent,
-    addresses: list[str],
-    reason: SuppressionReason,
-) -> None:
-    """Tell the customer's application what SESKit just decided.
-
-    One event for the addresses this notification condemned, rather than one
-    per address: they share a cause, and a bounce naming three dead mailboxes
-    is one thing that happened.
-
-    ``provider_event_id`` is null because no provider sent this - SESKit did.
-    Nulls do not collide in a unique index, so that costs no deduplication that
-    was ever available here.
-
-    ``occurred_at`` is now rather than the cause's timestamp. SESKit suppressed
-    the address when it processed the notification, and a bounce that sat in a
-    queue for an hour did not suppress anything an hour ago.
-    """
-    event_id = generate_id(IDPrefix.EVENT)
-    occurred = utcnow()
-
-    event = EmailEvent(
-        id=event_id,
-        email_id=email.id,
-        event_type=EventType.SUPPRESSED.value,
-        provider_event_id=None,
-        occurred_at=occurred,
-        payload=to_public(
-            event_id=event_id,
-            event_type=EventType.SUPPRESSED,
+        await record_suppression_event(
+            session,
             email_id=email.id,
-            occurred=occurred,
-            data={"to": addresses, "reason": reason.value, "caused_by": cause.id},
-        ),
-    )
-    session.add(event)
-    await session.flush()
-
-    await queue_deliveries(session, event)
-    logger.info(
-        "suppression_reported",
-        event_id=event.id,
-        caused_by=cause.id,
-        count=len(addresses),
-    )
+            addresses=added,
+            reason=reason,
+            caused_by=event.id,
+        )
 
 
 def apply_to_email(email: Email, event_type: EventType, payload: dict[str, Any]) -> None:

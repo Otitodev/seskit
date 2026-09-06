@@ -1,0 +1,49 @@
+{% extends "base_auth.html" %}
+{% from "components/ui.html" import button %}
+
+{% block title %}Unsubscribe · SESKit{% endblock %}
+
+{% block content %}
+  {% if invalid %}
+    <div class="auth__header">
+      <h1 class="auth__title">Link not valid</h1>
+      <p class="auth__subtitle">
+        This unsubscribe link is not valid. It may have been altered in
+        transit. Replying to the message and asking to be removed will work.
+      </p>
+    </div>
+  {% elif done %}
+    <div class="auth__header">
+      <h1 class="auth__title">Unsubscribed</h1>
+      {# Says the address, so somebody with more than one can tell which of
+         them they have just taken off the list. #}
+      <p class="auth__subtitle">
+        <code>{{ address }}</code> will no longer receive email from this
+        sender. Nothing more to do.
+      </p>
+    </div>
+  {% else %}
+    <div class="auth__header">
+      <h1 class="auth__title">Unsubscribe</h1>
+      <p class="auth__subtitle">
+        Stop sending email to <code>{{ address }}</code>?
+      </p>
+    </div>
+
+    {# A form, not a link. Mail clients and scanners follow links in messages
+       without being asked, and one that unsubscribed on sight would unsubscribe
+       people who never pressed anything. No CSRF token: the signed token in the
+       URL is the authorisation, and it has to be - the mail provider sending
+       the one-click POST has no session here. #}
+    <form class="stack" method="post" action="/u/{{ token }}">
+      {{ button("Unsubscribe", variant="primary", type="submit",
+                attrs='class="btn btn--primary auth__submit"') }}
+    </form>
+  {% endif %}
+{% endblock %}
+
+{% block footnote %}
+  {% if not invalid and not done %}
+    Closing this page instead leaves everything as it is.
+  {% endif %}
+{% endblock %}

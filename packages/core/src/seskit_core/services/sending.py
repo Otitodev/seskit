@@ -37,6 +37,7 @@ from seskit_core.models import (
     Identity,
 )
 from seskit_core.providers.types import IdentityType, OutboundEmail, VerificationStatus
+from seskit_core.security.unsubscribe import unsubscribe_token
 
 NO_PROVIDER_MESSAGE = (
     "This project cannot send yet. Connect an AWS account, or set SMTP_HOST to deliver locally."
@@ -121,12 +122,55 @@ async def configuration_set_for(
     return connection.configuration_set if connection else None
 
 
-def to_outbound(email: Email) -> OutboundEmail:
+def unsubscribe_link(email: Email, *, secret: str, base_url: str | None) -> str | None:
+    """The one-click unsubscribe URL for this message, or None (§31 Phase 11).
+
+    None in three cases, each of which is a deliberate refusal rather than a
+    gap:
+
+    *No public URL.* A link to ``localhost`` shows the recipient an Unsubscribe
+    button that cannot work, and a button that fails is worse than no button -
+    the next thing they press is Report spam.
+
+    *More than one recipient.* A message has one ``List-Unsubscribe`` header,
+    and a token names one address. Two recipients would mean handing everyone
+    on the message a link that unsubscribes whoever the token happened to name.
+    Transactional mail is one-to-one, which is the case this serves; anything
+    fanned out to a list should be sent as separate messages, which is what
+    makes per-recipient unsubscribe possible at all.
+
+    *Nothing that parses as an address.* Nothing to suppress later.
+
+    Blind copies count. A bcc'd recipient is a second person, and the header
+    would let them unsubscribe the first.
+    """
+    if not base_url:
+        return None
+
+    everyone = [*email.to_addresses, *email.cc_addresses, *email.bcc_addresses]
+    if len(everyone) != 1:
+        return None
+
+    address = bare_address(everyone[0])
+    if "@" not in address:
+        return None
+
+    token = unsubscribe_token(
+        secret, project_id=email.project_id, email_id=email.id, address=address
+    )
+    return f"{base_url.rstrip('/')}/{token}"
+
+
+def to_outbound(email: Email, *, unsubscribe_url: str | None = None) -> OutboundEmail:
     """The stored row as the vocabulary a provider speaks.
 
     Attachments come off the relationship, which is ``selectin`` loaded - the
     worker reads the row and gets the content with it, rather than the API
     having had to carry megabytes through the queue.
+
+    ``unsubscribe_url`` is passed in rather than derived here, because deriving
+    it needs the instance secret and public URL - configuration, which core
+    reads from nobody. The worker knows both and hands the answer down.
     """
     from seskit_core.providers.types import Attachment
 
@@ -153,6 +197,7 @@ def to_outbound(email: Email) -> OutboundEmail:
         # through - even after the project's events are torn down and set up
         # again under a different name.
         configuration_set=email.configuration_set,
+        unsubscribe_url=unsubscribe_url,
     )
 
 

@@ -19,10 +19,22 @@ from email.utils import make_msgid, parseaddr
 
 from seskit_core.errors import APIError, ErrorType
 from seskit_core.providers.types import Attachment, OutboundEmail
+from seskit_core.security.unsubscribe import (
+    LIST_UNSUBSCRIBE_HEADER,
+    LIST_UNSUBSCRIBE_POST_HEADER,
+    ONE_CLICK,
+)
 
 #: Headers the caller may not set. From, To, Cc and Subject are built from the
 #: request's own fields; letting a custom header overwrite them would let a
 #: caller send as one address while the record says another.
+#:
+#: The two List-Unsubscribe headers are reserved for a different reason: they
+#: are a promise about what happens when the recipient presses the button, and
+#: only SESKit can keep it. A caller-supplied link would unsubscribe someone in
+#: a system SESKit cannot see, while SESKit's own list stayed empty and kept
+#: sending. Two of them in one message is worse still - a duplicate header is
+#: undefined behaviour, and mail clients disagree about which one wins.
 RESERVED_HEADERS = frozenset(
     {
         "from",
@@ -34,6 +46,8 @@ RESERVED_HEADERS = frozenset(
         "mime-version",
         "content-type",
         "message-id",
+        "list-unsubscribe",
+        "list-unsubscribe-post",
     }
 )
 
@@ -123,6 +137,9 @@ def build_message(outbound: OutboundEmail) -> EmailMessage:
     else:
         message.set_content(outbound.html or "", subtype="html")
 
+    # SESKit's, never the caller's: RESERVED_HEADERS refuses theirs below.
+    _add_unsubscribe(message, outbound.unsubscribe_url)
+
     for name, value in outbound.headers.items():
         if name.lower() in RESERVED_HEADERS:
             raise APIError(
@@ -136,6 +153,24 @@ def build_message(outbound: OutboundEmail) -> EmailMessage:
         _attach(message, attachment)
 
     return message
+
+
+def _add_unsubscribe(message: EmailMessage, url: str | None) -> None:
+    """Offer the recipient a way out, if we know a URL they could reach.
+
+    Both headers or neither. ``List-Unsubscribe-Post`` is what makes the button
+    one-click: without it a client that sees a URL may open it in a browser and
+    wait for the person to confirm, which is a worse experience than the one
+    Gmail and Outlook now require of bulk senders.
+
+    The angle brackets are the syntax, not decoration - RFC 2369 defines the
+    value as a URL in brackets, and a bare URL is quietly ignored by some
+    clients.
+    """
+    if not url:
+        return
+    message[LIST_UNSUBSCRIBE_HEADER] = f"<{url}>"
+    message[LIST_UNSUBSCRIBE_POST_HEADER] = ONE_CLICK
 
 
 def _attach(message: EmailMessage, attachment: Attachment) -> None:

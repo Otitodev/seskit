@@ -20,6 +20,11 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 #: that answers 404, which looks exactly like events not working.
 EVENT_HTTPS_PATH = "/v1/events/ses"
 
+#: Where a recipient's one-click unsubscribe link points. Short because it
+#: goes in a header some mail clients render in full, and outside ``/v1``
+#: because it is a page a person opens, not an API a program calls.
+UNSUBSCRIBE_PATH = "/u"
+
 # Placeholder used in .env.example. Refusing to boot on this value is what stops
 # it reaching a real deployment.
 INSECURE_PLACEHOLDER = "changeme"
@@ -261,6 +266,24 @@ class Settings(BaseSettings):
         if not self.receives_https or not self.PUBLIC_BASE_URL:
             return None
         return f"{self.PUBLIC_BASE_URL.rstrip('/')}{EVENT_HTTPS_PATH}"
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def unsubscribe_base_url(self) -> str | None:
+        """Where one-click unsubscribe links live, or None if we cannot know.
+
+        Unlike the event endpoint this does not care how events are ingested -
+        the link is opened by a person's mail client, not by SNS - so
+        ``PUBLIC_BASE_URL`` alone decides it.
+
+        None means no ``List-Unsubscribe`` header at all. That is the right
+        failure: a header pointing at ``localhost`` is worse than no header,
+        because the mail client shows an Unsubscribe button that cannot work,
+        and a recipient whose unsubscribe fails presses Report spam.
+        """
+        if not self.PUBLIC_BASE_URL:
+            return None
+        return f"{self.PUBLIC_BASE_URL.rstrip('/')}{UNSUBSCRIBE_PATH}"
 
     @computed_field  # type: ignore[prop-decorator]
     @property

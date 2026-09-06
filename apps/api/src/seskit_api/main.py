@@ -27,6 +27,7 @@ from seskit_api.routes import (
     emails,
     health,
     suppressions,
+    unsubscribe,
     webhooks,
 )
 from seskit_api.routes import v1 as v1_routes
@@ -144,6 +145,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(emails.router)
     app.include_router(webhooks.router)
     app.include_router(suppressions.router)
+    # Public and unauthenticated, unlike everything above it.
+    app.include_router(unsubscribe.router)
     app.include_router(v1_routes.router)
 
     return app
