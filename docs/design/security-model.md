@@ -102,6 +102,46 @@ later without a flag day.
   after a logout cannot re-display the previous user's dashboard from the
   browser cache.
 
+## Response headers
+
+Set by one middleware on every response, because the failure mode of
+per-route security is a route somebody forgot.
+
+| Header | |
+|---|---|
+| `Content-Security-Policy` | `default-src 'self'`, with a per-request nonce for the two inline theme scripts. No `unsafe-inline`, no `unsafe-eval` |
+| `X-Frame-Options` / `frame-ancestors` | `DENY` / `'none'`. Every destructive action on the dashboard is a one-click form, which is what clickjacking needs |
+| `form-action 'self'` | The directive framing protection has no answer for: injected markup posting a CSRF token to another origin |
+| `X-Content-Type-Options` | `nosniff` |
+| `Referrer-Policy` | `same-origin`, so an unsubscribe token or an email id in a path does not leave with the `Referer` |
+| `Strict-Transport-Security` | Outside local development only |
+
+**A strict policy is affordable because of a decision made in Phase 1.** §5
+forbids Node, npm and a build step, so every script and stylesheet is a local
+file: no CDN, no analytics, no embedded fonts, no `data:` URIs. `default-src
+'self'` costs a codebase built that way nothing, and would be expensive to
+adopt later.
+
+The autoescaping above is the defence against injected markup. The policy is
+the layer that holds on the day an escape is missed, and a test walks the
+template tree and fails on any inline script without a nonce — a missing nonce
+does not raise, it just silently refuses to run.
+
+HSTS is not set locally on purpose. A browser that has seen it refuses every
+other project served from `http://localhost`, and the only cure is clearing
+HSTS state by hand.
+
+## Request size
+
+`MAX_REQUEST_BYTES` caps a request body **before anything reads it**. A
+declared `Content-Length` is refused without reading a byte; a chunked body is
+counted as it arrives, because `Content-Length` is a header the client controls
+and refusing on it alone is a courtesy rather than a defence.
+
+Distinct from `EMAIL_MAX_MESSAGE_BYTES`, which is checked against the assembled
+message *after* the body has been read, parsed and base64-decoded into memory.
+The first protects the server; the second protects the send.
+
 ## Tenancy
 
 Ownership is part of every query rather than a check after it. An id belonging
@@ -124,6 +164,11 @@ Stated plainly rather than left to be discovered:
   read or bulk-load the list. See [suppression](../guides/suppression.md).
 - **No RBAC.** An account owns its projects; there are no roles or team
   members.
+- **No per-IP rate limit.** Limits are per project for the API and per account
+  for sign-in; an unauthenticated flood is a job for whatever sits in front of
+  this.
+- **Suppression removal is not audited.** The row records who suppressed an
+  address and when, but not who took it off the list.
 - **Migrations are not audited for backward compatibility**, so rolling
   upgrades are not a supported story. See
   [upgrading](../operating/upgrading.md).

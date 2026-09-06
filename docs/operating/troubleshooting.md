@@ -1,5 +1,26 @@
 # Troubleshooting
 
+## Start here
+
+```bash
+uv run python scripts/doctor.py
+docker compose exec api python -m seskit_api.doctor   # against a container
+```
+
+Seven checks, in the order a first hour actually fails: the secret key, the
+database URL, whether Postgres answers and is at the schema this code expects,
+whether Redis answers, which path a send would take today, and whether anything
+is draining the queue. Each failure names the one thing to change.
+
+It is deliberately not the same as `/readyz`. That probe answers "should
+traffic come here"; this one answers "is this set up to do what I want". An
+instance with no SMTP and no AWS connection is ready, correct, and cannot send
+a single message.
+
+Exit code 0 or 1, so it works in a gate as well as by hand.
+
+## The rest
+
 Ordered by how often each one turns out to be the answer.
 
 ## Mail is stuck at `queued`
@@ -99,3 +120,24 @@ database rather than being scattered through log files.
 ```bash
 docker compose logs -f api worker
 ```
+
+## A page loads but a button does nothing
+
+Open the browser console. SESKit sends a strict
+[Content-Security-Policy](../design/security-model.md#response-headers), and a
+script that is not served from this origin, or an inline script without the
+request's nonce, is refused rather than run — silently, unless you are looking.
+
+If you have added an inline `<script>` to a template, give it
+`nonce="{{ csp_nonce }}"`. The test suite fails on any that lack it, so this
+should only ever bite during an edit.
+
+## A send is refused with `attachment_too_large` before it is read
+
+The request body was over `MAX_REQUEST_BYTES`, which is checked before anything
+reads it. That is a different limit from `EMAIL_MAX_MESSAGE_BYTES`, which is
+checked against the assembled message afterwards; the first protects the
+server, the second protects the send.
+
+By default the request cap is half again the message ceiling, so hitting it
+means a body far larger than any message it could have carried.
