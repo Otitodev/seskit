@@ -7,6 +7,8 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, Request, Response, status
+from fastapi.exception_handlers import request_validation_exception_handler
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from seskit_core.config import Settings, get_settings
@@ -35,6 +37,11 @@ from seskit_api.routes import v1 as v1_routes
 PACKAGE_DIR = Path(__file__).parent
 STATIC_DIR = PACKAGE_DIR / "static"
 
+#: How many field errors a validation message names before it stops. Enough to
+#: fix a request in one pass; not so many that a wrong body produces a wall of
+#: text in somebody's logs.
+MAX_REPORTED_FIELDS = 5
+
 logger = get_logger(__name__)
 
 
@@ -58,6 +65,22 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         await dispose_engine()
         await close_redis()
         logger.info("application_stopped")
+
+
+def _describe(exc: RequestValidationError) -> str:
+    """A readable summary of what was wrong with the body.
+
+    Field names and reasons only. ``exc.errors()`` also carries the submitted
+    value, and echoing that back would put a password, an API key or a customer
+    address into a response and into whatever logs it.
+    """
+    parts: list[str] = []
+    for error in exc.errors()[:MAX_REPORTED_FIELDS]:
+        # "body" is the first element of nearly every location and says nothing
+        # a caller does not already know.
+        where = ".".join(str(part) for part in error.get("loc", ()) if part != "body")
+        parts.append(f"{where}: {error['msg']}" if where else str(error["msg"]))
+    return "; ".join(parts) or "The request body is not valid."
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -111,6 +134,32 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             status_code=exc.status_code,
             content=exc.as_dict(),
             headers=exc.headers,
+        )
+
+    @app.exception_handler(RequestValidationError)
+    async def _invalid_body(request: Request, exc: RequestValidationError) -> Response:
+        """Give a malformed request body the same envelope as every other
+        failure (§19).
+
+        Without this, FastAPI answers a missing field with ``{"detail": [...]}``
+        while SESKit's own checks - "at least one recipient is required" - answer
+        the same class of mistake with ``{"error": {...}}``. A client cannot
+        parse both without knowing which of the two produced the failure, and
+        the SDK would have to guess.
+
+        The status stays 422, which is what a well-formed body that fails
+        validation has always returned here; only the shape changes.
+
+        The message is built from the field names and reasons and **never from
+        the submitted values** - a validation failure on an API key or a body
+        would otherwise echo it straight back into a response and a log.
+        """
+        if not request.url.path.startswith("/v1"):
+            return await request_validation_exception_handler(request, exc)
+
+        return JSONResponse(
+            status_code=422,
+            content=APIError(ErrorType.INVALID_REQUEST, _describe(exc), status_code=422).as_dict(),
         )
 
     @app.exception_handler(Exception)

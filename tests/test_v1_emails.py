@@ -495,3 +495,70 @@ async def test_a_removed_suppression_lets_mail_through_again(
 
     assert refused.status_code == 422
     assert allowed.status_code == 201
+
+
+# ------------------------------------------------------- one error shape ---
+
+
+async def test_a_malformed_body_answers_in_the_documented_shape(
+    app_client: AsyncClient, db_session: AsyncSession
+) -> None:
+    """§19 says every failure leaves the building in one shape.
+
+    Without a handler for it, FastAPI answers a missing field with
+    ``{"detail": [...]}`` while SESKit's own check for the same class of
+    mistake - "at least one recipient is required" - answers with
+    ``{"error": {...}}``. A client cannot parse both without knowing which of
+    the two produced the failure.
+    """
+    raw_key = await _key(db_session)
+    without_a_recipient = {key: value for key, value in BODY.items() if key != "to"}
+
+    response = await app_client.post(EMAILS_URL, json=without_a_recipient, headers=_auth(raw_key))
+
+    assert response.status_code == 422
+    assert response.json()["error"]["type"] == "invalid_request"
+
+
+async def test_a_malformed_body_says_which_field_was_wrong(
+    app_client: AsyncClient, db_session: AsyncSession
+) -> None:
+    raw_key = await _key(db_session)
+    without_a_recipient = {key: value for key, value in BODY.items() if key != "to"}
+
+    response = await app_client.post(EMAILS_URL, json=without_a_recipient, headers=_auth(raw_key))
+
+    assert "to" in response.json()["error"]["message"]
+
+
+async def test_a_rejected_value_is_not_read_back_to_the_caller(
+    app_client: AsyncClient, db_session: AsyncSession
+) -> None:
+    """The reason the message is built from field names rather than from
+    ``exc.errors()`` wholesale: that carries the submitted value, and echoing
+    it puts whatever was sent into a response and into whatever logs it.
+    """
+    raw_key = await _key(db_session)
+    # A shape no branch of the field's type accepts, so it fails in schema
+    # validation rather than reaching SESKit's own address check.
+    secret_looking = {**BODY, "to": {"token": "sk_live_not_actually_a_key"}}
+
+    response = await app_client.post(EMAILS_URL, json=secret_looking, headers=_auth(raw_key))
+
+    assert response.status_code == 422
+    assert "sk_live" not in response.text
+
+
+async def test_a_body_that_is_not_json_is_refused_the_same_way(
+    app_client: AsyncClient, db_session: AsyncSession
+) -> None:
+    raw_key = await _key(db_session)
+
+    response = await app_client.post(
+        EMAILS_URL,
+        content=b"not json",
+        headers={**_auth(raw_key), "Content-Type": "application/json"},
+    )
+
+    assert response.status_code == 422
+    assert response.json()["error"]["type"] == "invalid_request"
