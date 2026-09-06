@@ -18,6 +18,7 @@ from typing import Any
 import httpx
 import pytest
 from seskit import (
+    AsyncSesKit,
     DomainNotVerified,
     NotFound,
     SesKit,
@@ -456,3 +457,98 @@ def test_a_server_that_cannot_be_reached_is_its_own_failure() -> None:
         client.emails.get("email_01J8XQ")
 
     assert BASE_URL in raised.value.message
+
+
+# ------------------------------------------------------------------ async ---
+
+
+def _async_client(recorder: Recorder, **kwargs: Any) -> AsyncSesKit:
+    return AsyncSesKit(
+        api_key=API_KEY,
+        base_url=BASE_URL,
+        http_client=httpx.AsyncClient(transport=httpx.MockTransport(recorder)),
+        **kwargs,
+    )
+
+
+async def test_the_async_client_sends_the_same_request() -> None:
+    """The two clients share the request builder, and this is what says so. If
+    they ever diverge - a header on one and not the other - that is a bug a
+    caller would only find by switching between them.
+    """
+    sync_recorder = Recorder(_ok(SENT, 201))
+    async_recorder = Recorder(_ok(SENT, 201))
+
+    _client(sync_recorder).emails.send(
+        from_="a@example.com", to="b@example.com", subject="Hi", text="x", idempotency_key="k"
+    )
+    await _async_client(async_recorder).emails.send(
+        from_="a@example.com", to="b@example.com", subject="Hi", text="x", idempotency_key="k"
+    )
+
+    synchronous, asynchronous = sync_recorder.requests[0], async_recorder.requests[0]
+    assert synchronous.content == asynchronous.content
+    assert str(synchronous.url) == str(asynchronous.url)
+    assert synchronous.headers["Idempotency-Key"] == asynchronous.headers["Idempotency-Key"]
+
+
+async def test_the_async_client_reads_a_message() -> None:
+    recorder = Recorder(_ok(STORED))
+
+    email = await _async_client(recorder).emails.get("email_01J8XQ")
+
+    assert email.id == "email_01J8XQ"
+    assert email.from_ == "Acme <hello@example.com>"
+
+
+async def test_the_async_client_pages() -> None:
+    recorder = Recorder(_ok({"data": [STORED], "has_more": False}))
+
+    page = await _async_client(recorder).emails.list(limit=1)
+
+    assert page.has_more is False
+    assert [email.id for email in page] == ["email_01J8XQ"]
+
+
+async def test_the_async_client_maps_errors_the_same_way() -> None:
+    recorder = Recorder(_error(422, "suppressed_recipient", "On the list."))
+
+    with pytest.raises(SuppressedRecipient):
+        await _async_client(recorder).emails.send(
+            from_="a@example.com", to="b@example.com", subject="Hi", text="x"
+        )
+
+
+async def test_the_async_client_retries_without_blocking(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """`asyncio.sleep`, not `time.sleep`. Blocking the loop in the backoff of
+    the client that exists not to block the loop would be the whole point,
+    missed.
+    """
+    slept: list[float] = []
+
+    async def _record(seconds: float) -> None:
+        slept.append(seconds)
+
+    monkeypatch.setattr("seskit._async_client.asyncio.sleep", _record)
+    recorder = Recorder(httpx.Response(503), _ok(SENT, 201))
+
+    await _async_client(recorder).emails.send(
+        from_="a@example.com", to="b@example.com", subject="Hi", text="x"
+    )
+
+    assert len(recorder.requests) == 2
+    assert slept == [0.5]
+
+
+async def test_closing_an_async_client_is_awaited() -> None:
+    """A sync `close()` on an async client would be a footgun: it would look
+    like it worked and leave the pool open.
+    """
+    recorder = Recorder(_ok(STORED))
+    client = _async_client(recorder)
+
+    await client.aclose()
+
+    assert not hasattr(client, "close")
