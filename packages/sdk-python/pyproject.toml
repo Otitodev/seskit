@@ -1,9 +1,9 @@
 [project]
 # The distribution name matches the import name, so "pip install seskit" and
-# "from seskit import SesKit" agree. Published at 0.0.x as a placeholder while
-# the client is written, which keeps 0.1.0 free for the first working release.
+# "from seskit import SesKit" agree. 0.0.x reserved the name while the client
+# was written; 0.1.0 is the first release that contains one.
 name = "seskit"
-version = "0.0.1"
+version = "0.1.0"
 description = "Python SDK for SESKit, a self-hosted developer email platform built on Amazon SES"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -11,8 +11,7 @@ license = { file = "LICENSE" }
 authors = [{ name = "SESKit Contributors" }]
 keywords = ["email", "ses", "aws", "smtp", "transactional-email"]
 classifiers = [
-    # Honest about the state of it: this release is a reserved name, not a client.
-    "Development Status :: 1 - Planning",
+    "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
@@ -36,3 +35,8 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/seskit"]
+
+# py.typed is what tells a type checker in someone else's project that the
+# annotations here are meant to be believed. Without it the "Typing :: Typed"
+# classifier above is a claim nothing acts on.
+artifacts = ["src/seskit/py.typed"]
