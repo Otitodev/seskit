@@ -41,8 +41,8 @@ there is no hosted SESKit to point at.
 
 ```python
 email = client.emails.get(sent.id)
-email.status          # queued, sending, sent, failed
-email.delivered_at    # None until a delivery event arrives
+email.status  # queued, sending, sent, failed
+email.delivered_at  # None until a delivery event arrives
 
 page = client.emails.list(status="failed")
 for email in page:
@@ -62,11 +62,28 @@ from seskit import SuppressedRecipient, DomainNotVerified, SESKitError
 try:
     client.emails.send(...)
 except SuppressedRecipient:
-    ...          # the address hard-bounced or complained; it is on your list
+    ...  # the address hard-bounced or complained; it is on your list
 except DomainNotVerified:
-    ...          # the sender is not verified in SES
+    ...  # the sender is not verified in SES
 except SESKitError as error:
-    ...          # anything else; error.type and error.message say what
+    ...  # anything else; error.type and error.message say what
+```
+
+## Async
+
+The same surface, awaited — because a blocking HTTP call inside an async
+handler stops the event loop for every other request on that worker:
+
+```python
+from seskit import AsyncSesKit
+
+client = AsyncSesKit(api_key="sk_live_...", base_url="https://seskit.example.com")
+sent = await client.emails.send(
+    from_="hello@example.com",
+    to=["user@example.com"],
+    subject="Welcome",
+    html="<h1>Welcome!</h1>",
+)
 ```
 
 ## Retries
