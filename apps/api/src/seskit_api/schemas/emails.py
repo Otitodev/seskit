@@ -235,11 +235,16 @@ class EmailResponse(BaseModel):
 
 
 class EmailList(BaseModel):
-    """Declared, but nothing returns it yet - there is no list-emails endpoint.
+    """One page of a project's messages, newest first."""
 
-    Left in place because §11's shape is the contract the SDK will be generated
-    against, and deliberately undescribed: an ordering documented here would be
-    a promise made before the query that has to keep it exists.
-    """
-
-    data: list[EmailResponse]
+    data: list[EmailResponse] = Field(
+        description="The page, ordered by id descending - newest first."
+    )
+    has_more: bool = Field(
+        description=(
+            "Whether another page exists. Returned so a caller can stop without "
+            "a final request that comes back empty. Pass the last id in `data` "
+            "as `starting_after` to fetch it."
+        ),
+        examples=[False],
+    )

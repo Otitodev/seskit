@@ -1,4 +1,4 @@
-"""``POST /v1/emails`` and ``GET /v1/emails/{id}`` (§11, §23).
+"""``POST /v1/emails``, ``GET /v1/emails`` and ``GET /v1/emails/{id}`` (§11, §23).
 
 Validate here, send elsewhere. §14 draws this split and it is worth being clear
 about why: everything a caller can fix - an unverified sender, a malformed
@@ -12,7 +12,7 @@ from __future__ import annotations
 from typing import Annotated
 
 from arq.connections import ArqRedis
-from fastapi import APIRouter, Depends, Header, Path, Response, status
+from fastapi import APIRouter, Depends, Header, Path, Query, Response, status
 from seskit_core.config import Settings
 from seskit_core.db import get_session
 from seskit_core.email import assert_within_size
@@ -35,6 +35,7 @@ from seskit_api.dependencies import APIContext, get_app_settings, require_api_ke
 from seskit_api.queue import get_queue
 from seskit_api.routes.v1.api_keys import API_RESPONSES, apply_rate_limit_headers
 from seskit_api.schemas.emails import (
+    EmailList,
     EmailResponse,
     SendEmailRequest,
     SendEmailResponse,
@@ -45,6 +46,14 @@ logger = get_logger(__name__)
 router = APIRouter(tags=["emails"])
 
 SEND_JOB = "send_email"
+
+#: How many messages one page returns when the caller does not say.
+DEFAULT_PAGE = 25
+
+#: The most one page will ever return. A cap rather than a suggestion: without
+#: one, a project with a year of sends can ask for all of it in a single query
+#: and hold a connection open while the rows are serialised.
+MAX_PAGE = 100
 
 
 async def _refuse_suppressed(
@@ -231,3 +240,80 @@ async def get_email(
     if email is None:
         raise APIError(ErrorType.NOT_FOUND, "No email with that id.")
     return email
+
+
+@router.get(
+    "/emails",
+    response_model=EmailList,
+    responses=API_RESPONSES,
+    summary="List emails",
+)
+async def list_emails(
+    response: Response,
+    db: Annotated[AsyncSession, Depends(get_session)],
+    context: Annotated[APIContext, Depends(require_api_key)],
+    limit: Annotated[
+        int,
+        Query(
+            ge=1,
+            le=MAX_PAGE,
+            description="How many messages to return, newest first.",
+        ),
+    ] = DEFAULT_PAGE,
+    starting_after: Annotated[
+        str | None,
+        Query(
+            description=(
+                "Return messages older than this id - the last id from the previous "
+                "page. The id must belong to this project."
+            ),
+        ),
+    ] = None,
+    status_filter: Annotated[
+        EmailStatus | None,
+        Query(
+            alias="status",
+            description="Only messages in this status.",
+        ),
+    ] = None,
+) -> EmailList:
+    """This key's project, newest first.
+
+    **Paged by cursor rather than by offset.** Ids sort in the order they were
+    created, so ``starting_after`` names a fixed point in the list and stays
+    correct while new messages arrive underneath it. An offset does not: a send
+    between two pages shifts every row down one, and the reader silently skips
+    the message that moved across the boundary. For a send log that is data
+    loss nobody can see.
+
+    An unknown ``starting_after`` is a 404 rather than an empty page. The
+    comparison is lexical, so an id from another project would otherwise return
+    a page of real messages positioned by an id the caller cannot see - a wrong
+    answer that looks like a right one.
+    """
+    apply_rate_limit_headers(response, context)
+
+    query = select(Email).where(Email.project_id == context.project.id)
+
+    if starting_after is not None:
+        cursor = await db.scalar(
+            select(Email.id).where(
+                Email.id == starting_after, Email.project_id == context.project.id
+            )
+        )
+        if cursor is None:
+            raise APIError(ErrorType.NOT_FOUND, "No email with that id to page from.")
+        query = query.where(Email.id < cursor)
+
+    if status_filter is not None:
+        query = query.where(Email.status == status_filter.value)
+
+    # One more than asked for, so "is there another page?" is answered by the
+    # query that fetched this one rather than by a second round trip.
+    rows = list(await db.scalars(query.order_by(Email.id.desc()).limit(limit + 1)))
+    has_more = len(rows) > limit
+
+    return EmailList(
+        data=[EmailResponse.model_validate(row) for row in rows[:limit]],
+        has_more=has_more,
+    )

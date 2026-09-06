@@ -297,6 +297,33 @@
         "title": "DomainResponse",
         "type": "object"
       },
+      "EmailList": {
+        "description": "One page of a project's messages, newest first.",
+        "properties": {
+          "data": {
+            "description": "The page, ordered by id descending - newest first.",
+            "items": {
+              "$ref": "#/components/schemas/EmailResponse"
+            },
+            "title": "Data",
+            "type": "array"
+          },
+          "has_more": {
+            "description": "Whether another page exists. Returned so a caller can stop without a final request that comes back empty. Pass the last id in `data` as `starting_after` to fetch it.",
+            "examples": [
+              false
+            ],
+            "title": "Has More",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "data",
+          "has_more"
+        ],
+        "title": "EmailList",
+        "type": "object"
+      },
       "EmailResponse": {
         "description": "A stored message, as a customer sees it.\n\nBcc is deliberately absent. It is recorded - support gets asked - but a\nblind copy readable from the API is not blind.",
         "properties": {
@@ -446,6 +473,17 @@
         ],
         "title": "EmailResponse",
         "type": "object"
+      },
+      "EmailStatus": {
+        "description": "Where a message has got to inside SESKit.\n\nDeliberately not the same vocabulary as delivery: `sent` means a provider\naccepted it, which is the last thing SESKit can observe on its own.\nWhether it *arrived* is a delivery event, and that is Phase 7 - which is why\n`delivered_at` is a column here and not a status.",
+        "enum": [
+          "queued",
+          "sending",
+          "sent",
+          "failed"
+        ],
+        "title": "EmailStatus",
+        "type": "string"
       },
       "ErrorBody": {
         "properties": {
@@ -1128,6 +1166,108 @@
       }
     },
     "/v1/emails": {
+      "get": {
+        "description": "This key's project, newest first.\n\n**Paged by cursor rather than by offset.** Ids sort in the order they were\ncreated, so ``starting_after`` names a fixed point in the list and stays\ncorrect while new messages arrive underneath it. An offset does not: a send\nbetween two pages shifts every row down one, and the reader silently skips\nthe message that moved across the boundary. For a send log that is data\nloss nobody can see.\n\nAn unknown ``starting_after`` is a 404 rather than an empty page. The\ncomparison is lexical, so an id from another project would otherwise return\na page of real messages positioned by an id the caller cannot see - a wrong\nanswer that looks like a right one.",
+        "operationId": "list_emails_v1_emails_get",
+        "parameters": [
+          {
+            "description": "How many messages to return, newest first.",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 25,
+              "description": "How many messages to return, newest first.",
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Return messages older than this id - the last id from the previous page. The id must belong to this project.",
+            "in": "query",
+            "name": "starting_after",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Return messages older than this id - the last id from the previous page. The id must belong to this project.",
+              "title": "Starting After"
+            }
+          },
+          {
+            "description": "Only messages in this status.",
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/EmailStatus"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only messages in this status.",
+              "title": "Status"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmailList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid or missing API key."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Rate limit exceeded."
+          }
+        },
+        "summary": "List emails",
+        "tags": [
+          "emails"
+        ]
+      },
       "post": {
         "description": "Accept a message for sending.",
         "operationId": "send_email_v1_emails_post",
