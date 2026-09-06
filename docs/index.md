@@ -35,10 +35,17 @@ reaches, so anything you can do with it you can do with an HTTP request.
 Business logic lives in the API and is never duplicated in a client, which is
 why a Python call and a `curl` command cannot drift apart.
 
-!!! warning "The SDK is not written yet"
-    The `seskit` package on PyPI currently reserves the name and contains no
-    working client. Talk to the HTTP API directly for now — that is the
-    supported path, and the one every guide here uses.
+```python
+from seskit import SesKit
+
+client = SesKit(api_key="sk_live_...", base_url="https://seskit.example.com")
+client.emails.send(from_="hello@example.com", to=["user@example.com"],
+                   subject="Welcome", html="<h1>Welcome!</h1>")
+```
+
+Sync and async, typed, with every refusal as a class you can catch. See the
+[Python SDK](reference/sdk.md) — or keep using the HTTP API, which is what
+every guide here does.
 
 ## Start here
 
