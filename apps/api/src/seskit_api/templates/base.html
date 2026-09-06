@@ -30,7 +30,7 @@
   <meta name="theme-color" content="#0166f8">
 
   {# Applied before first paint so a dark-theme user never sees a light flash. #}
-  <script>
+  <script nonce="{{ csp_nonce }}">
     (function () {
       try {
         var t = localStorage.getItem("seskit-theme");

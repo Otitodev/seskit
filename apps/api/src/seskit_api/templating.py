@@ -76,6 +76,10 @@ def render(
     on screen - so it goes to one shared place.
     """
     shared: dict[str, Any] = {
+        # Every inline <script> needs this or it will not run. Read from the
+        # request rather than passed in, so a route cannot forget it and a page
+        # cannot render a script the browser then refuses.
+        "csp_nonce": getattr(request.state, "csp_nonce", ""),
         "nav_active": nav_active,
         "current_user": current.user if current else None,
         "csrf_token": current.session.csrf_token if current else None,
