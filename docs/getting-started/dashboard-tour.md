@@ -15,6 +15,7 @@ ordinary links that still work.
 | **AWS** | The connection, the region, your quota, sandbox status, and event reporting setup |
 | **API keys** | Create and revoke. Shown once at creation |
 | **Webhooks** | Endpoints, signing secrets, and the delivery history for each |
+| **Suppressions** | Addresses this project will not send to, why, and the button that puts one back |
 
 ## Overview
 
@@ -68,6 +69,20 @@ Each endpoint with its signing secret, its status, and its recent delivery
 attempts — status code, response, and what went wrong. An endpoint SESKit
 disabled after repeated failures says so and why, rather than showing a switch
 that appears to have moved by itself.
+
+## Suppressions
+
+Every address the project is refusing to send to, why it is there, and — where
+a message caused it — a link to that message.
+
+The page exists mostly for **Allow again**. Suppression happens on its own; the
+question it generates is "why can I not email this person?", and that arrives
+as a support ticket rather than as a stack trace. An empty list is the healthy
+state, not a setup step.
+
+An address can also be added by hand, for the case automation cannot cover:
+somebody asks to be left alone and there is no bounce to record it. Full
+detail in the [suppression guide](../guides/suppression.md).
 
 ## Dark mode
 

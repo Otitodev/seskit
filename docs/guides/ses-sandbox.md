@@ -26,11 +26,13 @@ you receive [delivery events](delivery-events.md), that bounce and complaint
 rates are visible to you, and what you do when an address hard-bounces. A
 specific answer is approved faster than a reassuring one.
 
-!!! warning "SESKit does not yet suppress bounced addresses for you"
-    It shows you the rates; acting on them is currently your job. Automatic
-    suppression is Phase 11. Until then, consume the
-    [webhooks](webhooks.md) and stop sending to addresses that hard-bounce —
-    AWS reviews accounts above **5% bounce** and **0.1% complaint**.
+!!! tip "You have a concrete answer to give"
+    SESKit maintains a [suppression list](suppression.md): a hard bounce or a
+    complaint puts the address on it, and later sends to that address are
+    refused before they reach SES. Messages also carry a
+    [one-click unsubscribe](suppression.md#one-click-unsubscribe) header. Both
+    are worth saying in the request — AWS reviews accounts above **5% bounce**
+    and **0.1% complaint**, and asks what you do about them.
 
 ## Working inside the sandbox
 

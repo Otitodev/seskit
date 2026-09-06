@@ -93,7 +93,7 @@ SESKit is in active development. This is honest about what is built:
 | ✅ | Delivery events | Delivered, bounced, complained — via SQS or HTTPS |
 | ✅ | Customer webhooks | Signed, retried, with delivery history |
 | ✅ | Analytics dashboard | Six counts, five rates, activity chart |
-| ⬜ | Suppression list | Next — bounce rates are shown, not yet acted on |
+| ✅ | Suppression list | Hard bounces and complaints stop future sends; one-click unsubscribe |
 | ⬜ | Python SDK | Currently a stub — use the HTTP API |
 | ⬜ | Production hardening | |
 
@@ -118,6 +118,7 @@ in the tree.
 [the SES sandbox](https://otitodev.github.io/seskit/guides/ses-sandbox/) ·
 [delivery events](https://otitodev.github.io/seskit/guides/delivery-events/) ·
 [webhooks](https://otitodev.github.io/seskit/guides/webhooks/) ·
+[suppression](https://otitodev.github.io/seskit/guides/suppression/) ·
 [reading your metrics](https://otitodev.github.io/seskit/guides/metrics/)
 
 **Reference** — [HTTP API](https://otitodev.github.io/seskit/reference/api/) ·
