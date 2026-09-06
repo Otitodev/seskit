@@ -57,6 +57,7 @@ Per project, not per key. Every response carries `X-RateLimit-Limit`,
 | `GET` | [`/v1/api-keys`](#get-v1api-keys) | List API keys |
 | `GET` | [`/v1/domains`](#get-v1domains) | List sending domains |
 | `POST` | [`/v1/emails`](#post-v1emails) | Send an email |
+| `GET` | [`/v1/emails`](#get-v1emails) | List emails |
 | `GET` | [`/v1/emails/{email_id}`](#get-v1emailsemail_id) | Retrieve an email |
 | `GET` | [`/v1/webhooks`](#get-v1webhooks) | List webhook endpoints |
 | `GET` | [`/v1/webhooks/{endpoint_id}/deliveries`](#get-v1webhooksendpoint_iddeliveries) | List recent webhook deliveries |
@@ -132,6 +133,44 @@ Accept a message for sending.
 | Status | |
 |---|---|
 | `201` | Successful Response |
+| `401` | Invalid or missing API key. |
+| `422` | Validation Error |
+| `429` | Rate limit exceeded. |
+
+
+---
+
+## `GET /v1/emails`
+
+**List emails**
+
+This key's project, newest first.
+
+**Paged by cursor rather than by offset.** Ids sort in the order they were
+created, so ``starting_after`` names a fixed point in the list and stays
+correct while new messages arrive underneath it. An offset does not: a send
+between two pages shifts every row down one, and the reader silently skips
+the message that moved across the boundary. For a send log that is data
+loss nobody can see.
+
+An unknown ``starting_after`` is a 404 rather than an empty page. The
+comparison is lexical, so an id from another project would otherwise return
+a page of real messages positioned by an id the caller cannot see - a wrong
+answer that looks like a right one.
+
+**Parameters**
+
+| Name | In | | |
+|---|---|---|---|
+| `limit` | query | optional | How many messages to return, newest first. |
+| `starting_after` | query | optional | Return messages older than this id - the last id from the previous page. The id must belong to this project. |
+| `status` | query | optional | Only messages in this status. |
+
+**Responses**
+
+| Status | |
+|---|---|
+| `200` | Successful Response |
 | `401` | Invalid or missing API key. |
 | `422` | Validation Error |
 | `429` | Rate limit exceeded. |
