@@ -13,6 +13,11 @@
     client.emails.get(sent.id)
     client.emails.list(status="failed")
 
+`AsyncSesKit` is the same surface, awaited. It exists because the reader most
+likely to install this is writing a FastAPI or Starlette handler, and a
+blocking HTTP call inside one stops the event loop for every other request on
+that worker.
+
 **Business logic lives in the API and is never duplicated here.** That is a
 constraint from §13, and it has a consequence worth stating plainly: this
 client can never do anything a `curl` command cannot. What it adds is typing,
@@ -24,6 +29,7 @@ is not Python, or you would rather not add a dependency, an HTTP request is a
 first-class way to use SESKit.
 """
 
+from seskit._async_client import AsyncEmails, AsyncSesKit
 from seskit._client import Emails, SesKit
 from seskit._errors import (
     AttachmentTooLarge,
@@ -49,6 +55,8 @@ __version__ = "0.1.0"
 
 __all__ = [
     "Accepted",
+    "AsyncEmails",
+    "AsyncSesKit",
     "Attachment",
     "AttachmentTooLarge",
     "AuthenticationFailed",
