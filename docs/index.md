@@ -39,8 +39,9 @@ why a Python call and a `curl` command cannot drift apart.
 from seskit import SesKit
 
 client = SesKit(api_key="sk_live_...", base_url="https://seskit.example.com")
-client.emails.send(from_="hello@example.com", to=["user@example.com"],
-                   subject="Welcome", html="<h1>Welcome!</h1>")
+client.emails.send(
+    from_="hello@example.com", to=["user@example.com"], subject="Welcome", html="<h1>Welcome!</h1>"
+)
 ```
 
 Sync and async, typed, with every refusal as a class you can catch. See the

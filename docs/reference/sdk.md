@@ -67,9 +67,9 @@ the one transformation it makes — see
 
 ```python
 email = client.emails.get("email_01J8XQ...")
-email.status            # queued, sending, sent, failed
-email.delivered_at      # None until a delivery event arrives
-email.last_error        # why the last attempt failed, if it did
+email.status  # queued, sending, sent, failed
+email.delivered_at  # None until a delivery event arrives
+email.last_error  # why the last attempt failed, if it did
 ```
 
 There is no `bcc`. The API does not return one — a blind copy readable from a
@@ -140,9 +140,9 @@ from seskit import SuppressedRecipient, DomainNotVerified, SESKitError
 try:
     client.emails.send(from_=..., to=..., subject=..., html=...)
 except SuppressedRecipient:
-    ...          # the address hard-bounced or complained; it is on your list
+    ...  # the address hard-bounced or complained; it is on your list
 except DomainNotVerified:
-    ...          # the sender is not verified in SES
+    ...  # the sender is not verified in SES
 except SESKitError as error:
     print(error.type, error.status_code, error.message)
 ```
