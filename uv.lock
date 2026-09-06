@@ -1851,7 +1851,7 @@ wheels = [
 
 [[package]]
 name = "seskit"
-version = "0.0.1"
+version = "0.1.0"
 source = { editable = "packages/sdk-python" }
 dependencies = [
     { name = "httpx" },
@@ -1988,6 +1988,7 @@ dev = [
     { name = "pytest" },
     { name = "pytest-asyncio" },
     { name = "ruff" },
+    { name = "seskit" },
 ]
 docs = [
     { name = "mkdocs" },
@@ -2013,6 +2014,7 @@ dev = [
     { name = "pytest", specifier = ">=8.0" },
     { name = "pytest-asyncio", specifier = ">=0.24" },
     { name = "ruff", specifier = ">=0.6" },
+    { name = "seskit", editable = "packages/sdk-python" },
 ]
 docs = [
     { name = "mkdocs", specifier = ">=1.6,<2" },
