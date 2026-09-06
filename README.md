@@ -51,8 +51,8 @@ machine or your own infrastructure. That is SESKit.
 
 **`pip install seskit` is a client** that goes inside your application and
 makes HTTP calls to a running server — and it is optional, because it is a thin
-wrapper over the same HTTP API `curl` reaches. The package currently reserves
-the name and contains no working client; **use the HTTP API**.
+wrapper over the same HTTP API `curl` reaches. Sync and async, typed, with
+every refusal as a class you can catch.
 
 ## Quickstart
 
@@ -94,7 +94,7 @@ SESKit is in active development. This is honest about what is built:
 | ✅ | Customer webhooks | Signed, retried, with delivery history |
 | ✅ | Analytics dashboard | Six counts, five rates, activity chart |
 | ✅ | Suppression list | Hard bounces and complaints stop future sends; one-click unsubscribe |
-| ⬜ | Python SDK | Currently a stub — use the HTTP API |
+| ✅ | Python SDK | `pip install seskit` — sync and async, typed, retrying |
 | ⬜ | Production hardening | |
 
 Build order: [`SESKit_MVP.md`](SESKit_MVP.md) §31.

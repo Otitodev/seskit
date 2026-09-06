@@ -106,7 +106,7 @@ plugins:
         SESKit is a self-hosted, Python-native email platform built on Amazon
         SES. You run the server yourself on your own AWS account; the `seskit`
         package on PyPI is an optional thin client for talking to it over HTTP,
-        and currently reserves the name without implementing a client.
+        with sync and async clients over the same API.
       sections:
         Start here:
           - index.md: What SESKit is, and the distinction between the server you run and the client you install.
@@ -126,7 +126,7 @@ plugins:
           - guides/suppression.md: What lands on the suppression list, what a suppressed send answers, and one-click unsubscribe.
         Reference:
           - reference/api.md: Every HTTP endpoint, generated from the OpenAPI schema.
-          - reference/sdk.md: The Python SDK, why it is optional, and that it is not written yet.
+          - reference/sdk.md: The Python SDK - send, get and list, sync and async, errors as classes, retries and idempotency.
           - reference/configuration.md: Every environment variable, its default, and its effect.
           - reference/events.md: The event vocabulary, webhook payload shape, and bounce types.
           - reference/errors.md: Every error type, which are worth retrying, and which are not.
