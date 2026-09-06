@@ -367,13 +367,20 @@ async def test_an_unsubscribe_is_reported_like_any_other_suppression(
     assert data["caused_by"] is None
 
 
-async def test_an_altered_token_does_nothing_and_says_nothing(
+async def test_a_token_naming_someone_who_never_received_the_message_is_refused(
     app_client: AsyncClient, db_session: AsyncSession, settings: Settings
 ) -> None:
-    email = await _stored(db_session)
-    forged = _live_token(email, settings, address="victim@example.com")
+    """A correct signature over the wrong address still gets nowhere.
 
-    response = await app_client.post(f"/u/{forged}")
+    Nothing issues such a token today - only the send path signs one, and only
+    for the single address the message went to. The check is here so that if
+    something one day signs an address from somewhere else, the link cannot
+    quietly suppress a stranger.
+    """
+    email = await _stored(db_session)
+    signed_for_someone_else = _live_token(email, settings, address="victim@example.com")
+
+    response = await app_client.post(f"/u/{signed_for_someone_else}")
 
     assert response.status_code == 200
     assert "not valid" in response.text
