@@ -219,6 +219,17 @@ class Settings(BaseSettings):
     #: a third, so a 9 MB attachment is an over-limit message.
     EMAIL_MAX_MESSAGE_BYTES: int = 10 * 1024 * 1024
 
+    #: The most one request body may be, before anything reads it. None means
+    #: "derive it from the message ceiling", which is almost always right - the
+    #: two move together, and an operator who raises one and forgets the other
+    #: would find the forgotten one silently binding.
+    #:
+    #: Distinct from EMAIL_MAX_MESSAGE_BYTES, which is checked against the
+    #: assembled message *after* the body has been read, parsed and decoded
+    #: into memory. Without this, one authenticated key could post half a
+    #: gigabyte and have all of that happen before anything refused it.
+    MAX_REQUEST_BYTES: int | None = None
+
     #: How many times the worker will retry a send that failed for a reason
     #: worth retrying. Terminal rejections are not retried at all.
     EMAIL_SEND_MAX_ATTEMPTS: int = 3
@@ -266,6 +277,18 @@ class Settings(BaseSettings):
         if not self.receives_https or not self.PUBLIC_BASE_URL:
             return None
         return f"{self.PUBLIC_BASE_URL.rstrip('/')}{EVENT_HTTPS_PATH}"
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def max_request_bytes(self) -> int:
+        """The body cap actually in force.
+
+        Half again the message ceiling by default. A request carrying a
+        maximum-size message is about that size once base64 and JSON overhead
+        are counted, and the headroom means the cap refuses bodies that could
+        never have been valid rather than ones that merely might not be.
+        """
+        return self.MAX_REQUEST_BYTES or self.EMAIL_MAX_MESSAGE_BYTES * 3 // 2
 
     @computed_field  # type: ignore[prop-decorator]
     @property
