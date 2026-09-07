@@ -113,6 +113,61 @@ async def test_a_blind_copy_is_not_readable_back(
     assert "quiet@example.com" not in stored.text
 
 
+async def test_the_custom_headers_are_readable_back(
+    app_client: AsyncClient, db_session: AsyncSession
+) -> None:
+    """A caller could set custom headers and had no way to see what was stored.
+
+    That gap mattered because a header is not echoed anywhere else: the message
+    has gone, the recipient has it, and support is being asked what was on it.
+    "We accepted them" and "we sent them" were indistinguishable from outside.
+    """
+    raw_key = await _key(db_session)
+    sent = {"X-Entity-Ref-Id": "order-1234"}
+    created = (
+        await app_client.post(EMAILS_URL, json={**BODY, "headers": sent}, headers=_auth(raw_key))
+    ).json()
+
+    stored = (await app_client.get(f"{EMAILS_URL}/{created['id']}", headers=_auth(raw_key))).json()
+
+    assert stored["headers"] == sent
+
+
+async def test_a_message_with_no_custom_headers_reads_back_empty(
+    app_client: AsyncClient, db_session: AsyncSession
+) -> None:
+    """Empty rather than absent or null. A caller reading `email["headers"]`
+    should not have to know whether any were set.
+    """
+    raw_key = await _key(db_session)
+    created = (await app_client.post(EMAILS_URL, json=BODY, headers=_auth(raw_key))).json()
+
+    stored = (await app_client.get(f"{EMAILS_URL}/{created['id']}", headers=_auth(raw_key))).json()
+
+    assert stored["headers"] == {}
+
+
+async def test_the_headers_seskit_sets_itself_are_not_echoed(
+    app_client: AsyncClient, db_session: AsyncSession
+) -> None:
+    """`From`, `Message-ID` and `List-Unsubscribe` are built at send time and
+    are not the caller's to read back here. Echoing them would suggest they
+    could be set, which RESERVED_HEADERS refuses.
+    """
+    raw_key = await _key(db_session)
+    created = (
+        await app_client.post(
+            EMAILS_URL,
+            json={**BODY, "headers": {"X-Entity-Ref-Id": "order-1234"}},
+            headers=_auth(raw_key),
+        )
+    ).json()
+
+    stored = (await app_client.get(f"{EMAILS_URL}/{created['id']}", headers=_auth(raw_key))).json()
+
+    assert set(stored["headers"]) == {"X-Entity-Ref-Id"}
+
+
 # ----------------------------------------------------------- validation ---
 
 

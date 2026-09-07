@@ -70,7 +70,13 @@ email = client.emails.get("email_01J8XQ...")
 email.status  # queued, sending, sent, failed
 email.delivered_at  # None until a delivery event arrives
 email.last_error  # why the last attempt failed, if it did
+email.headers  # the custom headers it was sent with, or {}
 ```
+
+`headers` is what you set on the send, as it was stored — empty when you set
+none. Headers SESKit builds itself (`From`, `Message-ID`, `List-Unsubscribe`)
+are not in it: they are settled at send time and are not yours to read back
+here.
 
 There is no `bcc`. The API does not return one — a blind copy readable from a
 `GET` is not blind — so there is nothing here to hold it.
