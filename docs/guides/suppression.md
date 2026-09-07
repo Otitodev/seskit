@@ -38,7 +38,7 @@ The send is refused before it reaches SES:
 {
   "error": {
     "type": "suppressed_recipient",
-    "message": "user@example.com is on this project's suppression list, so nothing was sent. Addresses are added after a hard bounce or a complaint. Take it off the list if you believe mail can be delivered there again."
+    "message": "user@example.com is on this project's suppression list, so nothing was sent. An address lands there after a hard bounce or a complaint, when the recipient unsubscribes, or by hand. The Suppressions page says which, and can take it off if you believe mail can be delivered there again."
   }
 }
 ```

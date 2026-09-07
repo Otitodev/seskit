@@ -92,8 +92,9 @@ async def _refuse_suppressed(
     raise APIError(
         ErrorType.SUPPRESSED_RECIPIENT,
         f"{named} {verb} on this project's suppression list, so nothing was sent. "
-        "Addresses are added after a hard bounce or a complaint. "
-        f"Take {pronoun} off the list if you believe mail can be delivered there again.",
+        "An address lands there after a hard bounce or a complaint, when the "
+        "recipient unsubscribes, or by hand. The Suppressions page says which, "
+        f"and can take {pronoun} off if you believe mail can be delivered there again.",
     )
 
 
