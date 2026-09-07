@@ -127,6 +127,40 @@ def test_the_message_carries_both_headers() -> None:
     assert message["List-Unsubscribe-Post"] == ONE_CLICK
 
 
+def test_the_url_survives_into_the_bytes_that_are_sent() -> None:
+    """The test the by-hand pass had to find, because every test above it
+    passed while the header was corrupt.
+
+    Python folds a long header to keep lines under 78 characters, and a URL has
+    nowhere to fold, so it split the word with RFC 2047 encoded-words instead.
+    `message["List-Unsubscribe"]` decodes that back to the right string - so
+    the accessor said the header was fine while the bytes on the wire carried
+    `=?utf-8?q?=3Chttp=3A//...`, which no mail client parses as a link.
+
+    Assert on the serialised message, not on the accessor.
+    """
+    url = (
+        "https://mail.example.com/u/"
+        "ZW1haWxfMDFNMVhGR1NDWDVTNENUR0NQS1pBOUJHMUY6cmVhZGVyQGV4YW1wbGUuY29t.6f2b3c"
+    )
+    raw = build_message(_outbound(unsubscribe_url=url)).as_bytes()
+
+    assert f"List-Unsubscribe: <{url}>".encode() in raw
+    assert b"=?utf-8?q?=3Chttp" not in raw
+
+
+def test_the_unsubscribe_header_is_not_split_across_lines() -> None:
+    """A folded URL is a broken URL even when it is not encoded: the
+    continuation line makes the value two tokens.
+    """
+    url = "https://mail.example.com/u/" + "a" * 200
+    raw = build_message(_outbound(unsubscribe_url=url)).as_bytes()
+
+    header = next(line for line in raw.splitlines() if line.startswith(b"List-Unsubscribe:"))
+
+    assert header.endswith(b">")
+
+
 def test_the_url_is_in_angle_brackets() -> None:
     """RFC 2369 syntax, not decoration - some clients ignore a bare URL."""
     message = build_message(_outbound(unsubscribe_url="https://mail.example.com/u/tok"))
