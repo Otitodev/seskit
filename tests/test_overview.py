@@ -443,7 +443,9 @@ async def test_the_series_covers_the_window_including_empty_buckets(
 
     page = await signed_in_client.get("/?range=24h")
     island = re.search(
-        r'<script type="application/json" id="activity-data">(.*?)</script>',
+        # Attributes matched loosely: the tag carries a CSP nonce as well, and
+        # which order they appear in is not what this test is about.
+        r'<script[^>]*id="activity-data"[^>]*>(.*?)</script>',
         page.text,
         re.S,
     )
