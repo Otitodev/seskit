@@ -22,6 +22,7 @@ own words.
 from __future__ import annotations
 
 import asyncio
+import re
 import sys
 from dataclasses import dataclass
 from datetime import timedelta
@@ -138,20 +139,43 @@ async def check_postgres(settings: Settings) -> list[Result]:
     return results
 
 
-def _alembic_head() -> str | None:
-    """The newest revision in `migrations/`, or None if it cannot be read.
+#: `revision = "abc"` / `down_revision = "abc"` at the top of a migration.
+_REVISION = re.compile(
+    r"^(revision|down_revision)(?::[^=]+)?\s*=\s*['\"]([^'\"]+)['\"]",
+    re.MULTILINE,
+)
 
-    None rather than a failure: a doctor that cannot answer a question should
-    say so, not turn its own missing dependency into somebody's bug report.
+
+def _alembic_head(root: Path = ROOT) -> str | None:
+    """The newest revision in `migrations/versions`, or None if unreadable.
+
+    Read from the files rather than through Alembic, which is a development
+    dependency and is **not installed in the runtime image** - which is exactly
+    where an operator most needs to be told their schema is behind.
+
+    The head is the revision nothing else names as its `down_revision`. That is
+    the definition, not an approximation, and it needs no import: parsing two
+    assignments out of each file is less machinery than the library, and works
+    wherever the files do.
+
+    None rather than a failure when the directory is not there. A check that
+    cannot answer should say so, not turn its own missing input into somebody
+    else's bug report.
     """
-    try:
-        from alembic.config import Config
-        from alembic.script import ScriptDirectory
-
-        script = ScriptDirectory.from_config(Config(str(ROOT / "alembic.ini")))
-        return script.get_current_head()
-    except Exception:
+    versions = root / "migrations" / "versions"
+    if not versions.is_dir():
         return None
+
+    revisions: set[str] = set()
+    parents: set[str] = set()
+    for path in versions.glob("*.py"):
+        for kind, value in _REVISION.findall(path.read_text(encoding="utf-8")):
+            (revisions if kind == "revision" else parents).add(value)
+
+    heads = revisions - parents
+    # Exactly one, or the history has branched and "are we at head" is not a
+    # question with one answer - which is a thing to say rather than to guess at.
+    return heads.pop() if len(heads) == 1 else None
 
 
 async def check_redis(settings: Settings) -> list[Result]:

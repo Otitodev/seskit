@@ -13,9 +13,12 @@ broken machine.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 from seskit_api.doctor import (
     Result,
+    _alembic_head,
     check_configuration,
     check_postgres,
     report,
@@ -173,3 +176,72 @@ async def test_every_check_runs(settings: Settings, name: str) -> None:
     results = await run(_settings(settings, DATABASE_URL=UNREACHABLE))
 
     assert _named(results, name)
+
+
+# ------------------------------------------------------------- migrations ---
+
+
+def _chain(root: Path, *pairs: tuple[str, str | None]) -> Path:
+    """A `migrations/versions` directory of (revision, down_revision) pairs."""
+    versions = root / "migrations" / "versions"
+    versions.mkdir(parents=True)
+    for revision, down in pairs:
+        down_line = f'down_revision = "{down}"' if down else "down_revision = None"
+        (versions / f"{revision}.py").write_text(
+            f'revision = "{revision}"\n{down_line}\n', encoding="utf-8"
+        )
+    return root
+
+
+def test_the_head_is_the_revision_nothing_follows(tmp_path: Path) -> None:
+    """Read from the files rather than through Alembic, which is a development
+    dependency and is not installed in the runtime image - which is exactly
+    where an operator most needs to be told their schema is behind.
+    """
+    root = _chain(tmp_path, ("aaa", None), ("bbb", "aaa"), ("ccc", "bbb"))
+
+    assert _alembic_head(root) == "ccc"
+
+
+def test_the_order_files_are_read_in_does_not_matter(tmp_path: Path) -> None:
+    """`glob` gives no ordering guarantee, and these are named by hash rather
+    than by sequence, so a head found by "the last file" would be a coin toss.
+    """
+    root = _chain(tmp_path, ("zzz", "mmm"), ("mmm", None))
+
+    assert _alembic_head(root) == "zzz"
+
+
+def test_a_branched_history_has_no_single_head(tmp_path: Path) -> None:
+    """Two heads means "are we at head" has no one answer. Saying so beats
+    picking one and being wrong half the time.
+    """
+    root = _chain(tmp_path, ("aaa", None), ("bbb", "aaa"), ("ccc", "aaa"))
+
+    assert _alembic_head(root) is None
+
+
+def test_no_migrations_directory_is_not_a_failure(tmp_path: Path) -> None:
+    assert _alembic_head(tmp_path) is None
+
+
+def test_a_typed_revision_annotation_is_still_read(tmp_path: Path) -> None:
+    """Newer Alembic templates write `revision: str = "abc"`. A parser that
+    only knew the untyped form would silently find no revisions at all and
+    report a branched history.
+    """
+    versions = tmp_path / "migrations" / "versions"
+    versions.mkdir(parents=True)
+    (versions / "one.py").write_text(
+        'revision: str = "aaa"\ndown_revision: str | None = None\n', encoding="utf-8"
+    )
+    (versions / "two.py").write_text(
+        'revision: str = "bbb"\ndown_revision: str | None = "aaa"\n', encoding="utf-8"
+    )
+
+    assert _alembic_head(tmp_path) == "bbb"
+
+
+def test_the_real_migrations_have_one_head() -> None:
+    """The repository's own history, which is what the check reads in anger."""
+    assert _alembic_head() is not None
