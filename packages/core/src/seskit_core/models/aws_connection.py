@@ -21,7 +21,7 @@ from datetime import datetime
 from enum import StrEnum
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Boolean, DateTime, Float, ForeignKey, String, Text
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, String, Text, false
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from seskit_core.db import Base
@@ -60,7 +60,13 @@ class AWSConnection(Base, TimestampMixin):
     project_id: Mapped[str] = mapped_column(
         String(64),
         ForeignKey("projects.id", ondelete="CASCADE"),
+        # A unique *index* rather than a unique constraint, which is what the
+        # migration created and what Postgres enforces identically. Declared
+        # the same way here so a database built from the models matches one
+        # built by the migrations - otherwise autogenerate proposes swapping
+        # one for the other on every run.
         unique=True,
+        index=True,
         nullable=False,
     )
 
@@ -114,7 +120,9 @@ class AWSConnection(Base, TimestampMixin):
     #: link in the mail this project sends and add a tracking pixel - a visible
     #: change to the customer's own product, with privacy consequences, which
     #: is not something to switch on by default on their behalf.
-    track_opens_and_clicks: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    track_opens_and_clicks: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=false()
+    )
 
     project: Mapped[Project] = relationship(back_populates="aws_connection")
 

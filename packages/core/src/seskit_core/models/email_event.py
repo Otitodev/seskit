@@ -122,7 +122,15 @@ class EmailEvent(Base, TimestampMixin):
     #: and that uniqueness is what makes redelivery idempotent. Nullable only
     #: because a provider that offers no such id should not be unrecordable;
     #: NULLs do not collide in a unique index, so those simply do not dedup.
-    provider_event_id: Mapped[str | None] = mapped_column(String(255), unique=True, nullable=True)
+    provider_event_id: Mapped[str | None] = mapped_column(
+        # unique *and* indexed: the migration created a unique index, and
+        # declaring only `unique=True` here would make a database built from
+        # the models differ from one built by the migrations.
+        String(255),
+        unique=True,
+        index=True,
+        nullable=True,
+    )
 
     #: The normalised event (§15), not the provider's payload. Provider-specific
     #: shapes must not leak into the public API, and this field is read by
