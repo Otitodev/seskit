@@ -67,6 +67,10 @@ class Email:
     subject: str
     html: str | None
     text: str | None
+    #: The custom headers the message was sent with. Empty when none were set.
+    #: Headers SESKit builds itself - From, Message-ID, List-Unsubscribe - are
+    #: not here: they are not the caller's to read back.
+    headers: dict[str, str]
     provider_message_id: str | None
     last_error: str | None
     created_at: datetime | None
@@ -89,6 +93,7 @@ class Email:
             subject=str(payload.get("subject", "")),
             html=payload.get("html"),
             text=payload.get("text"),
+            headers=dict(payload.get("headers") or {}),
             provider_message_id=payload.get("provider_message_id"),
             last_error=payload.get("last_error"),
             created_at=_when(payload.get("created_at")),

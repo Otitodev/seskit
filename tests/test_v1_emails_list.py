@@ -122,6 +122,22 @@ async def test_bcc_is_still_not_returned(app_client: AsyncClient, db_session: As
     assert "archive@example.com" not in str(body)
 
 
+async def test_the_custom_headers_come_back_in_a_list_too(
+    app_client: AsyncClient, db_session: AsyncSession
+) -> None:
+    """The list returns the same shape as the detail endpoint. A field added to
+    one and not the other is how two representations of one row drift.
+    """
+    project_id, raw_key = await _project_key(db_session, owner="owner@example.com", name="Sending")
+    row = await _send(db_session, project_id=project_id)
+    row.headers = {"X-Entity-Ref-Id": "order-1234"}
+    await db_session.commit()
+
+    body = (await app_client.get(EMAILS_URL, headers=_auth(raw_key))).json()
+
+    assert body["data"][0]["headers"] == {"X-Entity-Ref-Id": "order-1234"}
+
+
 # ----------------------------------------------------------------- paging ---
 
 

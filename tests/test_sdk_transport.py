@@ -43,6 +43,7 @@ STORED = {
     "subject": "Welcome",
     "html": "<h1>Welcome!</h1>",
     "text": None,
+    "headers": {"X-Entity-Ref-Id": "order-1234"},
     "provider_message_id": "0100018f",
     "last_error": None,
     "created_at": "2026-09-02T09:00:00+00:00",
@@ -275,6 +276,26 @@ def test_list_sends_only_the_filters_it_was_given() -> None:
     _client(recorder).emails.list(status="failed")
 
     assert dict(recorder.requests[0].url.params) == {"status": "failed"}
+
+
+def test_the_custom_headers_reach_the_caller() -> None:
+    """Echoed by the API since Phase 12; useless if the client drops them on
+    the way through.
+    """
+    recorder = Recorder(_ok(STORED))
+
+    email = _client(recorder).emails.get("email_01J8XQ")
+
+    assert email.headers == {"X-Entity-Ref-Id": "order-1234"}
+
+
+def test_a_message_with_no_headers_reads_back_empty() -> None:
+    """`None` would make every caller check before iterating."""
+    recorder = Recorder(_ok({**STORED, "headers": None}))
+
+    email = _client(recorder).emails.get("email_01J8XQ")
+
+    assert email.headers == {}
 
 
 def test_a_field_this_version_does_not_know_is_kept() -> None:

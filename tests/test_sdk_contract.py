@@ -162,6 +162,28 @@ async def test_a_sent_message_reads_back(app_client: AsyncClient, db_session: As
     assert email.created_at is not None
 
 
+async def test_custom_headers_survive_the_whole_round_trip(
+    app_client: AsyncClient, db_session: AsyncSession
+) -> None:
+    """Client -> API -> row -> API -> client. Each hop names the field
+    separately, and any one of them getting it wrong reads as "the headers
+    were not sent" from outside.
+    """
+    _, raw_key = await _key(db_session)
+    client = _sdk(app_client, raw_key)
+    accepted = await client.emails.send(
+        from_=SENDER,
+        to=[RECIPIENT],
+        subject="Welcome",
+        text="Hello",
+        headers={"X-Entity-Ref-Id": "order-1234"},
+    )
+
+    email = await client.emails.get(accepted.id)
+
+    assert email.headers == {"X-Entity-Ref-Id": "order-1234"}
+
+
 async def test_a_bcc_is_not_readable_through_the_sdk(
     app_client: AsyncClient, db_session: AsyncSession
 ) -> None:

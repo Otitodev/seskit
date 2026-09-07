@@ -210,6 +210,16 @@ class EmailResponse(BaseModel):
     text_body: str | None = Field(
         default=None, serialization_alias="text", description="Null when the message was HTML only."
     )
+    headers: dict[str, str] = Field(
+        default_factory=dict,
+        description=(
+            "The custom headers the message was sent with, as they were stored. "
+            "Empty when none were set. Headers SESKit sets itself - `From`, "
+            "`Message-ID`, `List-Unsubscribe` - are not included: they are built "
+            "at send time and are not the caller's to read back here."
+        ),
+        examples=[{"X-Entity-Ref-Id": "order-1234"}],
+    )
     provider_message_id: str | None = Field(
         default=None,
         description=(
