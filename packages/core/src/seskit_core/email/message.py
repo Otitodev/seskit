@@ -13,8 +13,15 @@ message, not the request.
 
 from __future__ import annotations
 
-from email.headerregistry import Address
+from email.headerregistry import (
+    Address,
+    BaseHeader,
+    HeaderRegistry,
+    UnstructuredHeader,
+)
 from email.message import EmailMessage
+from email.policy import Policy
+from email.policy import default as default_policy
 from email.utils import make_msgid, parseaddr
 
 from seskit_core.errors import APIError, ErrorType
@@ -55,6 +62,50 @@ RESERVED_HEADERS = frozenset(
 #: because the header is not there - the address goes to the provider as an
 #: envelope recipient instead.
 BCC_IS_ENVELOPE_ONLY = True
+
+
+class _UnfoldedHeader(BaseHeader, UnstructuredHeader):
+    """A header whose value is one token that must not be broken.
+
+    Python folds a long header to keep lines under 78 characters, and when the
+    value is a single word with nowhere to fold it, it splits the word using
+    RFC 2047 encoded-words instead. For a URL that is silent corruption: the
+    accessor still hands back the right string, so nothing in Python notices,
+    while the bytes on the wire carry
+
+        List-Unsubscribe: =?utf-8?q?=3Chttp=3A//localhost=3A8000/u/ZW1haWxf?=
+
+    which no mail client parses as a link. The Unsubscribe button then does not
+    appear, and the recipient's next move is Report spam - the exact outcome
+    the header exists to prevent.
+
+    So this one is never folded. The line goes over the 78-character
+    recommendation and stays far inside the 998-character limit, which is what
+    every real sender does with a `List-Unsubscribe`.
+    """
+
+    #: `BaseHeader` is inherited only so the name and value are typed. The
+    #: registry mixes it in at runtime either way; naming it here means mypy
+    #: sees the same class the interpreter builds.
+    def fold(self, *, policy: Policy) -> str:
+        return f"{self.name}: {self}{policy.linesep}"
+
+
+def _policy() -> Policy:
+    """`email.policy.default`, with the header above registered.
+
+    A registry of our own rather than the default policy's, which is shared
+    process-wide - mutating that would change how every other library in the
+    process folds its mail.
+    """
+    registry = HeaderRegistry()
+    registry.map_to_type(LIST_UNSUBSCRIBE_HEADER, _UnfoldedHeader)
+    return default_policy.clone(header_factory=registry)
+
+
+#: Built once. Cloning a policy per message would be work repeated on every
+#: send for a value that never changes.
+POLICY = _policy()
 
 
 def _reject_header_injection(name: str, value: str) -> None:
@@ -111,7 +162,7 @@ def build_message(outbound: OutboundEmail) -> EmailMessage:
 
     _reject_header_injection("subject", outbound.subject)
 
-    message = EmailMessage()
+    message = EmailMessage(policy=POLICY)
     message["From"] = _address(outbound.sender)
     message["To"] = [_address(value) for value in outbound.to]
     if outbound.cc:
