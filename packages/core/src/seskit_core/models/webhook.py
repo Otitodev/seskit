@@ -93,13 +93,19 @@ class WebhookEndpoint(Base, TimestampMixin):
     secret: Mapped[str] = mapped_column(String(128), nullable=False)
 
     status: Mapped[str] = mapped_column(
-        String(32), nullable=False, default=WebhookStatus.ACTIVE.value, index=True
+        String(32),
+        nullable=False,
+        default=WebhookStatus.ACTIVE.value,
+        server_default=WebhookStatus.ACTIVE.value,
+        index=True,
     )
 
     #: Reset to zero by any success. Counting *consecutive* failures rather
     #: than total is what stops a long-lived endpoint being disabled for a bad
     #: week it recovered from months ago.
-    consecutive_failures: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    consecutive_failures: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
 
     project: Mapped[Project] = relationship(back_populates="webhook_endpoints")
     deliveries: Mapped[list[WebhookDelivery]] = relationship(
@@ -162,10 +168,15 @@ class WebhookDelivery(Base, TimestampMixin):
     )
 
     status: Mapped[str] = mapped_column(
-        String(32), nullable=False, default=DeliveryStatus.PENDING.value
+        String(32),
+        nullable=False,
+        default=DeliveryStatus.PENDING.value,
+        server_default=DeliveryStatus.PENDING.value,
     )
 
-    attempt_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    attempt_count: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
 
     #: What the endpoint answered, when it answered at all. Null means the
     #: request never got that far - see ``error``.

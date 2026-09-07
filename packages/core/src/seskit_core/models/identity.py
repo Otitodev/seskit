@@ -19,7 +19,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import JSON, DateTime, ForeignKey, String, Text, UniqueConstraint
+from sqlalchemy import JSON, DateTime, ForeignKey, Index, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from seskit_core.db import Base
@@ -51,6 +51,14 @@ class Identity(Base, TimestampMixin):
         UniqueConstraint(
             "project_id", "value", "region", name="uq_identities_project_value_region"
         ),
+        # The refcount asks "does any other project still use this?" on every
+        # delete, so the lookup it performs is worth an index of its own.
+        #
+        # Declared here as well as in the migration that created it. It was
+        # only in the migration, which meant every test ran without it and
+        # `alembic revision --autogenerate` would have written a migration
+        # dropping it - silently removing the index that query depends on.
+        Index("ix_identities_value_region", "value", "region"),
     )
 
     id: Mapped[str] = mapped_column(

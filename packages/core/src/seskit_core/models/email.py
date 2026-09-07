@@ -110,6 +110,12 @@ class Email(Base, TimestampMixin):
     #: the message at the other, so a header that is not on the row is a header
     #: that was never sent. They are also what the message was *actually* sent
     #: with, which is the question asked when a receiver did something odd.
+    #: No ``server_default``. The migration that added this column carried one
+    #: to backfill existing rows, and a later migration drops it: Postgres has
+    #: no equality operator for ``json``, so a server default on this type
+    #: cannot be compared and makes ``alembic revision --autogenerate`` fail
+    #: outright. Nothing inserts an email outside the ORM, so the Python
+    #: default below is the whole story.
     headers: Mapped[dict[str, str]] = mapped_column(JSON, nullable=False, default=dict)
 
     status: Mapped[str] = mapped_column(
