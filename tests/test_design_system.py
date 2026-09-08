@@ -53,6 +53,26 @@ def _components() -> str:
     return css.split(_COMPONENTS_START, 1)[1]
 
 
+def _rule(css: str, selector: str) -> str:
+    """The declarations of one rule, by its exact selector."""
+    start = css.index(selector + " {") + len(selector) + 2
+    return css[start : css.index("}", start)]
+
+
+def _theme_blocks(css: str) -> list[str]:
+    """The three places a token is given a value: the light default, the
+    prefers-color-scheme override, and the explicit dark choice.
+    """
+    blocks = [css[m.start() : css.index("}", m.start())] for m in re.finditer(r":root", css)]
+    assert len(blocks) == 3, f"expected three theme blocks, found {len(blocks)}"
+    return blocks
+
+
+def _token(block: str, name: str) -> str | None:
+    match = re.search(rf"{re.escape(name)}:\s*([^;]+);", block)
+    return match.group(1).strip() if match else None
+
+
 def _declarations(text: str) -> list[str]:
     """Lines that set something, ignoring comments.
 
@@ -119,6 +139,30 @@ def test_every_token_used_is_a_token_that_exists() -> None:
     used = set(_REFERENCED.findall(css))
 
     assert used <= defined, f"used but never defined: {sorted(used - defined)}"
+
+
+# --------------------------------------------------------------- surfaces ---
+
+
+def test_a_code_block_is_a_different_surface_from_the_card_under_it() -> None:
+    """It used `--surface-raised`, which in the light theme is `#ffffff` - the
+    same white as the card it sits inside. So a code block had nothing but its
+    border, in the theme most people read the docs in.
+
+    Raised was the wrong direction as well as the wrong colour. A code block is
+    a well in a card, not something floating over it; `--surface-raised` still
+    means what it says for the things that do float - the toast and the skip
+    link, both of which sit over the page rather than in a card.
+    """
+    css = _css()
+
+    assert "background: var(--surface-sunken);" in _rule(css, ".code")
+
+    for block in _theme_blocks(css):
+        surface = _token(block, "--surface")
+        sunken = _token(block, "--surface-sunken")
+        assert surface and sunken, block[:40]
+        assert surface != sunken, f"a sunken surface equal to the card: {surface}"
 
 
 # ------------------------------------------------------------------ guard ---

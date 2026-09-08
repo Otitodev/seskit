@@ -24,6 +24,11 @@
   --surface: #ffffff;
   --surface-raised: #ffffff;
   --surface-hover: #f4f6f9;
+  /* A well inside a card, for a code block - the one surface that has to sit
+     *under* the card rather than on it. Raised is the wrong direction for it
+     and in this theme also the wrong colour: --surface-raised is white, the
+     same white as the card, so a code block had nothing but its border. */
+  --surface-sunken: #f2f4f7;
 
   --border: #e4e7ec;
   --border-strong: #d0d5dd;
@@ -136,6 +141,7 @@
     --surface: #14171d;
     --surface-raised: #191d24;
     --surface-hover: #1c2129;
+    --surface-sunken: #0d1015;
 
     --border: #232830;
     --border-strong: #2f3641;
@@ -185,6 +191,7 @@
   --surface: #14171d;
   --surface-raised: #191d24;
   --surface-hover: #1c2129;
+  --surface-sunken: #0d1015;
 
   --border: #232830;
   --border-strong: #2f3641;
@@ -975,7 +982,7 @@ svg {
   position: relative;
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
-  background: var(--surface-raised);
+  background: var(--surface-sunken);
   overflow: hidden;
 }
 
