@@ -597,9 +597,31 @@ svg {
   font-weight: 600;
 }
 
-.card__body { padding: var(--space-5); }
+/* A card body lays its children out; it does not just pad them.
+
+   The reset sets `* { margin: 0 }`, and this was a plain padded block, so
+   anything a page put inside it touched whatever came next. Every card with
+   more than one child was affected and the Webhooks page was the worst of
+   them: a description list, a row of three buttons, a paragraph, a heading and
+   a table, all flush against each other.
+
+   Fixed here rather than by wrapping each page's contents in `.stack`, because
+   the pages were not doing anything wrong - a card that only pads is. */
+.card__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-5);
+}
 
 .card--flush .card__body { padding: 0; }
+
+/* A heading inside a body starts a new section, so it wants more room above it
+   than the even rhythm gives. Only when something precedes it - a first child
+   is not a break from anything. */
+.card__body > h3:not(:first-child) {
+  margin-top: var(--space-2);
+}
 
 /* Metric tile ------------------------------------------------------------- */
 
