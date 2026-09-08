@@ -24,7 +24,7 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
-from fakes.ses import ACCOUNT_ID, FakeProviderFactory
+from fakes.ses import ACCOUNT_ID, TEST_SECRET_KEY, FakeProviderFactory
 from seskit_core.errors import APIError
 from seskit_core.models import AWSConnection, ConnectionStatus, Email, EmailProvider, EmailStatus
 from seskit_core.providers import AWSCredentials
@@ -41,7 +41,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 PASSWORD = "correct-horse-battery"
 REGION = "us-east-1"
-SECRET_KEY = "an-instance-secret"
+#: The application's own secret, not a literal.
+#:
+#: `send_one` reads it from settings rather than taking it as an argument, so a
+#: test that encrypted under any other value would find the key unreadable and
+#: the send recorded as failed - which looks exactly like the bug this file
+#: exists to catch, and is not one.
+SECRET_KEY = TEST_SECRET_KEY
 
 #: Two projects, two IAM users, two AWS accounts. The point of the phase.
 ONE = AWSCredentials(access_key_id="AKIAPROJECTONE000001", secret_access_key="secret-for-one")
