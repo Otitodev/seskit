@@ -12,7 +12,7 @@
        `script-src 'self' 'nonce-...'`, and a nonce does not license an inline
        event handler - one here is blocked, silently, and the dropdown does
        nothing at all. #}
-    <select class="input switcher__select" id="project-switcher" name="project_id"
+    <select class="input" id="project-switcher" name="project_id"
             data-auto-submit>
       {% for option in projects %}
         <option value="{{ option.id }}" {% if option.id == project.id %}selected{% endif %}>

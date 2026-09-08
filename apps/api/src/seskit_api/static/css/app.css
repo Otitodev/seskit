@@ -90,6 +90,21 @@
   --space-12: 3rem;
   --space-16: 4rem;
 
+  /* One height for anything a pointer lands on.
+
+     There were five: a 32px button, a 34px input, a 30px select, a 36px auth
+     submit and a 26px small button. Every `row row--end` form on the dashboard
+     bottom-aligns a button against an input, so two of those sat side by side
+     with the button 2px proud of the field - which is most of what "the
+     spacing looks off" turns out to mean.
+
+     A scale of three rather than one value: a table's row action and a
+     full-width sign-in button genuinely are not the same control. Three is a
+     decision; five was an accident. */
+  --control-h-sm: 28px;
+  --control-h: 34px;
+  --control-h-lg: 40px;
+
   /* Restrained radii - not everything is a pill. */
   --radius-sm: 4px;
   --radius: 6px;
@@ -617,7 +632,7 @@ svg {
   justify-content: center;
   gap: var(--space-2);
   padding: 0 var(--space-3);
-  height: 32px;
+  height: var(--control-h);
   border: 1px solid var(--border-strong);
   border-radius: var(--radius);
   background: var(--surface);
@@ -670,9 +685,9 @@ svg {
 
 .btn--danger:hover { background: var(--danger-bg); }
 
-.btn--sm { height: 26px; font-size: var(--text-sm); padding: 0 var(--space-2); }
-.btn--icon { width: 32px; padding: 0; }
-.btn--icon.btn--sm { width: 26px; }
+.btn--sm { height: var(--control-h-sm); font-size: var(--text-sm); padding: 0 var(--space-2); }
+.btn--icon { width: var(--control-h); padding: 0; }
+.btn--icon.btn--sm { width: var(--control-h-sm); }
 
 .btn__icon {
   width: 15px;
@@ -759,7 +774,7 @@ svg {
 
 .input {
   width: 100%;
-  height: 34px;
+  height: var(--control-h);
   padding: 0 var(--space-3);
   border: 1px solid var(--border-strong);
   border-radius: var(--radius);
@@ -992,9 +1007,12 @@ svg {
   text-wrap: pretty;
 }
 
+/* The one control on the page, and the reason for the large step: a
+   full-width primary action at the same height as a table's row button reads
+   as a form that has not finished loading. */
 .auth__submit {
   width: 100%;
-  height: 36px;
+  height: var(--control-h-lg);
   margin-top: var(--space-1);
 }
 
@@ -1064,11 +1082,6 @@ svg {
   letter-spacing: 0.04em;
   text-transform: uppercase;
   color: var(--text-subtle);
-}
-
-.switcher__select {
-  height: 30px;
-  font-size: var(--text-sm);
 }
 
 .switcher__current {
