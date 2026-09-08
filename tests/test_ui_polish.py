@@ -385,6 +385,22 @@ def test_the_six_counts_are_one_grid_of_equal_tiles() -> None:
     assert "auto-fit" not in _rule(_stylesheet(), ".grid-metrics")
 
 
+def test_no_navigation_is_taken_away_on_a_small_screen() -> None:
+    """`.sidebar__footer` is Settings and Docs. It was `display: none` under
+    900px, and nothing else on any page links to either, so on a phone those
+    two pages could not be reached at all.
+
+    The section label above the nav is a different case and stays hidden: a
+    heading over a horizontal bar labels nothing.
+    """
+    import re
+
+    css = _stylesheet()
+
+    assert not re.search(r"\.sidebar__footer[^{}]*\{[^{}]*display:\s*none", css)
+    assert not re.search(r"\.sidebar__nav[^{}]*\{[^{}]*display:\s*none", css)
+
+
 def test_no_table_can_scroll_the_page_sideways() -> None:
     """Wide content scrolls inside `.table-wrap`; the body never does.
 
