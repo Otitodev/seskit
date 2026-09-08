@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
+from typing import Any
 
 from fastapi import FastAPI, Request, Response, status
 from fastapi.exception_handlers import request_validation_exception_handler
@@ -87,6 +88,32 @@ def _describe(exc: RequestValidationError) -> str:
     return "; ".join(parts) or "The request body is not valid."
 
 
+class RevalidatedStatic(StaticFiles):
+    """Static files that a browser has to ask about before reusing.
+
+    `StaticFiles` sends `last-modified` and an `etag` and no `Cache-Control` at
+    all. With no directive, a browser is free to guess how long the file stays
+    fresh, and the guess in every major browser is a tenth of the file's age -
+    so an asset last changed a hundred days ago is treated as good for ten more
+    without asking. SESKit ships its whole interface in two of those files.
+
+    The effect is an upgrade that half arrives: `docker compose pull && up`
+    brings new HTML, and the dashboard renders it against the stylesheet and
+    the script from the version before. Nothing errors. It just looks wrong,
+    for a window nobody can predict, and a reload does not fix it.
+
+    `no-cache` does not mean "do not store" - it means "revalidate before
+    reuse". The etag is still there, so an unchanged file costs one 304 with no
+    body. For a dashboard served off the same box as the database, that is not
+    a trade worth thinking about.
+    """
+
+    def file_response(self, *args: Any, **kwargs: Any) -> Response:
+        response = super().file_response(*args, **kwargs)
+        response.headers["Cache-Control"] = "no-cache"
+        return response
+
+
 def create_app(settings: Settings | None = None) -> FastAPI:
     """Build the FastAPI application.
 
@@ -117,7 +144,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.add_middleware(SecurityHeadersMiddleware, settings=settings)
 
     STATIC_DIR.mkdir(parents=True, exist_ok=True)
-    app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+    app.mount("/static", RevalidatedStatic(directory=STATIC_DIR), name="static")
 
     @app.exception_handler(AuthenticationRequired)
     async def _authentication_required(
