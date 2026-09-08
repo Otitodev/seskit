@@ -26,7 +26,9 @@ from seskit_core.services import (
     activity_series,
     compute_metrics,
     get_connection,
+    is_complete,
     list_projects,
+    setup_progress,
 )
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -75,6 +77,7 @@ async def overview(
     """Render the Overview for the selected project and range."""
     time_range = TimeRange.parse(range)
     connection = await get_connection(db, project.id)
+    setup = await setup_progress(db, project.id)
 
     return render(
         request,
@@ -92,6 +95,8 @@ async def overview(
         # Distinguishes "nothing has happened yet" from "SES was never asked to
         # report", which look identical on screen and have different fixes.
         events_configured=bool(connection and connection.events_enabled),
+        setup=setup,
+        setup_done=is_complete(setup),
     )
 
 

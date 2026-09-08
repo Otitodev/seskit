@@ -18,6 +18,35 @@
     </p>
   </div>
 
+  {# The checklist, until there is nothing left on it.
+     Shown above the metrics because on a new install the metrics are six
+     zeroes: what somebody needs on their first visit is the next thing to do,
+     not a measurement of nothing.
+
+     It disappears rather than being dismissible. A checklist you can hide
+     while it is unfinished is one that stops meaning anything, and there is
+     nothing here that a project which has done all four still needs. #}
+  {% if not setup_done %}
+    {{ card_open("Finish setting up") }}
+      <ol class="setup">
+        {% for step in setup %}
+          <li class="setup__step{% if step.done %} setup__step--done{% endif %}">
+            <span class="setup__mark" aria-hidden="true">{% if step.done %}&check;{% else %}&nbsp;{% endif %}</span>
+            <span class="setup__body">
+              {% if step.done %}
+                <span class="setup__title">{{ step.title }}</span>
+                <span class="visually-hidden">- done</span>
+              {% else %}
+                <a class="setup__title" href="{{ step.href }}">{{ step.title }}</a>
+              {% endif %}
+              <span class="setup__why muted">{{ step.why }}</span>
+            </span>
+          </li>
+        {% endfor %}
+      </ol>
+    {{ card_close() }}
+  {% endif %}
+
   {% if metrics.has_activity or counts.total %}
     {% include "partials/metrics.html" %}
 
