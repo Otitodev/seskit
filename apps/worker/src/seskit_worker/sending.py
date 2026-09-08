@@ -124,8 +124,24 @@ async def send_one(
         return email.status
 
     name = email.provider or EmailProvider.SMTP.value
-    region, credentials = await _aws_for(session, email, secret_key=settings.SECRET_KEY)
-    provider = build(name, region=region, settings=settings, credentials=credentials)
+
+    try:
+        region, credentials = await _aws_for(session, email, secret_key=settings.SECRET_KEY)
+        provider = build(name, region=region, settings=settings, credentials=credentials)
+    except APIError as error:
+        # Terminal, and it has to be handled here rather than left to raise. A
+        # missing or unreadable key stays missing until somebody reconnects the
+        # project, so retrying is pure repetition - and left uncaught this
+        # would sit in `queued` while ARQ tried it on a schedule for ever, with
+        # nothing on the dashboard to say why.
+        record_failure(email, error)
+        await session.commit()
+        logger.info(
+            "send_failed_before_provider",
+            email_id=email_id,
+            error_type=error.error_type.value,
+        )
+        return EmailStatus.FAILED.value
 
     email.status = EmailStatus.SENDING.value
     await session.commit()
