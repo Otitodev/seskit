@@ -1,0 +1,41 @@
+# Checks that belong to the pull request itself rather than to its code.
+#
+# A separate workflow from ci.yml on purpose. This has to run on `edited`, so
+# that fixing a description clears the check - and putting `edited` on ci.yml
+# would re-run the whole test suite, Postgres and Redis included, every time
+# somebody corrects a typo in a paragraph.
+name: Pull request
+
+on:
+  pull_request:
+    # `edited` is the one that matters and the one most often left out. Without
+    # it the check runs once, at open, and a corrected description never clears
+    # it - which reads as a broken check rather than an unmet rule.
+    types: [opened, edited, reopened, synchronize]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  description:
+    name: Description
+    runs-on: ubuntu-latest
+    # Bots do not read templates. Dependabot's descriptions are generated and
+    # useful as they are, and failing them would only train people to ignore a
+    # red check.
+    if: github.event.pull_request.user.type != 'Bot'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check the description
+        env:
+          # Through the environment, never interpolated into the `run` script.
+          # A pull request body is text an outside contributor controls, and
+          # `${{ }}` inside `run:` is substituted before the shell sees it - so
+          # a body containing shell syntax would execute here.
+          BODY: ${{ github.event.pull_request.body }}
+        run: |
+          printf '%s' "$BODY" > "$RUNNER_TEMP/pr-body.md"
+          python3 scripts/check_pr_body.py "$RUNNER_TEMP/pr-body.md"
