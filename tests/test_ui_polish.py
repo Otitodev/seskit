@@ -255,7 +255,7 @@ def test_the_indicator_uses_the_styles_that_already_existed() -> None:
 
 # ---------------------------------------------------- accessibility floor ---
 
-# `design-system.md` calls these non-negotiable and every one of them was
+# `docs/design/system.md` calls these non-negotiable and every one of them was
 # already true, apart from the skip link. They are asserted rather than left as
 # prose because each is the kind of thing a single later template quietly
 # breaks - and nothing else in the suite would notice.
