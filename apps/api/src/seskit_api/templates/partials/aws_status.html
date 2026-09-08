@@ -218,8 +218,10 @@
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         <input type="hidden" name="region" value="{{ connection.region }}">
 
+        {# No placeholder here. Somebody replacing a key has seen one, and an
+           example access key id on the page is indistinguishable from the
+           stored one at a glance. #}
         {{ field("access_key_id", "New access key ID",
-                 placeholder="AKIAIOSFODNN7EXAMPLE",
                  attrs='maxlength="128" autocomplete="off" spellcheck="false"') }}
         {{ field("secret_access_key", "New secret access key", type="password",
                  attrs='maxlength="256" autocomplete="off"') }}
