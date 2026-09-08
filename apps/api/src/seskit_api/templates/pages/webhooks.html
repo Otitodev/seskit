@@ -76,19 +76,27 @@
                which is the whole point of this being an edit rather than a
                delete and a re-add - nobody should have to re-key verification
                on both sides at once. #}
+            {# A stack inside the value, because this is the one row here
+               holding a control and a note rather than a badge or a string.
+               `dd` lays its children out in a row - which is right for the two
+               badges on the AWS page and wrong here, where it put the note
+               beside the Save button and squeezed a 2048-character URL into
+               whatever width was left. #}
             <dd>
-              <form class="row row--end" method="post"
-                    action="/webhooks/{{ endpoint.id }}/url">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-                <input class="input input--mono grow" id="url-{{ endpoint.id }}"
-                       type="url" name="url" value="{{ endpoint.url }}"
-                       maxlength="2048" autocomplete="off" required>
-                {{ button("Save", type="submit") }}
-              </form>
-              <p class="muted">
-                Deliveries already queued go to the new URL, and the signing
-                secret does not change.
-              </p>
+              <div class="stack grow">
+                <form class="row row--end" method="post"
+                      action="/webhooks/{{ endpoint.id }}/url">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                  <input class="input input--mono grow" id="url-{{ endpoint.id }}"
+                         type="url" name="url" value="{{ endpoint.url }}"
+                         maxlength="2048" autocomplete="off" required>
+                  {{ button("Save", type="submit") }}
+                </form>
+                <p class="muted">
+                  Deliveries already queued go to the new URL, and the signing
+                  secret does not change.
+                </p>
+              </div>
             </dd>
           </div>
           <div class="datalist__row">
