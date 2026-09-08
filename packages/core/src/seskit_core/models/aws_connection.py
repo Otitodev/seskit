@@ -73,6 +73,23 @@ class AWSConnection(Base, TimestampMixin):
     aws_account_id: Mapped[str] = mapped_column(String(32), nullable=False)
     region: Mapped[str] = mapped_column(String(32), nullable=False)
 
+    #: The IAM access key this project sends with. In plain text on purpose: an
+    #: access key id is an identifier, not a secret, and showing its last four
+    #: characters is how somebody tells two keys apart when deciding which to
+    #: rotate. AWS documents it as 16-128 characters, so the column is sized for
+    #: the ceiling rather than for today's 20.
+    aws_access_key_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+
+    #: The matching secret, Fernet-encrypted under a key derived from
+    #: SECRET_KEY. Never decrypted here - `seskit_core.services.aws` owns that,
+    #: because a model that decrypts on attribute access is a model that
+    #: decrypts into a repr, a log line and a template.
+    #:
+    #: Text rather than bytes so a row reads as obviously encrypted in `psql`
+    #: instead of as a blob somebody has to decode before they can tell what it
+    #: is.
+    aws_secret_access_key_encrypted: Mapped[str | None] = mapped_column(Text, nullable=True)
+
     status: Mapped[str] = mapped_column(
         String(32), nullable=False, default=ConnectionStatus.ERROR.value
     )
@@ -122,6 +139,17 @@ class AWSConnection(Base, TimestampMixin):
     )
 
     project: Mapped[Project] = relationship(back_populates="aws_connection")
+
+    @property
+    def has_credentials(self) -> bool:
+        """Whether this row can actually reach AWS.
+
+        False for every connection made before Phase 14, which stored no key
+        because credentials came from the environment. Those rows are marked
+        `error` by the migration, so this is a belt to that braces rather than
+        the thing gating a call.
+        """
+        return bool(self.aws_access_key_id and self.aws_secret_access_key_encrypted)
 
     @property
     def is_connected(self) -> bool:

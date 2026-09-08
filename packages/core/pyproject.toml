@@ -11,6 +11,8 @@ dependencies = [
     "redis>=5.0",
     "structlog>=24.4",
     "pwdlib[argon2]>=0.2",
+    # Fernet, for the AWS secret access key stored per project (Phase 14).
+    "cryptography>=43",
     "python-ulid>=3.0",
 ]
 
