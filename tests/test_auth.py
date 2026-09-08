@@ -296,6 +296,31 @@ async def test_switching_to_your_own_project_works(
     assert "Staging" in (await app_client.get("/")).text
 
 
+async def test_the_switcher_can_be_submitted_without_a_script(
+    app_client: AsyncClient, db_session: AsyncSession
+) -> None:
+    """The dropdown submits on change, from app.js - and the button beside it
+    is what is left if that file never arrives.
+
+    It shipped as `onchange` and as a <noscript> button, which is the pairing
+    that fails: the CSP refuses the handler while scripting stays enabled, so
+    nothing submits and nothing appears in its place.
+    """
+    await _sign_in(app_client)
+    from seskit_core.services import create_project, get_user_by_email
+
+    user = await get_user_by_email(db_session, "owner@example.com")
+    assert user is not None
+    await create_project(db_session, user_id=user.id, name="Staging")
+
+    body = (await app_client.get("/")).text
+
+    assert 'id="project-switcher"' in body
+    assert "data-auto-submit" in body
+    assert 'type="submit"' in body
+    assert "noscript" not in body
+
+
 async def test_switching_to_someone_elses_project_is_denied(
     app_client: AsyncClient, db_session: AsyncSession
 ) -> None:

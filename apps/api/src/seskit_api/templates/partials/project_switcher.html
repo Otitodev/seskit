@@ -7,17 +7,25 @@
   <form class="switcher" method="post" action="/projects/switch">
     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
     <label class="switcher__label" for="project-switcher">Project</label>
+    {# Submitting on change keeps the switch to one interaction. The handler
+       lives in app.js rather than in an onchange attribute: the CSP is
+       `script-src 'self' 'nonce-...'`, and a nonce does not license an inline
+       event handler - one here is blocked, silently, and the dropdown does
+       nothing at all. #}
     <select class="input switcher__select" id="project-switcher" name="project_id"
-            onchange="this.form.submit()">
+            data-auto-submit>
       {% for option in projects %}
         <option value="{{ option.id }}" {% if option.id == project.id %}selected{% endif %}>
           {{ option.name }}
         </option>
       {% endfor %}
     </select>
-    {# Submitting via onchange keeps the switch to one interaction. The button
-       is the keyboard and no-JavaScript path, not a duplicate control. #}
-    <noscript><button class="btn btn--sm" type="submit">Switch</button></noscript>
+    {# Rendered always and hidden by the script that replaces it, rather than
+       put in <noscript>. Scripts being disabled is not the only way this page
+       ends up without them: a blocked file or a CSP refusal leaves scripting
+       enabled, so <noscript> stays hidden and the fallback never appears. #}
+    <button class="btn btn--sm switcher__submit" type="submit"
+            data-auto-submit-fallback>Switch</button>
   </form>
 {% elif project %}
   <div class="switcher">

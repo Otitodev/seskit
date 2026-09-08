@@ -269,6 +269,16 @@ svg {
   max-width: 100%;
 }
 
+/* `hidden` has to beat a component class.
+
+   The UA sheet's `[hidden] { display: none }` is a single attribute selector,
+   so any class that sets `display` outruns it - `.btn` is `inline-flex`, and a
+   hidden button carrying it stays on screen. Restated once, with weight, so
+   `el.hidden = true` means the same thing everywhere. */
+[hidden] {
+  display: none !important;
+}
+
 /* One visible focus treatment everywhere - keyboard access is a requirement,
    not a nice-to-have. */
 :focus-visible {
@@ -1065,6 +1075,13 @@ svg {
   font-size: var(--text-base);
   font-weight: 500;
   color: var(--text);
+}
+
+/* Only on screen when the script that submits on change did not arrive, so it
+   is sized like a control rather than stretched across the sidebar. */
+.switcher__submit {
+  align-self: flex-start;
+  margin-top: var(--space-1);
 }
 
 /* Skip link.

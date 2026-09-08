@@ -30,6 +30,14 @@ TEMPLATES = ROOT / "apps" / "api" / "src" / "seskit_api" / "templates"
 #: An opening <script> tag with no `src`, i.e. one whose body is inline.
 _INLINE_SCRIPT = re.compile(r"<script(?![^>]*\ssrc=)[^>]*>")
 
+#: An inline event handler attribute - onchange=, onclick=, and the rest.
+#:
+#: Worth its own guard rather than being folded into the one above, because the
+#: fix is different. An inline script can be made to run by giving it the
+#: nonce; an inline handler cannot be made to run at all under this policy, so
+#: the only fix is to move it into a file.
+_INLINE_HANDLER = re.compile(r"\son[a-z]+\s*=\s*[\"']")
+
 
 # ---------------------------------------------------------------- headers ---
 
@@ -163,6 +171,27 @@ def test_no_template_ships_an_inline_script_without_a_nonce(template: str) -> No
     assert not unnonced, f"{template} has an inline script with no nonce: {unnonced}"
 
 
+@pytest.mark.parametrize(
+    "template",
+    sorted(path.relative_to(TEMPLATES).as_posix() for path in TEMPLATES.rglob("*.html")),
+)
+def test_no_template_ships_an_inline_event_handler(template: str) -> None:
+    """A nonce does not license one, so this is not a lesser version of the
+    guard above - it is the case that has no fix short of moving the code.
+
+    The project switcher shipped `onchange="this.form.submit()"` for two
+    phases. It was refused on every page load, in silence, and the dropdown
+    simply did nothing: no error a user would see, and a <noscript> fallback
+    that stayed hidden because scripting was enabled the whole time.
+    """
+    text = (TEMPLATES / template).read_text(encoding="utf-8")
+
+    assert not _INLINE_HANDLER.findall(text), (
+        f"{template} has an inline event handler, which the CSP refuses. "
+        f"Move it into static/js/app.js."
+    )
+
+
 def test_the_guard_would_notice() -> None:
     """A guard nobody has seen fail is a guard nobody should trust."""
     assert _INLINE_SCRIPT.findall("<script>alert(1)</script>") == ["<script>"]
@@ -170,6 +199,13 @@ def test_the_guard_would_notice() -> None:
     assert _INLINE_SCRIPT.findall('<script nonce="{{ csp_nonce }}">') == [
         '<script nonce="{{ csp_nonce }}">'
     ]
+
+    assert _INLINE_HANDLER.findall('<select onchange="this.form.submit()">')
+    assert _INLINE_HANDLER.findall("<button onclick='go()'>")
+    # Not every attribute beginning with "on": the data attribute that replaced
+    # the handler must not read as one, or the guard fails on its own fix.
+    assert _INLINE_HANDLER.findall("<select data-auto-submit>") == []
+    assert _INLINE_HANDLER.findall('<a href="/only">') == []
 
 
 # ----------------------------------------------------------------- policy ---
