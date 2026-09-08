@@ -345,6 +345,26 @@ def test_the_chevron_is_drawn_for_both_themes() -> None:
     )
 
 
+def test_every_container_that_holds_page_content_spaces_it() -> None:
+    """The reset sets `* { margin: 0 }`, so a container that only pads is a
+    container whose children touch.
+
+    `.card__body` was exactly that. Every card holding more than one thing was
+    affected, and the Webhooks page was the worst of them: a description list,
+    a row of three buttons, a paragraph, a heading and a table, all flush.
+
+    Asserted on the containers rather than on the pages, because the pages were
+    not doing anything wrong. A page should be able to put two elements in a
+    card without knowing that it has to space them itself.
+    """
+    css = _stylesheet()
+
+    for selector in (".content", ".stack", ".card__body", ".auth__card"):
+        assert "gap:" in _rule(css, selector), (
+            f"{selector} holds arbitrary content and supplies no spacing of its own"
+        )
+
+
 def test_no_table_can_scroll_the_page_sideways() -> None:
     """Wide content scrolls inside `.table-wrap`; the body never does.
 
