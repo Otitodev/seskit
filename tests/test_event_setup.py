@@ -17,10 +17,11 @@ from __future__ import annotations
 from typing import ClassVar
 
 import pytest
-from fakes.ses import TEST_SECRET_KEY
+from fakes.ses import FAKE_CREDENTIALS, TEST_SECRET_KEY
 from seskit_core.errors import APIError, ErrorType
 from seskit_core.models import AWSConnection, ConnectionStatus
 from seskit_core.providers import AWSCredentials, EventInfrastructure
+from seskit_core.security.aws_credentials import encrypt_secret_access_key
 from seskit_core.services import (
     create_project,
     disconnect_aws,
@@ -119,6 +120,10 @@ async def _connection(
         aws_account_id=ACCOUNT,
         region=region,
         status=ConnectionStatus.CONNECTED.value,
+        aws_access_key_id=FAKE_CREDENTIALS.access_key_id,
+        aws_secret_access_key_encrypted=encrypt_secret_access_key(
+            FAKE_CREDENTIALS.secret_access_key, secret_key=TEST_SECRET_KEY
+        ),
     )
     session.add(connection)
     await session.flush()

@@ -183,7 +183,7 @@ def test_identity_status_is_immutable() -> None:
 
 from datetime import timedelta
 
-from fakes.ses import TEST_SECRET_KEY, FakeProviderFactory, denied
+from fakes.ses import TEST_SECRET_KEY, FakeProviderFactory, connect_project, denied
 from redis.asyncio import Redis
 from seskit_core.errors import APIError
 from seskit_core.models import Project, utcnow
@@ -209,6 +209,9 @@ VERIFIED = 30 * 24 * 60 * 60
 async def _make_project(session: AsyncSession, *, email: str = "owner@example.com") -> str:
     user = await register_user(session, email=email, password=PASSWORD, allow_signup=True)
     project = await create_project(session, user_id=user.id, name="Sending")
+    # Verifying a sender needs a connection to find the project's key on. The
+    # Domains page has always required one; until Phase 14 the service did not.
+    await connect_project(session, project.id)
     return str(project.id)
 
 

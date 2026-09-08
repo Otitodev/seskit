@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from datetime import timedelta
 
-from fakes.ses import TEST_SECRET_KEY, FakeProviderFactory, denied
+from fakes.ses import TEST_SECRET_KEY, FakeProviderFactory, connect_project, denied
 from seskit_core.models import utcnow
 from seskit_core.services import (
     add_identity,
@@ -36,6 +36,7 @@ async def _identity(session: AsyncSession, factory: FakeProviderFactory, value: 
         session, email=f"{value}@example.com", password=PASSWORD, allow_signup=True
     )
     project = await create_project(session, user_id=user.id, name="Sending")
+    await connect_project(session, project.id)
     return await add_identity(
         session,
         factory,

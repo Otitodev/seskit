@@ -9,7 +9,7 @@ possible behaviours and the easiest one to write by accident.
 from __future__ import annotations
 
 import pytest
-from fakes.ses import FAKE_CREDENTIALS, TEST_SECRET_KEY, FakeProviderFactory
+from fakes.ses import FAKE_CREDENTIALS, TEST_SECRET_KEY, FakeProviderFactory, connect_project
 from seskit_core.errors import APIError, ErrorType
 from seskit_core.models import Email, EmailProvider
 from seskit_core.services import (
@@ -34,6 +34,7 @@ SENDER = "Acme <hello@example.com>"
 async def _project(session: AsyncSession, *, email: str = "owner@example.com") -> str:
     user = await register_user(session, email=email, password=PASSWORD, allow_signup=True)
     project = await create_project(session, user_id=user.id, name="Sending")
+    await connect_project(session, project.id)
     return str(project.id)
 
 
