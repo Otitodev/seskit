@@ -1326,8 +1326,32 @@ svg {
   }
 
   .sidebar__nav { flex-direction: row; }
-  .sidebar__section,
-  .sidebar__footer { display: none; }
+
+  /* The section label goes, because a heading over a horizontal bar labels
+     nothing. The footer stays: it is Settings and Docs, and hiding it took two
+     destinations out of reach on a phone with nothing else linking to them. */
+  .sidebar__section { display: none; }
+
+  .sidebar__footer {
+    flex-direction: row;
+    margin-top: 0;
+    padding-top: var(--space-1);
+    padding-left: var(--space-3);
+    /* A divider on the side it is now on. */
+    border-top: none;
+    border-left: 1px solid var(--border);
+  }
+
+  /* The bar scrolls, so nothing in it should be compressed to fit - that is
+     what the scrolling is for. */
+  .sidebar__nav,
+  .sidebar__footer,
+  .nav-item,
+  .switcher {
+    flex: none;
+  }
+
+  .nav-item { white-space: nowrap; }
 
   .content { padding: var(--space-6) var(--space-4) var(--space-12); }
 }
