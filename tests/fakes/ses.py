@@ -17,6 +17,7 @@ from typing import ClassVar
 from seskit_core.errors import APIError, ErrorType
 from seskit_core.providers import (
     AccountStatus,
+    AWSCredentials,
     EventInfrastructure,
     IdentityStatus,
     IdentityType,
@@ -37,12 +38,26 @@ PRODUCTION_QUOTA = SendingQuota(
 )
 
 
+#: What a test connects with. Not a real key - `FakeProvider` never reaches
+#: AWS - but it has to round-trip through the encryption, so it is a value and
+#: not a placeholder string somewhere.
+FAKE_CREDENTIALS = AWSCredentials(
+    access_key_id="AKIAIOSFODNN7EXAMPLE",
+    secret_access_key="wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
+)
+
+#: The instance secret a test encrypts under. Whatever stores a credential and
+#: whatever reads it back must agree, so both come from here.
+TEST_SECRET_KEY = "test-instance-secret-key"
+
+
 class FakeProvider:
     """Answers ``verify_account`` with whatever the test asked for."""
 
     def __init__(
         self,
         region: str,
+        credentials: AWSCredentials | None = None,
         *,
         sandbox: bool = True,
         sending_enabled: bool = True,
@@ -155,10 +170,15 @@ class FakeProviderFactory:
         self.provider = FakeProvider("", **self._kwargs)  # type: ignore[arg-type]
         #: How many times a route asked for a provider at all.
         self.builds = 0
+        #: The credentials the last build was handed. Recorded because "does
+        #: this project send on its own key?" is now a thing a test can ask,
+        #: and getting it wrong means sending from somebody else's account.
+        self.credentials: AWSCredentials | None = None
 
-    def __call__(self, region: str) -> FakeProvider:
+    def __call__(self, region: str, credentials: AWSCredentials) -> FakeProvider:
         self.builds += 1
         self.provider.region = region
+        self.credentials = credentials
         return self.provider
 
 
@@ -174,8 +194,9 @@ class FakeProvisioner:
     #: to see every call across a request.
     calls: ClassVar[list[str]] = []
 
-    def __init__(self, region: str) -> None:
+    def __init__(self, region: str, credentials: AWSCredentials | None = None) -> None:
         self.region = region
+        self.credentials = credentials
 
     async def provision_events(
         self,

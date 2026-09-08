@@ -108,6 +108,7 @@ async def add(
     current: Annotated[CurrentUser, Depends(require_user)],
     project: Annotated[Project, Depends(require_project)],
     provider_factory: Annotated[ProviderFactory, Depends(get_provider_factory)],
+    settings: Annotated[Settings, Depends(get_app_settings)],
     value: Annotated[str, Form()] = "",
 ) -> HTMLResponse:
     """Add a domain or an email address.
@@ -130,6 +131,7 @@ async def add(
             project_id=project.id,
             value=value,
             region=connection.region,
+            secret_key=settings.SECRET_KEY,
         )
     except APIError as error:
         return await _page(
@@ -170,6 +172,7 @@ async def refresh(
         provider_factory,
         identity,
         interval_seconds=settings.IDENTITY_REFRESH_INTERVAL_SECONDS,
+        secret_key=settings.SECRET_KEY,
     )
     await db.commit()
 
@@ -191,6 +194,7 @@ async def delete(
     current: Annotated[CurrentUser, Depends(require_user)],
     project: Annotated[Project, Depends(require_project)],
     provider_factory: Annotated[ProviderFactory, Depends(get_provider_factory)],
+    settings: Annotated[Settings, Depends(get_app_settings)],
 ) -> HTMLResponse:
     """Remove this project's identity.
 
@@ -208,7 +212,7 @@ async def delete(
     removed = identity.value
 
     try:
-        await remove_identity(db, provider_factory, identity)
+        await remove_identity(db, provider_factory, identity, secret_key=settings.SECRET_KEY)
     except APIError as error:
         return await _page(
             request, db, current, project, error=error.message, status_code=_status_for(error)

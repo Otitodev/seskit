@@ -17,9 +17,10 @@ from __future__ import annotations
 from typing import ClassVar
 
 import pytest
+from fakes.ses import TEST_SECRET_KEY
 from seskit_core.errors import APIError, ErrorType
 from seskit_core.models import AWSConnection, ConnectionStatus
-from seskit_core.providers import EventInfrastructure
+from seskit_core.providers import AWSCredentials, EventInfrastructure
 from seskit_core.services import (
     create_project,
     disconnect_aws,
@@ -43,8 +44,15 @@ class FakeProvisioner:
     #: refcount observable at all.
     calls: ClassVar[list[tuple[str, object]]] = []
 
-    def __init__(self, region: str, *, error: APIError | None = None) -> None:
+    def __init__(
+        self,
+        region: str,
+        credentials: AWSCredentials | None = None,
+        *,
+        error: APIError | None = None,
+    ) -> None:
         self.region = region
+        self.credentials = credentials
         self.error = error
 
     async def provision_events(
@@ -93,8 +101,8 @@ def _reset_calls() -> None:
     FakeProvisioner.calls = []
 
 
-def factory(region: str) -> FakeProvisioner:
-    return FakeProvisioner(region)
+def factory(region: str, credentials: AWSCredentials | None = None) -> FakeProvisioner:
+    return FakeProvisioner(region, credentials)
 
 
 def _removals() -> list[EventInfrastructure]:
@@ -127,7 +135,12 @@ async def test_setup_records_what_was_created(db_session: AsyncSession) -> None:
     connection = await _connection(db_session, email="a@example.com", name="One")
 
     await setup_events(
-        db_session, factory, connection, resource_prefix="seskit", configuration_set="seskit"
+        db_session,
+        factory,
+        connection,
+        resource_prefix="seskit",
+        configuration_set="seskit",
+        secret_key=TEST_SECRET_KEY,
     )
 
     assert connection.events_enabled is True
@@ -142,11 +155,21 @@ async def test_setup_is_repeatable(db_session: AsyncSession) -> None:
     connection = await _connection(db_session, email="a@example.com", name="One")
 
     await setup_events(
-        db_session, factory, connection, resource_prefix="seskit", configuration_set="seskit"
+        db_session,
+        factory,
+        connection,
+        resource_prefix="seskit",
+        configuration_set="seskit",
+        secret_key=TEST_SECRET_KEY,
     )
     first = connection.event_topic_arn
     await setup_events(
-        db_session, factory, connection, resource_prefix="seskit", configuration_set="seskit"
+        db_session,
+        factory,
+        connection,
+        resource_prefix="seskit",
+        configuration_set="seskit",
+        secret_key=TEST_SECRET_KEY,
     )
 
     assert connection.event_topic_arn == first
@@ -160,10 +183,15 @@ async def test_teardown_removes_infrastructure_no_one_else_uses(
 ) -> None:
     connection = await _connection(db_session, email="a@example.com", name="One")
     await setup_events(
-        db_session, factory, connection, resource_prefix="seskit", configuration_set="seskit"
+        db_session,
+        factory,
+        connection,
+        resource_prefix="seskit",
+        configuration_set="seskit",
+        secret_key=TEST_SECRET_KEY,
     )
 
-    removed = await teardown_events(db_session, factory, connection)
+    removed = await teardown_events(db_session, factory, connection, secret_key=TEST_SECRET_KEY)
 
     assert removed is True
     assert len(_removals()) == 1
@@ -183,10 +211,15 @@ async def test_teardown_leaves_infrastructure_another_project_shares(
     theirs = await _connection(db_session, email="b@example.com", name="Two")
     for connection in (mine, theirs):
         await setup_events(
-            db_session, factory, connection, resource_prefix="seskit", configuration_set="seskit"
+            db_session,
+            factory,
+            connection,
+            resource_prefix="seskit",
+            configuration_set="seskit",
+            secret_key=TEST_SECRET_KEY,
         )
 
-    removed = await teardown_events(db_session, factory, mine)
+    removed = await teardown_events(db_session, factory, mine, secret_key=TEST_SECRET_KEY)
 
     assert removed is False
     assert _removals() == []
@@ -205,10 +238,15 @@ async def test_a_project_in_another_region_does_not_hold_it_open(
     elsewhere = await _connection(db_session, email="b@example.com", name="Two", region="eu-west-1")
     for connection in (mine, elsewhere):
         await setup_events(
-            db_session, factory, connection, resource_prefix="seskit", configuration_set="seskit"
+            db_session,
+            factory,
+            connection,
+            resource_prefix="seskit",
+            configuration_set="seskit",
+            secret_key=TEST_SECRET_KEY,
         )
 
-    removed = await teardown_events(db_session, factory, mine)
+    removed = await teardown_events(db_session, factory, mine, secret_key=TEST_SECRET_KEY)
 
     assert removed is True
 
@@ -221,11 +259,16 @@ async def test_the_last_project_out_removes_it(db_session: AsyncSession) -> None
     theirs = await _connection(db_session, email="b@example.com", name="Two")
     for connection in (mine, theirs):
         await setup_events(
-            db_session, factory, connection, resource_prefix="seskit", configuration_set="seskit"
+            db_session,
+            factory,
+            connection,
+            resource_prefix="seskit",
+            configuration_set="seskit",
+            secret_key=TEST_SECRET_KEY,
         )
 
-    await teardown_events(db_session, factory, mine)
-    removed = await teardown_events(db_session, factory, theirs)
+    await teardown_events(db_session, factory, mine, secret_key=TEST_SECRET_KEY)
+    removed = await teardown_events(db_session, factory, theirs, secret_key=TEST_SECRET_KEY)
 
     assert removed is True
     assert len(_removals()) == 1
@@ -234,7 +277,9 @@ async def test_the_last_project_out_removes_it(db_session: AsyncSession) -> None
 async def test_teardown_without_infrastructure_does_nothing(db_session: AsyncSession) -> None:
     connection = await _connection(db_session, email="a@example.com", name="One")
 
-    assert await teardown_events(db_session, factory, connection) is False
+    assert (
+        await teardown_events(db_session, factory, connection, secret_key=TEST_SECRET_KEY) is False
+    )
     assert _removals() == []
 
 
@@ -249,10 +294,21 @@ async def test_disconnecting_removes_the_infrastructure(
     """
     connection = await _connection(db_session, email="a@example.com", name="One")
     await setup_events(
-        db_session, factory, connection, resource_prefix="seskit", configuration_set="seskit"
+        db_session,
+        factory,
+        connection,
+        resource_prefix="seskit",
+        configuration_set="seskit",
+        secret_key=TEST_SECRET_KEY,
     )
 
-    await disconnect_aws(db_session, redis_client, connection, provisioner_factory=factory)  # type: ignore[arg-type]
+    await disconnect_aws(
+        db_session,
+        redis_client,  # type: ignore[arg-type]
+        connection,
+        provisioner_factory=factory,
+        secret_key=TEST_SECRET_KEY,
+    )
 
     assert len(_removals()) == 1
 
@@ -266,11 +322,16 @@ async def test_disconnecting_without_a_provisioner_refuses(
     """
     connection = await _connection(db_session, email="a@example.com", name="One")
     await setup_events(
-        db_session, factory, connection, resource_prefix="seskit", configuration_set="seskit"
+        db_session,
+        factory,
+        connection,
+        resource_prefix="seskit",
+        configuration_set="seskit",
+        secret_key=TEST_SECRET_KEY,
     )
 
     with pytest.raises(ValueError):
-        await disconnect_aws(db_session, redis_client, connection)  # type: ignore[arg-type]
+        await disconnect_aws(db_session, redis_client, connection, secret_key=TEST_SECRET_KEY)  # type: ignore[arg-type]
 
 
 async def test_disconnecting_a_project_without_events_still_works(
@@ -279,7 +340,7 @@ async def test_disconnecting_a_project_without_events_still_works(
     """Every connection made before this phase is in this state."""
     connection = await _connection(db_session, email="a@example.com", name="One")
 
-    await disconnect_aws(db_session, redis_client, connection)  # type: ignore[arg-type]
+    await disconnect_aws(db_session, redis_client, connection, secret_key=TEST_SECRET_KEY)  # type: ignore[arg-type]
 
 
 # ---------------------------------------------------------------- tracking ---
@@ -294,7 +355,12 @@ async def test_tracking_is_off_until_asked_for(db_session: AsyncSession) -> None
     assert connection.track_opens_and_clicks is False
 
     await setup_events(
-        db_session, factory, connection, resource_prefix="seskit", configuration_set="seskit"
+        db_session,
+        factory,
+        connection,
+        resource_prefix="seskit",
+        configuration_set="seskit",
+        secret_key=TEST_SECRET_KEY,
     )
 
     assert connection.track_opens_and_clicks is False
@@ -303,10 +369,17 @@ async def test_tracking_is_off_until_asked_for(db_session: AsyncSession) -> None
 async def test_turning_tracking_on_reaches_the_provider(db_session: AsyncSession) -> None:
     connection = await _connection(db_session, email="a@example.com", name="One")
     await setup_events(
-        db_session, factory, connection, resource_prefix="seskit", configuration_set="seskit"
+        db_session,
+        factory,
+        connection,
+        resource_prefix="seskit",
+        configuration_set="seskit",
+        secret_key=TEST_SECRET_KEY,
     )
 
-    await set_open_click_tracking(db_session, factory, connection, enabled=True)
+    await set_open_click_tracking(
+        db_session, factory, connection, enabled=True, secret_key=TEST_SECRET_KEY
+    )
 
     assert ("tracking", True) in FakeProvisioner.calls
     assert connection.track_opens_and_clicks is True
@@ -318,14 +391,21 @@ async def test_the_preference_is_kept_before_events_exist(db_session: AsyncSessi
     """
     connection = await _connection(db_session, email="a@example.com", name="One")
 
-    await set_open_click_tracking(db_session, factory, connection, enabled=True)
+    await set_open_click_tracking(
+        db_session, factory, connection, enabled=True, secret_key=TEST_SECRET_KEY
+    )
 
     assert connection.track_opens_and_clicks is True
     # Nothing was called: there is no destination to update yet.
     assert FakeProvisioner.calls == []
 
     await setup_events(
-        db_session, factory, connection, resource_prefix="seskit", configuration_set="seskit"
+        db_session,
+        factory,
+        connection,
+        resource_prefix="seskit",
+        configuration_set="seskit",
+        secret_key=TEST_SECRET_KEY,
     )
 
     assert connection.track_opens_and_clicks is True
@@ -339,8 +419,10 @@ async def test_a_failed_setup_records_nothing(db_session: AsyncSession) -> None:
     message through a configuration set SES does not have.
     """
 
-    def failing(region: str) -> FakeProvisioner:
-        return FakeProvisioner(region, error=APIError(ErrorType.PROVIDER_ERROR, "AWS said no."))
+    def failing(region: str, credentials: AWSCredentials | None = None) -> FakeProvisioner:
+        return FakeProvisioner(
+            region, credentials, error=APIError(ErrorType.PROVIDER_ERROR, "AWS said no.")
+        )
 
     connection = await _connection(db_session, email="a@example.com", name="One")
 
@@ -351,6 +433,7 @@ async def test_a_failed_setup_records_nothing(db_session: AsyncSession) -> None:
             connection,
             resource_prefix="seskit",
             configuration_set="seskit",
+            secret_key=TEST_SECRET_KEY,
         )
 
     assert connection.events_enabled is False

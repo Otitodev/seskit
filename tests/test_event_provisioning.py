@@ -35,6 +35,7 @@ import pytest
 pytest.importorskip("moto", reason="moto is a dev dependency")
 
 import boto3
+from fakes.ses import FAKE_CREDENTIALS
 from moto import mock_aws
 from seskit_core.providers import EventInfrastructure
 from seskit_provider_aws_ses import (
@@ -98,7 +99,7 @@ class _RecordingSES:
 
 
 def _provisioner(monkeypatch: pytest.MonkeyPatch) -> tuple[SESEventProvisioner, _RecordingSES]:
-    provisioner = SESEventProvisioner(REGION)
+    provisioner = SESEventProvisioner(REGION, FAKE_CREDENTIALS)
     recorder = _RecordingSES(boto3.client("sesv2", region_name=REGION))
     monkeypatch.setattr(provisioner, "_ses", lambda: recorder)
     return provisioner, recorder

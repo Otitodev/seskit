@@ -24,6 +24,34 @@ SANDBOX_DAILY_LIMIT = 200
 
 
 @dataclass(frozen=True, slots=True)
+class AWSCredentials:
+    """One IAM user's long-term keys.
+
+    Core's vocabulary for "what a provider needs in order to authenticate".
+    It lives here rather than in the SES package because core must not import a
+    provider (§32.8), and both the service layer and the adapters have to name
+    the same thing.
+
+    Long-term keys only. A session token from STS expires, and a stored one
+    becomes a connection that silently stops working some hours after somebody
+    set it up - which is a worse experience than not offering it.
+    """
+
+    access_key_id: str
+    secret_access_key: str
+
+    def __repr__(self) -> str:
+        """Never the secret.
+
+        A dataclass generates a repr that prints every field, and this object
+        is passed through provider constructors that appear in tracebacks and
+        structlog output. Defining one here suppresses that generation, so
+        there is no path by which the secret reaches a log.
+        """
+        return f"AWSCredentials(access_key_id={self.access_key_id!r}, secret_access_key=***)"
+
+
+@dataclass(frozen=True, slots=True)
 class SendingQuota:
     """What the account is allowed to send, as the provider reports it.
 

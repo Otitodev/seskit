@@ -26,8 +26,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from seskit_core.errors import APIError, ErrorType
 from seskit_core.logging import get_logger
 from seskit_core.models import Identity, utcnow
-from seskit_core.providers import IdentityStatus, IdentityType
-from seskit_core.services.aws import ProviderFactory, check_is_allowed
+from seskit_core.providers import AWSCredentials, IdentityStatus, IdentityType
+from seskit_core.services.aws import ProviderFactory, check_is_allowed, get_connection
+from seskit_core.services.credentials import stored_credentials
 
 logger = get_logger(__name__)
 
@@ -122,6 +123,26 @@ async def count_other_references(session: AsyncSession, identity: Identity) -> i
     return int(count or 0)
 
 
+async def _credentials_for(
+    session: AsyncSession, project_id: str, *, secret_key: str
+) -> AWSCredentials:
+    """The access key the project sends with.
+
+    An identity carries a region but not a connection, so every call that
+    reaches SES on an identity's behalf has to find one. Raising here rather
+    than returning None keeps the three callers below to one line each: a
+    project with no connection cannot verify a sender, and that is the same
+    answer whichever of them asked.
+    """
+    connection = await get_connection(session, project_id)
+    if connection is None:
+        raise APIError(
+            ErrorType.INVALID_REQUEST,
+            "This project is not connected to AWS. Connect it on the AWS page first.",
+        )
+    return stored_credentials(connection, secret_key=secret_key)
+
+
 async def add_identity(
     session: AsyncSession,
     provider_factory: ProviderFactory,
@@ -129,6 +150,7 @@ async def add_identity(
     project_id: str,
     value: str,
     region: str,
+    secret_key: str,
 ) -> Identity:
     """Ask SES to verify a domain or address, and record what it said.
 
@@ -138,7 +160,8 @@ async def add_identity(
     """
     cleaned, identity_type = classify(value)
 
-    provider = provider_factory(region)
+    credentials = await _credentials_for(session, project_id, secret_key=secret_key)
+    provider = provider_factory(region, credentials)
     # May adopt an existing identity: the adapter turns AlreadyExists into a
     # status read, so a domain another project verified arrives already SUCCESS.
     status = await provider.create_identity(cleaned, identity_type)
@@ -168,6 +191,7 @@ async def refresh_identity(
     identity: Identity,
     *,
     interval_seconds: int,
+    secret_key: str,
 ) -> Identity:
     """Re-ask SES about one identity, if the interval allows.
 
@@ -180,7 +204,7 @@ async def refresh_identity(
     if not allowed:
         return identity
 
-    await check_identity(session, provider_factory, identity)
+    await check_identity(session, provider_factory, identity, secret_key=secret_key)
     return identity
 
 
@@ -188,6 +212,8 @@ async def check_identity(
     session: AsyncSession,
     provider_factory: ProviderFactory,
     identity: Identity,
+    *,
+    secret_key: str,
 ) -> Identity:
     """Read the current state from SES and write it onto the row.
 
@@ -195,7 +221,8 @@ async def check_identity(
     rather than raised: the job runs over many identities and one unreachable
     domain must not stop the rest.
     """
-    provider = provider_factory(identity.region)
+    credentials = await _credentials_for(session, identity.project_id, secret_key=secret_key)
+    provider = provider_factory(identity.region, credentials)
 
     try:
         status = await provider.get_identity_status(identity.value)
@@ -219,6 +246,8 @@ async def remove_identity(
     session: AsyncSession,
     provider_factory: ProviderFactory,
     identity: Identity,
+    *,
+    secret_key: str,
 ) -> bool:
     """Remove a project's identity, and the SES identity if nothing else uses it.
 
@@ -231,6 +260,9 @@ async def remove_identity(
     """
     others = await count_other_references(session, identity)
     value, region, identity_id = identity.value, identity.region, identity.id
+    # Read before the row is deleted: afterwards there is no project_id to
+    # resolve a connection from.
+    credentials = await _credentials_for(session, identity.project_id, secret_key=secret_key)
 
     await session.delete(identity)
     await session.flush()
@@ -243,7 +275,7 @@ async def remove_identity(
         )
         return False
 
-    provider = provider_factory(region)
+    provider = provider_factory(region, credentials)
     await provider.delete_identity(value)
     logger.info("identity_deleted", identity_id=identity_id)
     return True

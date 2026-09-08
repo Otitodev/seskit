@@ -10,6 +10,7 @@ from seskit_core.providers.types import (
     VERIFIED_STATUSES,
     AccountStatus,
     Attachment,
+    AWSCredentials,
     DnsRecord,
     EventInfrastructure,
     IdentityStatus,
@@ -24,6 +25,7 @@ from seskit_core.providers.types import (
 __all__ = [
     "SANDBOX_DAILY_LIMIT",
     "VERIFIED_STATUSES",
+    "AWSCredentials",
     "AccountStatus",
     "Attachment",
     "DnsRecord",

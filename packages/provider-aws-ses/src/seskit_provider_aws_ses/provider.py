@@ -28,6 +28,7 @@ from seskit_core.errors import APIError, ErrorType
 from seskit_core.logging import get_logger
 from seskit_core.providers.types import (
     AccountStatus,
+    AWSCredentials,
     IdentityStatus,
     IdentityType,
     OutboundEmail,
@@ -72,9 +73,9 @@ class SESProvider:
     would keep serving a role whose credentials have since rotated.
     """
 
-    def __init__(self, region: str) -> None:
+    def __init__(self, region: str, credentials: AWSCredentials) -> None:
         self.region = region
-        self._session = build_session(region)
+        self._session = build_session(region, credentials)
 
     # ------------------------------------------------------------ account ---
 

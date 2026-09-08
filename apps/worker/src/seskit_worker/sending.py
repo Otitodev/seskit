@@ -21,9 +21,10 @@ from typing import Any
 
 from seskit_core.config import get_settings
 from seskit_core.db import get_session_factory
-from seskit_core.errors import APIError
+from seskit_core.errors import APIError, ErrorType
 from seskit_core.logging import get_logger
 from seskit_core.models import Email, EmailProvider, EmailStatus
+from seskit_core.providers import AWSCredentials
 from seskit_core.providers import EmailProvider as EmailProviderProtocol
 from seskit_core.services import (
     is_retryable,
@@ -45,14 +46,29 @@ logger = get_logger(__name__)
 ProviderBuilder = Callable[..., EmailProviderProtocol]
 
 
-def build_provider(name: str, *, region: str, settings: Any) -> EmailProviderProtocol:
+def build_provider(
+    name: str,
+    *,
+    region: str,
+    settings: Any,
+    credentials: AWSCredentials | None = None,
+) -> EmailProviderProtocol:
     """Map a provider name onto an adapter.
 
     The mapping lives here rather than in core, which must not import a provider
     (§32.8). Core decides *which*; the app knows *what*.
+
+    ``credentials`` is required for SES and meaningless for SMTP, which is why
+    it is optional here rather than positional: the caller resolves it only on
+    the branch that needs it.
     """
     if name == EmailProvider.SES.value:
-        return SESProvider(region)
+        if credentials is None:
+            raise APIError(
+                ErrorType.INVALID_REQUEST,
+                "This project has no AWS access key. Connect it on the AWS page.",
+            )
+        return SESProvider(region, credentials)
     return SMTPProvider(
         SMTPSettings(
             host=settings.SMTP_HOST or "localhost",
@@ -108,7 +124,8 @@ async def send_one(
         return email.status
 
     name = email.provider or EmailProvider.SMTP.value
-    provider = build(name, region=await _region_for(session, email), settings=settings)
+    region, credentials = await _aws_for(session, email, secret_key=settings.SECRET_KEY)
+    provider = build(name, region=region, settings=settings, credentials=credentials)
 
     email.status = EmailStatus.SENDING.value
     await session.commit()
@@ -153,14 +170,24 @@ async def send_one(
     return EmailStatus.SENT.value
 
 
-async def _region_for(session: AsyncSession, email: Email) -> str:
-    """Which region this project's SES identities live in.
+async def _aws_for(
+    session: AsyncSession, email: Email, *, secret_key: str
+) -> tuple[str, AWSCredentials | None]:
+    """The region and access key this message sends on.
 
-    Read from the connection rather than settings: a project may be connected to
-    a different region than the instance default, and sending to the wrong one
-    fails with an unhelpful message about an unverified identity.
+    Read from the connection rather than from settings: a project may be
+    connected to a different region than the instance default, and sending to
+    the wrong one fails with an unhelpful message about an unverified identity.
+
+    Returns no credentials for a project with no connection, which is the SMTP
+    path and needs none. A project that *is* connected but whose stored key
+    cannot be read raises, and the send is recorded as failed with the reason -
+    far better than silently falling back to the host's own credentials and
+    sending from an account nobody chose.
     """
-    from seskit_core.services import get_connection
+    from seskit_core.services import get_connection, stored_credentials
 
     connection = await get_connection(session, email.project_id)
-    return connection.region if connection else get_settings().AWS_DEFAULT_REGION
+    if connection is None:
+        return get_settings().AWS_DEFAULT_REGION, None
+    return connection.region, stored_credentials(connection, secret_key=secret_key)

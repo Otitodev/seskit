@@ -24,7 +24,7 @@ from __future__ import annotations
 from typing import Any
 
 from seskit_core.logging import get_logger
-from seskit_core.providers.types import QueuedNotification
+from seskit_core.providers.types import AWSCredentials, QueuedNotification
 
 from seskit_provider_aws_ses.client import BOTO_CONFIG, build_session, call
 from seskit_provider_aws_ses.errors import normalise_boto_error
@@ -42,12 +42,18 @@ MAX_WAIT_SECONDS = 20
 
 
 class SQSNotificationQueue:
-    """One SQS queue, read one batch at a time."""
+    """One SQS queue, read one batch at a time.
 
-    def __init__(self, region: str, queue_url: str) -> None:
+    Credentials come from the connection that owns the queue rather than from
+    the worker's environment. A queue URL embeds the account it lives in, so
+    the two always agree - and a worker polling several projects holds several
+    sessions rather than one that could only ever reach a single account.
+    """
+
+    def __init__(self, region: str, queue_url: str, credentials: AWSCredentials) -> None:
         self.region = region
         self.queue_url = queue_url
-        self._session = build_session(region)
+        self._session = build_session(region, credentials)
 
     def _client(self) -> Any:
         return self._session.client("sqs", config=BOTO_CONFIG)

@@ -8,7 +8,7 @@ of a check.
 
 from __future__ import annotations
 
-from fakes.ses import FakeProviderFactory
+from fakes.ses import TEST_SECRET_KEY, FakeProviderFactory
 from httpx import AsyncClient
 from redis.asyncio import Redis
 from seskit_core.services import (
@@ -40,9 +40,23 @@ async def _project_with_key(
     user = await register_user(session, email=email, password=PASSWORD, allow_signup=True)
     project = await create_project(session, user_id=user.id, name="Sending")
 
-    await add_identity(session, factory, project_id=project.id, value=domain, region=REGION)
+    await add_identity(
+        session,
+        factory,
+        project_id=project.id,
+        value=domain,
+        region=REGION,
+        secret_key=TEST_SECRET_KEY,
+    )
     if address is not None:
-        await add_identity(session, factory, project_id=project.id, value=address, region=REGION)
+        await add_identity(
+            session,
+            factory,
+            project_id=project.id,
+            value=address,
+            region=REGION,
+            secret_key=TEST_SECRET_KEY,
+        )
 
     issued = await create_api_key(session, project_id=project.id, name="prod")
     return issued.raw_key

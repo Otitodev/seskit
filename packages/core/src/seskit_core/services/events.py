@@ -26,15 +26,17 @@ from collections.abc import Callable
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from seskit_core.errors import APIError
 from seskit_core.logging import get_logger
 from seskit_core.models import AWSConnection, EmailEvent
-from seskit_core.providers import EventProvisioner
+from seskit_core.providers import AWSCredentials, EventProvisioner
+from seskit_core.services.credentials import stored_credentials
 
 logger = get_logger(__name__)
 
 #: Builds a provisioner for a region. Injected for the same reason as
 #: ``ProviderFactory``: so this module never imports an adapter.
-ProvisionerFactory = Callable[[str], EventProvisioner]
+ProvisionerFactory = Callable[[str, AWSCredentials], EventProvisioner]
 
 
 def queue_name_for(prefix: str) -> str:
@@ -72,23 +74,51 @@ async def count_other_users(session: AsyncSession, connection: AWSConnection) ->
     return int(total or 0)
 
 
-async def distinct_event_queues(session: AsyncSession) -> list[tuple[str, str]]:
-    """Every queue that needs polling, as ``(region, queue_url)`` pairs.
+async def distinct_event_queues(
+    session: AsyncSession, *, secret_key: str
+) -> list[tuple[str, str, AWSCredentials]]:
+    """Every queue that needs polling, with the key that opens it.
 
-    Distinct, because projects sharing a region share a queue - the same
-    reasoning the teardown refcount rests on. Polling once per project would
-    mean several consumers racing for the same messages, each one stealing
-    events from the others' batches and doing the same work twice.
+    Distinct by queue, because projects sharing a region and an account share a
+    queue - the same reasoning the teardown refcount rests on. Polling once per
+    project would mean several consumers racing for the same messages, each one
+    stealing events from the others' batches and doing the same work twice.
 
     Correlation is by SES message id, so a single consumer serves every project
     on that queue without needing to know whose message it is holding.
+
+    **Any connection on a queue can open it.** A queue URL embeds the account
+    that owns it, so two connections reporting the same URL are in the same
+    account by construction. Connected rows are preferred over broken ones, so
+    a project whose key has been revoked does not become the one the whole
+    queue is polled with.
+
+    A connection whose stored key cannot be decrypted is skipped rather than
+    raising: one project with a stale key must not stop the events of every
+    other project on the instance.
     """
-    rows = await session.execute(
-        select(AWSConnection.region, AWSConnection.event_queue_url)
+    rows = await session.scalars(
+        select(AWSConnection)
         .where(AWSConnection.event_queue_url.is_not(None))
-        .distinct()
+        # "connected" sorts before "error", so a working row wins the queue.
+        .order_by(AWSConnection.status, AWSConnection.id)
     )
-    return [(region, url) for region, url in rows if url]
+
+    queues: dict[tuple[str, str], AWSCredentials] = {}
+    for connection in rows:
+        key = (connection.region, connection.event_queue_url or "")
+        if not key[1] or key in queues:
+            continue
+        try:
+            queues[key] = stored_credentials(connection, secret_key=secret_key)
+        except APIError:
+            logger.info(
+                "event_queue_credentials_unusable",
+                project_id=connection.project_id,
+                region=connection.region,
+            )
+
+    return [(region, url, credentials) for (region, url), credentials in queues.items()]
 
 
 async def list_events(session: AsyncSession, email_id: str) -> list[EmailEvent]:
@@ -115,6 +145,7 @@ async def setup_events(
     resource_prefix: str,
     configuration_set: str,
     https_endpoint: str | None = None,
+    secret_key: str,
 ) -> AWSConnection:
     """Create the AWS resources and record what was created.
 
@@ -122,7 +153,9 @@ async def setup_events(
     and this rewrites the same columns. Running it again is how a user repairs
     infrastructure they deleted by hand in the console.
     """
-    provisioner = provisioner_factory(connection.region)
+    provisioner = provisioner_factory(
+        connection.region, stored_credentials(connection, secret_key=secret_key)
+    )
 
     infrastructure = await provisioner.provision_events(
         queue_name=queue_name_for(resource_prefix),
@@ -148,6 +181,8 @@ async def teardown_events(
     session: AsyncSession,
     provisioner_factory: ProvisionerFactory,
     connection: AWSConnection,
+    *,
+    secret_key: str,
 ) -> bool:
     """Remove the infrastructure, unless another project still needs it.
 
@@ -173,7 +208,9 @@ async def teardown_events(
         )
         return False
 
-    provisioner = provisioner_factory(connection.region)
+    provisioner = provisioner_factory(
+        connection.region, stored_credentials(connection, secret_key=secret_key)
+    )
     await provisioner.remove_events(infrastructure)
 
     logger.info("events_torn_down", project_id=connection.project_id, region=connection.region)
@@ -186,6 +223,7 @@ async def set_open_click_tracking(
     connection: AWSConnection,
     *,
     enabled: bool,
+    secret_key: str,
 ) -> AWSConnection:
     """Turn link and open tracking on or off for this project.
 
@@ -195,7 +233,9 @@ async def set_open_click_tracking(
     connection.track_opens_and_clicks = enabled
 
     if connection.events_enabled:
-        provisioner = provisioner_factory(connection.region)
+        provisioner = provisioner_factory(
+            connection.region, stored_credentials(connection, secret_key=secret_key)
+        )
         infrastructure = await provisioner.set_open_click_tracking(
             connection.event_infrastructure, enabled=enabled
         )

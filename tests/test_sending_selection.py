@@ -9,7 +9,7 @@ possible behaviours and the easiest one to write by accident.
 from __future__ import annotations
 
 import pytest
-from fakes.ses import FakeProviderFactory
+from fakes.ses import FAKE_CREDENTIALS, TEST_SECRET_KEY, FakeProviderFactory
 from seskit_core.errors import APIError, ErrorType
 from seskit_core.models import Email, EmailProvider
 from seskit_core.services import (
@@ -41,10 +41,15 @@ async def _verified(
     session: AsyncSession, factory: FakeProviderFactory, project_id: str, value: str
 ) -> None:
     identity = await add_identity(
-        session, factory, project_id=project_id, value=value, region=REGION
+        session,
+        factory,
+        project_id=project_id,
+        value=value,
+        region=REGION,
+        secret_key=TEST_SECRET_KEY,
     )
     factory.provider.mark_verified(value)
-    await check_identity(session, factory, identity)
+    await check_identity(session, factory, identity, secret_key=TEST_SECRET_KEY)
 
 
 # ------------------------------------------------------------- no AWS yet ---
@@ -89,6 +94,8 @@ async def test_a_verified_address_sends_through_ses(
         provider_factory,
         project_id=project_id,
         region=REGION,
+        credentials=FAKE_CREDENTIALS,
+        secret_key=TEST_SECRET_KEY,
     )
     await _verified(db_session, provider_factory, project_id, ADDRESS)
 
@@ -112,6 +119,8 @@ async def test_a_verified_domain_covers_any_address_on_it(
         provider_factory,
         project_id=project_id,
         region=REGION,
+        credentials=FAKE_CREDENTIALS,
+        secret_key=TEST_SECRET_KEY,
     )
     await _verified(db_session, provider_factory, project_id, DOMAIN)
 
@@ -145,6 +154,8 @@ async def test_connected_but_unverified_is_refused_not_diverted(
         provider_factory,
         project_id=project_id,
         region=REGION,
+        credentials=FAKE_CREDENTIALS,
+        secret_key=TEST_SECRET_KEY,
     )
 
     with pytest.raises(APIError) as caught:
@@ -169,9 +180,16 @@ async def test_an_unverified_identity_does_not_count(
         provider_factory,
         project_id=project_id,
         region=REGION,
+        credentials=FAKE_CREDENTIALS,
+        secret_key=TEST_SECRET_KEY,
     )
     await add_identity(
-        db_session, provider_factory, project_id=project_id, value=ADDRESS, region=REGION
+        db_session,
+        provider_factory,
+        project_id=project_id,
+        value=ADDRESS,
+        region=REGION,
+        secret_key=TEST_SECRET_KEY,
     )
 
     with pytest.raises(APIError):

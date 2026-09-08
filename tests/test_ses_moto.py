@@ -32,6 +32,7 @@ pytest.importorskip("moto", reason="moto is a dev dependency")
 
 import boto3
 from botocore.exceptions import ClientError
+from fakes.ses import FAKE_CREDENTIALS
 from moto import mock_aws
 from seskit_provider_aws_ses import SESProvider
 
@@ -65,7 +66,7 @@ async def test_the_adapter_reads_a_real_sts_response(aws_credentials: None) -> N
     latter goes on to call GetAccount, which moto does not implement.
     """
     with mock_aws():
-        provider = SESProvider(REGION)
+        provider = SESProvider(REGION, FAKE_CREDENTIALS)
 
         assert await provider._account_id() == MOTO_ACCOUNT_ID
 

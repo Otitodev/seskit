@@ -9,7 +9,7 @@ what happens when AWS says no - rather than about boto3, which
 from __future__ import annotations
 
 import pytest
-from fakes.ses import ACCOUNT_ID, FakeProviderFactory, denied
+from fakes.ses import ACCOUNT_ID, FAKE_CREDENTIALS, TEST_SECRET_KEY, FakeProviderFactory, denied
 from httpx import AsyncClient
 from redis.asyncio import Redis
 from seskit_core.errors import APIError, ErrorType
@@ -55,6 +55,21 @@ async def _csrf(client: AsyncClient) -> str:
     return page.text[start : page.text.index('"', start)]
 
 
+def _connect_form(token: str, *, region: str = REGION) -> dict[str, str]:
+    """What the connect form actually posts.
+
+    A helper rather than a literal in twenty places: the form gained two fields
+    in Phase 14, and a test that posted only a region would now be testing the
+    validation error rather than the thing it was written for.
+    """
+    return {
+        "csrf_token": token,
+        "region": region,
+        "access_key_id": FAKE_CREDENTIALS.access_key_id,
+        "secret_access_key": FAKE_CREDENTIALS.secret_access_key,
+    }
+
+
 # ---------------------------------------------------------------- service ---
 
 
@@ -65,7 +80,13 @@ async def test_connecting_records_what_aws_reported(
     factory = FakeProviderFactory(sandbox=True)
 
     connection = await connect_aws(
-        db_session, redis_client, factory, project_id=project_id, region=REGION
+        db_session,
+        redis_client,
+        factory,
+        project_id=project_id,
+        region=REGION,
+        credentials=FAKE_CREDENTIALS,
+        secret_key=TEST_SECRET_KEY,
     )
 
     assert connection.aws_account_id == ACCOUNT_ID
@@ -87,6 +108,8 @@ async def test_a_production_account_is_not_marked_sandboxed(
         FakeProviderFactory(sandbox=False),
         project_id=project_id,
         region=REGION,
+        credentials=FAKE_CREDENTIALS,
+        secret_key=TEST_SECRET_KEY,
     )
 
     assert connection.sandbox is False
@@ -103,10 +126,22 @@ async def test_connecting_twice_updates_rather_than_duplicates(
     factory = FakeProviderFactory()
 
     first = await connect_aws(
-        db_session, redis_client, factory, project_id=project_id, region=REGION
+        db_session,
+        redis_client,
+        factory,
+        project_id=project_id,
+        region=REGION,
+        credentials=FAKE_CREDENTIALS,
+        secret_key=TEST_SECRET_KEY,
     )
     second = await connect_aws(
-        db_session, redis_client, factory, project_id=project_id, region=OTHER_REGION
+        db_session,
+        redis_client,
+        factory,
+        project_id=project_id,
+        region=OTHER_REGION,
+        credentials=FAKE_CREDENTIALS,
+        secret_key=TEST_SECRET_KEY,
     )
 
     assert first.id == second.id
@@ -126,6 +161,8 @@ async def test_a_failed_connect_creates_no_row(
             FakeProviderFactory(error=denied()),
             project_id=project_id,
             region=REGION,
+            credentials=FAKE_CREDENTIALS,
+            secret_key=TEST_SECRET_KEY,
         )
 
     assert await get_connection(db_session, project_id) is None
@@ -139,7 +176,13 @@ async def test_a_working_connection_that_breaks_is_marked_broken(
     """
     project_id = await _project(db_session)
     await connect_aws(
-        db_session, redis_client, FakeProviderFactory(), project_id=project_id, region=REGION
+        db_session,
+        redis_client,
+        FakeProviderFactory(),
+        project_id=project_id,
+        region=REGION,
+        credentials=FAKE_CREDENTIALS,
+        secret_key=TEST_SECRET_KEY,
     )
 
     with pytest.raises(APIError):
@@ -149,6 +192,8 @@ async def test_a_working_connection_that_breaks_is_marked_broken(
             FakeProviderFactory(error=denied()),
             project_id=project_id,
             region=REGION,
+            credentials=FAKE_CREDENTIALS,
+            secret_key=TEST_SECRET_KEY,
         )
 
     connection = await get_connection(db_session, project_id)
@@ -165,7 +210,13 @@ async def test_the_stored_error_is_the_normalised_one(
     """
     project_id = await _project(db_session)
     await connect_aws(
-        db_session, redis_client, FakeProviderFactory(), project_id=project_id, region=REGION
+        db_session,
+        redis_client,
+        FakeProviderFactory(),
+        project_id=project_id,
+        region=REGION,
+        credentials=FAKE_CREDENTIALS,
+        secret_key=TEST_SECRET_KEY,
     )
 
     with pytest.raises(APIError):
@@ -175,6 +226,8 @@ async def test_the_stored_error_is_the_normalised_one(
             FakeProviderFactory(error=APIError(ErrorType.PROVIDER_ERROR, "Generic failure.")),
             project_id=project_id,
             region=REGION,
+            credentials=FAKE_CREDENTIALS,
+            secret_key=TEST_SECRET_KEY,
         )
 
     connection = await get_connection(db_session, project_id)
@@ -189,13 +242,24 @@ async def test_refresh_asks_aws_again(db_session: AsyncSession, redis_client: Re
     project_id = await _project(db_session)
     factory = FakeProviderFactory(sandbox=True)
     connection = await connect_aws(
-        db_session, redis_client, factory, project_id=project_id, region=REGION
+        db_session,
+        redis_client,
+        factory,
+        project_id=project_id,
+        region=REGION,
+        credentials=FAKE_CREDENTIALS,
+        secret_key=TEST_SECRET_KEY,
     )
 
     factory.provider.sandbox = False
     calls_before = factory.provider.calls
     await refresh_connection(
-        db_session, redis_client, factory, connection, interval_seconds=INTERVAL
+        db_session,
+        redis_client,
+        factory,
+        connection,
+        interval_seconds=INTERVAL,
+        secret_key=TEST_SECRET_KEY,
     )
 
     assert factory.provider.calls == calls_before + 1
@@ -211,15 +275,31 @@ async def test_a_second_refresh_inside_the_interval_does_not_call_aws(
     project_id = await _project(db_session)
     factory = FakeProviderFactory()
     connection = await connect_aws(
-        db_session, redis_client, factory, project_id=project_id, region=REGION
+        db_session,
+        redis_client,
+        factory,
+        project_id=project_id,
+        region=REGION,
+        credentials=FAKE_CREDENTIALS,
+        secret_key=TEST_SECRET_KEY,
     )
 
     await refresh_connection(
-        db_session, redis_client, factory, connection, interval_seconds=INTERVAL
+        db_session,
+        redis_client,
+        factory,
+        connection,
+        interval_seconds=INTERVAL,
+        secret_key=TEST_SECRET_KEY,
     )
     calls_after_first = factory.provider.calls
     await refresh_connection(
-        db_session, redis_client, factory, connection, interval_seconds=INTERVAL
+        db_session,
+        redis_client,
+        factory,
+        connection,
+        interval_seconds=INTERVAL,
+        secret_key=TEST_SECRET_KEY,
     )
 
     assert factory.provider.calls == calls_after_first
@@ -234,16 +314,40 @@ async def test_connecting_clears_the_interval_guard(
     project_id = await _project(db_session)
     factory = FakeProviderFactory()
     connection = await connect_aws(
-        db_session, redis_client, factory, project_id=project_id, region=REGION
+        db_session,
+        redis_client,
+        factory,
+        project_id=project_id,
+        region=REGION,
+        credentials=FAKE_CREDENTIALS,
+        secret_key=TEST_SECRET_KEY,
     )
     await refresh_connection(
-        db_session, redis_client, factory, connection, interval_seconds=INTERVAL
+        db_session,
+        redis_client,
+        factory,
+        connection,
+        interval_seconds=INTERVAL,
+        secret_key=TEST_SECRET_KEY,
     )
 
-    await connect_aws(db_session, redis_client, factory, project_id=project_id, region=REGION)
+    await connect_aws(
+        db_session,
+        redis_client,
+        factory,
+        project_id=project_id,
+        region=REGION,
+        credentials=FAKE_CREDENTIALS,
+        secret_key=TEST_SECRET_KEY,
+    )
     calls_before = factory.provider.calls
     await refresh_connection(
-        db_session, redis_client, factory, connection, interval_seconds=INTERVAL
+        db_session,
+        redis_client,
+        factory,
+        connection,
+        interval_seconds=INTERVAL,
+        secret_key=TEST_SECRET_KEY,
     )
 
     assert factory.provider.calls == calls_before + 1
@@ -257,10 +361,16 @@ async def test_disconnecting_removes_the_connection(
 ) -> None:
     project_id = await _project(db_session)
     connection = await connect_aws(
-        db_session, redis_client, FakeProviderFactory(), project_id=project_id, region=REGION
+        db_session,
+        redis_client,
+        FakeProviderFactory(),
+        project_id=project_id,
+        region=REGION,
+        credentials=FAKE_CREDENTIALS,
+        secret_key=TEST_SECRET_KEY,
     )
 
-    await disconnect_aws(db_session, redis_client, connection)
+    await disconnect_aws(db_session, redis_client, connection, secret_key=TEST_SECRET_KEY)
 
     assert await get_connection(db_session, project_id) is None
 
@@ -278,8 +388,24 @@ async def test_projects_do_not_share_a_connection(
     theirs = await _project(db_session, email="them@example.com")
     factory = FakeProviderFactory()
 
-    await connect_aws(db_session, redis_client, factory, project_id=mine, region=REGION)
-    await connect_aws(db_session, redis_client, factory, project_id=theirs, region=OTHER_REGION)
+    await connect_aws(
+        db_session,
+        redis_client,
+        factory,
+        project_id=mine,
+        region=REGION,
+        credentials=FAKE_CREDENTIALS,
+        secret_key=TEST_SECRET_KEY,
+    )
+    await connect_aws(
+        db_session,
+        redis_client,
+        factory,
+        project_id=theirs,
+        region=OTHER_REGION,
+        credentials=FAKE_CREDENTIALS,
+        secret_key=TEST_SECRET_KEY,
+    )
 
     mine_connection = await get_connection(db_session, mine)
     theirs_connection = await get_connection(db_session, theirs)
@@ -297,7 +423,13 @@ async def test_deleting_a_project_deletes_its_connection(
     """
     project_id = await _project(db_session)
     await connect_aws(
-        db_session, redis_client, FakeProviderFactory(), project_id=project_id, region=REGION
+        db_session,
+        redis_client,
+        FakeProviderFactory(),
+        project_id=project_id,
+        region=REGION,
+        credentials=FAKE_CREDENTIALS,
+        secret_key=TEST_SECRET_KEY,
     )
 
     project = await db_session.get(Project, project_id)
@@ -334,7 +466,7 @@ async def test_connecting_through_the_page_shows_the_account(app_client: AsyncCl
     await _sign_in(app_client)
     token = await _csrf(app_client)
 
-    page = await app_client.post("/aws/connect", data={"csrf_token": token, "region": REGION})
+    page = await app_client.post("/aws/connect", data=_connect_form(token))
 
     assert page.status_code == 200
     assert ACCOUNT_ID in page.text
@@ -347,7 +479,7 @@ async def test_a_sandboxed_account_is_warned_about_persistently(app_client: Asyn
     """
     await _sign_in(app_client)
     token = await _csrf(app_client)
-    await app_client.post("/aws/connect", data={"csrf_token": token, "region": REGION})
+    await app_client.post("/aws/connect", data=_connect_form(token))
 
     page = await app_client.get("/aws")
 
@@ -362,7 +494,7 @@ async def test_a_production_account_is_not_warned(
     await _sign_in(app_client)
     token = await _csrf(app_client)
 
-    page = await app_client.post("/aws/connect", data={"csrf_token": token, "region": REGION})
+    page = await app_client.post("/aws/connect", data=_connect_form(token))
 
     assert PRODUCTION_ACCESS_MARKER not in page.text
     assert "Production access" in page.text
@@ -377,9 +509,7 @@ async def test_an_unknown_region_is_refused_without_calling_aws(
     await _sign_in(app_client)
     token = await _csrf(app_client)
 
-    page = await app_client.post(
-        "/aws/connect", data={"csrf_token": token, "region": "mars-central-1"}
-    )
+    page = await app_client.post("/aws/connect", data=_connect_form(token, region="mars-central-1"))
 
     assert page.status_code == 400
     assert provider_factory.builds == 0
@@ -395,7 +525,7 @@ async def test_a_denied_connect_shows_the_missing_iam_action(
     await _sign_in(app_client)
     token = await _csrf(app_client)
 
-    page = await app_client.post("/aws/connect", data={"csrf_token": token, "region": REGION})
+    page = await app_client.post("/aws/connect", data=_connect_form(token))
 
     assert DENIED_ACTION in page.text
 
@@ -411,7 +541,7 @@ async def test_a_credential_failure_is_not_a_401(
     await _sign_in(app_client)
     token = await _csrf(app_client)
 
-    page = await app_client.post("/aws/connect", data={"csrf_token": token, "region": REGION})
+    page = await app_client.post("/aws/connect", data=_connect_form(token))
 
     assert page.status_code == 400
 
@@ -419,7 +549,7 @@ async def test_a_credential_failure_is_not_a_401(
 async def test_disconnecting_through_the_page_forgets_the_account(app_client: AsyncClient) -> None:
     await _sign_in(app_client)
     token = await _csrf(app_client)
-    await app_client.post("/aws/connect", data={"csrf_token": token, "region": REGION})
+    await app_client.post("/aws/connect", data=_connect_form(token))
 
     page = await app_client.post("/aws/disconnect", data={"csrf_token": token})
 
@@ -457,7 +587,7 @@ async def test_disconnect_without_a_csrf_token_is_refused(app_client: AsyncClien
     """
     await _sign_in(app_client)
     token = await _csrf(app_client)
-    await app_client.post("/aws/connect", data={"csrf_token": token, "region": REGION})
+    await app_client.post("/aws/connect", data=_connect_form(token))
 
     page = await app_client.post("/aws/disconnect", data={"csrf_token": "forged"})
 
@@ -476,7 +606,7 @@ async def test_a_failed_action_shows_its_error_only_once(
     """
     await _sign_in(app_client)
     token = await _csrf(app_client)
-    await app_client.post("/aws/connect", data={"csrf_token": token, "region": REGION})
+    await app_client.post("/aws/connect", data=_connect_form(token))
     provider_factory.provider.error = denied()
 
     page = await app_client.post("/aws/refresh", data={"csrf_token": token})
@@ -493,7 +623,7 @@ async def test_the_stored_error_survives_a_reload(
     """
     await _sign_in(app_client)
     token = await _csrf(app_client)
-    await app_client.post("/aws/connect", data={"csrf_token": token, "region": REGION})
+    await app_client.post("/aws/connect", data=_connect_form(token))
     provider_factory.provider.error = denied()
     await app_client.post("/aws/refresh", data={"csrf_token": token})
 
@@ -512,7 +642,7 @@ async def test_a_broken_connection_is_not_described_as_absent(
     """
     await _sign_in(app_client)
     token = await _csrf(app_client)
-    await app_client.post("/aws/connect", data={"csrf_token": token, "region": REGION})
+    await app_client.post("/aws/connect", data=_connect_form(token))
     provider_factory.provider.error = denied()
     await app_client.post("/aws/refresh", data={"csrf_token": token})
 
@@ -545,7 +675,13 @@ async def test_no_credential_material_is_ever_stored(
     """
     project_id = await _project(db_session)
     connection = await connect_aws(
-        db_session, redis_client, FakeProviderFactory(), project_id=project_id, region=REGION
+        db_session,
+        redis_client,
+        FakeProviderFactory(),
+        project_id=project_id,
+        region=REGION,
+        credentials=FAKE_CREDENTIALS,
+        secret_key=TEST_SECRET_KEY,
     )
 
     columns = {column.name for column in connection.__table__.columns}

@@ -3,7 +3,7 @@
    A partial so Refresh can swap just this fragment over HTMX rather than
    reloading the page. Rendered standalone on those responses, so it carries
    everything it needs and assumes no surrounding markup. #}
-{% from "components/ui.html" import button, card_open, card_close, empty, badge, metric %}
+{% from "components/ui.html" import button, card_open, card_close, empty, badge, metric, field %}
 
 <div id="aws-status">
   {% if connection and connection.is_connected %}
@@ -225,14 +225,28 @@
          suggests the connection was lost rather than that it stopped working. #}
       {{ empty(
         "Connection is not working" if connection else "No AWS account connected",
-        "SESKit reads AWS credentials from the environment it runs in - an IAM
-         role, environment variables, or a shared credentials file. Choose the
-         region your SES account is in and SESKit will confirm what it can do.",
+        "Paste an AWS access key. SESKit checks it against AWS before storing
+         it, so a wrong key is refused here rather than at the first send.",
         icon_name="cloud"
       ) }}
 
-      <form class="row row--end" method="post" action="/aws/connect">
+      <form class="stack" method="post" action="/aws/connect">
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+
+        {{ field("access_key_id", "Access key ID",
+                 placeholder="AKIAIOSFODNN7EXAMPLE",
+                 hint="From an IAM user in your own AWS account. See the guide
+                       for the exact permissions it needs.",
+                 attrs='maxlength="128" autocomplete="off" spellcheck="false"') }}
+
+        {# type=password so it is not left legible on a shared screen, and never
+           rendered back into the form on an error - there is no route that can
+           return it once stored. #}
+        {{ field("secret_access_key", "Secret access key", type="password",
+                 hint="Shown once by AWS when the key is created. SESKit stores
+                       it encrypted and never displays it again.",
+                 attrs='maxlength="256" autocomplete="off"') }}
+
         <div class="grow">
           <div class="field">
             <label class="field__label" for="region">Region</label>
