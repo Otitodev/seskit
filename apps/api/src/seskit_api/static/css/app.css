@@ -5,7 +5,7 @@
    deliberate choice - the product's whole pitch is one lightweight Python
    service, and the build pipeline should not contradict it.
 
-   Direction and rationale live in docs/design-system.md. Read that before
+   Direction and rationale live in docs/design/system.md. Read that before
    adding to this file.
 
    Structure:
@@ -1487,7 +1487,7 @@ svg {
   padding: var(--space-1) var(--space-3);
   border-radius: var(--radius-sm);
   color: var(--text-muted);
-  font-size: 0.8125rem;
+  font-size: var(--text-sm);
   font-variant-numeric: tabular-nums;
   text-decoration: none;
   white-space: nowrap;
@@ -1502,7 +1502,7 @@ svg {
   color: var(--text);
   background: var(--surface);
   border-color: var(--border-strong);
-  box-shadow: 0 1px 2px rgb(16 24 40 / 6%);
+  box-shadow: var(--shadow-sm);
 }
 
 .segmented__item:focus-visible {
@@ -1568,10 +1568,12 @@ svg {
 /* Struck through rather than removed. Seeing what you already did is most of
    what makes a checklist feel like progress instead of a list of demands. */
 .setup__step--done .setup__title {
-  color: var(--fg-muted, inherit);
+  color: var(--text-muted);
   text-decoration: line-through;
 }
 
+/* The same size as `.field__hint`, which is the same thing: the line under a
+   label saying why it is worth doing. */
 .setup__why {
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
 }
