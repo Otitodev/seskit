@@ -365,6 +365,26 @@ def test_every_container_that_holds_page_content_spaces_it() -> None:
         )
 
 
+def test_the_six_counts_are_one_grid_of_equal_tiles() -> None:
+    """They were two grids - four tiles, then two.
+
+    `.grid-metrics` sizes its columns against the width it is given, so the
+    second grid laid its pair out across the whole row: the last two tiles came
+    out twice as wide as the four above them, on the first screen of the
+    dashboard.
+
+    `auto-fill` rather than `auto-fit` is the other half. auto-fit collapses
+    the empty tracks on a part-full last row and gives their width away, which
+    reintroduces the same two sizes at any window where six does not divide by
+    the column count.
+    """
+    metrics = dict(_templates())["partials/metrics.html"]
+
+    assert metrics.count('class="grid-metrics"') == 1
+    assert "auto-fill" in _stylesheet()
+    assert "auto-fit" not in _rule(_stylesheet(), ".grid-metrics")
+
+
 def test_no_table_can_scroll_the_page_sideways() -> None:
     """Wide content scrolls inside `.table-wrap`; the body never does.
 

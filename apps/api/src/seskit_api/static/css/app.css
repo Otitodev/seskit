@@ -566,9 +566,15 @@ svg {
   gap: var(--space-3);
 }
 
+/* auto-fill, not auto-fit.
+
+   auto-fit collapses the empty tracks on the last row and hands their width to
+   whatever is on it, so six tiles in four columns end as four of one size and
+   two of another. auto-fill keeps the empty tracks, and every tile is the same
+   width at every window size - which is the whole job of a grid of counts. */
 .grid-metrics {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
   gap: var(--space-4);
 }
 
