@@ -10,22 +10,39 @@ same endpoint, same request.
     fails. Falling back to Mailpit would report success while the message
     reached nobody, which is the worst of both outcomes.
 
-## SESKit never stores your credentials
+## Connect it
 
-It resolves them the standard boto3 way, in boto3's own order of precedence:
+1. **[Get an access key](get-an-access-key.md)** from your AWS account — about
+   five minutes in the IAM console.
+2. Open **AWS** in the dashboard, choose the region your SES account is in, and
+   paste both values.
+3. Press **Connect**.
 
-1. an IAM role attached to the EC2 instance, ECS task, or EKS pod
-2. the `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` environment variables
-3. a shared credentials file (`~/.aws/credentials`)
-4. SSO or workload identity where configured
+SESKit checks the key against AWS before storing anything, so a wrong one is
+refused there and then rather than at your first send. On success the page
+records the account id, the region, your sending quota and your sandbox state.
 
-There is deliberately no setting for them. Naming one would invite credentials
-into logs, into config dumps, and into a database — and an IAM role, which is
-the right answer in production, has nothing to name.
+No shell, no AWS CLI, and nothing to set on the server.
 
-Give the process credentials by whichever route suits your deployment, then
-open **AWS** in the dashboard, choose your SES region, and connect. SESKit asks
-AWS who the identity is and what it may do, and records the answer.
+## The key is stored, per project
+
+SESKit keeps the access key on the project, with the secret encrypted under a
+key derived from your `SECRET_KEY`.
+
+Per project, which means two projects on one instance can send through two
+different AWS accounts. That was not possible when credentials came from the
+environment the process ran in — everything on the instance necessarily
+resolved the same account.
+
+The trade is real and worth reading before you decide how you feel about it:
+SESKit now holds a long-lived AWS credential, so a database dump becomes a
+credential leak. What the encryption does and does not protect is set out in
+the [security model](../design/security-model.md#aws-credentials).
+
+!!! danger "Rotating `SECRET_KEY` invalidates every stored key"
+    Change it and every project must be connected again. There is no way
+    around this: the encryption key is derived from it. See
+    [upgrading](../operating/upgrading.md).
 
 ## Connecting creates nothing
 
@@ -52,10 +69,16 @@ throttling. The page says when it last checked.
 
 ## Disconnecting
 
-Removes what SESKit recorded about the connection, and tears down any event
-infrastructure it created. Because SESKit never held your credentials, there is
-nothing else to revoke — turning off the IAM permissions is a thing you do at
-AWS, not here.
+Removes the stored access key along with everything else SESKit recorded, and
+tears down any event infrastructure it created.
+
+**The key still exists in IAM.** Deleting somebody's AWS credential is not
+something a Disconnect button should be able to do, so revoking it is a thing
+you do at AWS. If you are disconnecting because the key leaked, delete it there
+too.
+
+To change a key rather than remove it, use **Replace the access key** — that
+leaves delivery events alone.
 
 If a second project on the same instance shares the region, shared
 infrastructure stays until the last one stops using it.

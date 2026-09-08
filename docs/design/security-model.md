@@ -2,16 +2,46 @@
 
 What SESKit protects, how, and where the deliberate holes are.
 
-## AWS credentials are never stored
+## AWS credentials
 
-SESKit resolves them from the environment the boto3 way and never writes them
-anywhere. There is deliberately no configuration setting for them: naming one
-would invite credentials into logs, config dumps and a database, and an IAM
-role — the right answer in production — has nothing to name.
+SESKit stores an AWS access key per project. This changed in Phase 14; before
+it, credentials came from the environment the process ran in and SESKit held
+nothing. It is worth being exact about what was traded for what.
 
-The `AWSConnection` record holds which credential source is active and the
-account id, region and status it resolved to. It does not hold or broker
-credentials.
+**Why it changed.** Reading credentials from the environment meant that
+connecting AWS required shell access to the server: SSH in, install a CLI or
+edit a file, restart. That is a wall in front of the first thing anyone wants
+to do, and it is not a wall most people can climb on a managed host. It also
+meant every project on an instance necessarily resolved the *same* AWS account,
+because there was only one environment.
+
+**What is stored.** The access key id in plain text — it is an identifier, and
+AWS shows them in full in its own console. The secret access key encrypted with
+Fernet, under a key derived from `SECRET_KEY` by HKDF with a label that
+separates it from every other use of that secret (sessions, CSRF, webhook
+signatures, unsubscribe links).
+
+**What the encryption protects.** The copy that leaves the building: a backup,
+a snapshot, a replica with looser access, a `pg_dump` pasted into a support
+thread. In every one of those the ciphertext is useless without `SECRET_KEY`,
+which lives in the environment and not in the database.
+
+**What it does not protect.** A compromised host. The process must be able to
+read `SECRET_KEY` in order to send mail at all, so anything that can read the
+application's environment can decrypt every stored credential. Encryption at
+rest is not a defence against an attacker already inside; it is a defence
+against the copy that walks out. A reader who believes otherwise will make
+worse decisions than one told plainly.
+
+**What follows for you.** Give the IAM user
+[only the actions SESKit needs](../guides/iam-policies.md) — never
+`AdministratorAccess`. Treat a database backup as containing live AWS
+credentials, because it does. And know that rotating `SECRET_KEY` makes every
+stored key unreadable, so each project must be connected again.
+
+The key is never returned by any route, never rendered into a page, never
+echoed back into a form after a failure, and never present in a log line or a
+`repr`. Each of those is a test rather than an intention.
 
 ## API keys are hashed; webhook secrets are not
 

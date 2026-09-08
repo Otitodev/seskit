@@ -12,12 +12,22 @@ other components are not on the list.
 | Uploaded files | None exist | Attachments live in Postgres |
 | AWS resources | No | The queue, topic and configuration set are recreated by pressing the button again |
 
-!!! danger "A database backup carries the webhook signing secrets"
-    They are stored in plaintext, deliberately: your receivers must read them
-    back to verify signatures, so hashing them is not possible.
+!!! danger "A database backup carries secrets"
+    **Webhook signing secrets**, in plaintext and deliberately: your receivers
+    must read them back to verify signatures, so hashing them is not possible.
 
-    That makes a dump a secret-bearing artifact. Encrypt it and restrict who
-    can read it, the same way you would treat the database itself.
+    **AWS access keys**, encrypted. The ciphertext is useless without
+    `SECRET_KEY`, which is not in the database — so a dump on its own does not
+    hand somebody your AWS account. A dump stored *next to* the environment
+    that holds `SECRET_KEY` does.
+
+    Either way a dump is a secret-bearing artifact. Encrypt it, restrict who
+    can read it, and do not keep it beside your `.env`.
+
+!!! warning "A backup is only restorable with the SECRET_KEY it was taken under"
+    Restore a dump into an instance with a different `SECRET_KEY` and every
+    stored AWS key is unreadable — each project has to be connected again.
+    Whatever holds your backups should hold that secret too, and separately.
 
 ## Taking one
 

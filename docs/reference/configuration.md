@@ -25,13 +25,13 @@ list lives in
 
 ## There is no AWS credential setting
 
-!!! note "Deliberately absent"
-    Credentials are resolved by boto3 from the environment SESKit runs in and
-    are never handled as data — naming them here would invite them into logs
-    and into config dumps.
+!!! note "They are per project, not per instance"
+    An AWS access key belongs to a project and is entered on the dashboard, not
+    set here — which is what lets two projects on one instance send through two
+    different AWS accounts.
 
-    In production the right answer is an IAM role, which has nothing to name.
-    See [Connect an AWS account](../guides/connect-aws.md).
+    The secret is stored encrypted under a key derived from `SECRET_KEY`. See
+    [get an access key](../guides/get-an-access-key.md).
 
 ## The ones worth thinking about
 

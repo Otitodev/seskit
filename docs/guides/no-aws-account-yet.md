@@ -39,22 +39,16 @@ do something else while they wait.
 
 ## Credentials for SESKit
 
-SESKit [never stores credentials](connect-aws.md) — it reads them from the
-environment it runs in.
-
-For a laptop or a first deployment, an IAM user with an access key is the
-simplest thing that works. Create one, attach the
-[sending policy](iam-policies.md), and put the key in the environment SESKit
-runs in.
+SESKit needs an access key from an IAM user in your account. There is a
+step-by-step walkthrough: [get an access key](get-an-access-key.md).
 
 !!! warning "Do not use your root account credentials"
     The account you signed up with can do anything, including close the
     account. Create an IAM user, give it only the actions on the
     [IAM policies](iam-policies.md) page, and use that.
 
-In production, an **IAM role** attached to the instance or task is better than
-any key: there is no secret to leak, rotate, or accidentally commit. SESKit
-picks it up with no configuration at all.
+You paste the key into the SESKit dashboard. Nothing goes on the server, and
+there is no AWS CLI to install.
 
 ## Then
 
