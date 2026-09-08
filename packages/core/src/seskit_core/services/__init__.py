@@ -54,6 +54,7 @@ from seskit_core.services.identities import (
     refresh_identity,
     remove_identity,
 )
+from seskit_core.services.onboarding import SetupStep, is_complete, setup_progress
 from seskit_core.services.projects import (
     create_project,
     get_default_project,
@@ -115,6 +116,7 @@ __all__ = [
     "Metrics",
     "ProviderFactory",
     "ProvisionerFactory",
+    "SetupStep",
     "SignupClosed",
     "TimeRange",
     "activity_series",
@@ -152,6 +154,7 @@ __all__ = [
     "get_user_by_email",
     "get_user_by_id",
     "identities_due",
+    "is_complete",
     "is_recheck_due",
     "is_retryable",
     "list_api_keys",
@@ -181,6 +184,7 @@ __all__ = [
     "set_enabled",
     "set_open_click_tracking",
     "setup_events",
+    "setup_progress",
     "signup_allowed",
     "stored_credentials",
     "suppress",

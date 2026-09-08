@@ -1402,3 +1402,53 @@ svg {
     height: 12rem;
   }
 }
+
+/* Setup checklist ---------------------------------------------------------
+   Shown on the Overview until every step is done. Deliberately quiet: it is
+   the first thing on a new install and the last thing anybody wants to see
+   once they are working, so it looks like a list rather than a banner. */
+
+.setup {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.setup__step {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+}
+
+/* Fixed width so the titles line up whether or not a step is done - a list
+   whose left edge moves as you complete it reads as two different lists. */
+.setup__mark {
+  flex: 0 0 1.25rem;
+  text-align: center;
+  color: var(--success);
+  font-weight: 600;
+}
+
+.setup__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.setup__title {
+  font-weight: 500;
+}
+
+/* Struck through rather than removed. Seeing what you already did is most of
+   what makes a checklist feel like progress instead of a list of demands. */
+.setup__step--done .setup__title {
+  color: var(--fg-muted, inherit);
+  text-decoration: line-through;
+}
+
+.setup__why {
+  font-size: 0.875rem;
+}
