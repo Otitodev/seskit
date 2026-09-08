@@ -114,6 +114,7 @@ plugins:
           - getting-started/first-email.md: Sending through Mailpit in a minute with no AWS account; what "queued" means; idempotency keys.
           - getting-started/sending-from-your-app.md: Calling a running instance from your own code over HTTP, with error handling and rate limits.
           - getting-started/dashboard-tour.md: What each dashboard page shows.
+          - deploy-with-an-agent.md: A copy-paste brief that hands the whole deployment to a coding agent.
         Guides:
           - guides/no-aws-account-yet.md: The path from no AWS account to a verified sender, and what SES costs.
           - guides/get-an-access-key.md: The IAM console click-path to an access key SESKit can use, and how to rotate one.
@@ -170,6 +171,7 @@ nav:
       - Your first email: getting-started/first-email.md
       - Sending from your app: getting-started/sending-from-your-app.md
       - The dashboard: getting-started/dashboard-tour.md
+      - Deploy with a coding agent: deploy-with-an-agent.md
   - Guides:
       - No AWS account yet?: guides/no-aws-account-yet.md
       - Get an access key: guides/get-an-access-key.md

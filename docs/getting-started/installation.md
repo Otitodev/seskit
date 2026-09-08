@@ -22,6 +22,26 @@ docker compose up
 
 Then [send your first email](first-email.md).
 
+## On a server
+
+```bash
+curl -fsSL https://otitodev.github.io/seskit/install.sh | sh
+```
+
+Clones the repository, writes a `.env` with a generated `SECRET_KEY`, and
+brings the stack up. It refuses rather than guesses: where Docker is missing or
+not running it says so and stops, instead of installing things on your machine.
+
+Safe to run twice — an existing checkout is left alone and an existing `.env`
+is never overwritten, so a rerun cannot rotate `SECRET_KEY` and lock every
+project out of its stored AWS credentials.
+
+If piping a script to a shell is not something you do — reasonable — the
+three commands above are the whole of it, and
+[read the script first](https://otitodev.github.io/seskit/install.sh).
+
+Or [hand the whole thing to a coding agent](../deploy-with-an-agent.md).
+
 ## Why Postgres and Redis are on unusual ports
 
 !!! tip "55432 and 56379, not 5432 and 6379"
@@ -48,7 +68,7 @@ export DATABASE_URL="postgresql+asyncpg://seskit:seskit@localhost:55432/seskit"
 export REDIS_URL="redis://localhost:56379/0"
 export SECRET_KEY="dev"
 
-uv run alembic upgrade head
+uv run alembic upgrade head                # Compose does this for you
 uv run uvicorn seskit_api.main:app --reload
 uv run arq seskit_worker.main.WorkerSettings   # in a second shell
 ```
