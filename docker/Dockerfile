@@ -45,8 +45,16 @@ RUN mkdir -p packages/core/src/seskit_core \
              apps/api/src/seskit_api/__init__.py \
              apps/worker/src/seskit_worker/__init__.py
 
-RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --frozen --no-dev
+# No cache mount here, deliberately. `RUN --mount=type=cache` is BuildKit-only,
+# and a builder without BuildKit does not ignore it - it fails the build with
+# "the --mount option requires BuildKit". Some deployment platforms build with
+# the classic builder and offer no way to turn BuildKit on, so this file has to
+# be buildable by both.
+#
+# What that costs is wheel reuse when this layer is invalidated. Layer caching
+# still covers the common case: the manifests are copied above on their own, so
+# an ordinary source edit never reaches this line.
+RUN uv sync --frozen --no-dev
 
 COPY . .
 
@@ -54,8 +62,8 @@ COPY . .
 # Workspace members install editable, so the Compose bind mounts over /app/apps
 # and /app/packages feed straight into the running process and --reload works.
 # A production image should add --no-editable here to stay self-contained.
-RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --frozen --no-dev
+# No cache mount, for the reason given above.
+RUN uv sync --frozen --no-dev
 
 
 # ------------------------------------------------------------------ final ---

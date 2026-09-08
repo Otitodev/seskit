@@ -117,11 +117,24 @@ jobs:
 
       # Catches a broken Dockerfile at PR time rather than on someone's first
       # `docker compose up`, which is the project's advertised entry point.
-      - name: Build image
+      - name: Build the API image
         uses: docker/build-push-action@v6
         with:
           context: .
           file: docker/Dockerfile
+          push: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # The worker ships its own Dockerfile, for platforms whose build path
+      # offers no per-deployment command override. Building only the API's left
+      # that one free to break unnoticed - and it is the image a deployment
+      # actually runs the sending on.
+      - name: Build the worker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile.worker
           push: false
           cache-from: type=gha
           cache-to: type=gha,mode=max
