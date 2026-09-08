@@ -36,6 +36,26 @@ Safe to run twice — an existing checkout is left alone and an existing `.env`
 is never overwritten, so a rerun cannot rotate `SECRET_KEY` and lock every
 project out of its stored AWS credentials.
 
+It installs the **latest published release**, not the tip of `main`, so a
+commit pushed five minutes ago cannot become your production instance. Pin it
+yourself, or take `main` deliberately:
+
+```bash
+curl -fsSL https://otitodev.github.io/seskit/install.sh | SESKIT_VERSION=v0.1.0 sh
+curl -fsSL https://otitodev.github.io/seskit/install.sh | SESKIT_VERSION=main sh
+```
+
+| Variable | Default |
+|---|---|
+| `SESKIT_VERSION` | The latest release, or `main` if none is published |
+| `SESKIT_DIR` | `./seskit` |
+| `SESKIT_PUBLIC_URL` | Guessed from this machine's public IP |
+
+`SESKIT_PUBLIC_URL` becomes `PUBLIC_BASE_URL`, which is what puts a working
+one-click unsubscribe link on every message. The guess is right often enough to
+be worth making and wrong in ways you can see — behind a proxy or on a real
+domain, change the one line in `.env`.
+
 If piping a script to a shell is not something you do — reasonable — the
 three commands above are the whole of it, and
 [read the script first](https://otitodev.github.io/seskit/install.sh).
