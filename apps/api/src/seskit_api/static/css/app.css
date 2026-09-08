@@ -61,6 +61,14 @@
 
   --focus-ring: #0166f8;
 
+  /* The chevron a <select> draws for itself, drawn by us instead.
+
+     A data URI cannot read a custom property, so the stroke colour is
+     baked in and each theme carries its own - which is why this is a token
+     rather than a value sitting in the component. Matches the icon set:
+     stroke-based, 1.5px, round caps, on a 24px grid. */
+  --select-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%235a6472' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9.5 6 6 6-6'/%3E%3C/svg%3E");
+
   /* Type. IBM Plex where present - designed for technical products - with a
      system stack behind it. No webfont request: a self-hosted dashboard may
      run with no internet access at all.                                     */
@@ -163,6 +171,8 @@
 
     --focus-ring: #4d94ff;
 
+    --select-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2398a2b3' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9.5 6 6 6-6'/%3E%3C/svg%3E");
+
     --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.3);
     --shadow: 0 1px 3px rgb(0 0 0 / 0.4), 0 1px 2px rgb(0 0 0 / 0.3);
     --shadow-lg: 0 4px 12px rgb(0 0 0 / 0.5), 0 2px 4px rgb(0 0 0 / 0.3);
@@ -206,6 +216,8 @@
   --neutral-border: #2a313b;
 
   --focus-ring: #4d94ff;
+
+  --select-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2398a2b3' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9.5 6 6 6-6'/%3E%3C/svg%3E");
 
   --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.3);
   --shadow: 0 1px 3px rgb(0 0 0 / 0.4), 0 1px 2px rgb(0 0 0 / 0.3);
@@ -795,6 +807,59 @@ svg {
 .input[aria-invalid="true"] { border-color: var(--danger); }
 
 .input--mono { font-family: var(--font-mono); font-size: var(--text-sm); }
+
+/* Select ------------------------------------------------------------------ */
+
+/* Both dropdowns wore `.input`, which is a rule written for a text field:
+   symmetric padding and no `appearance`. The browser then paints its own
+   chevron over that right-hand padding and sizes the control to its own taste,
+   so the two selects in the dashboard looked like neither each other nor
+   anything else on the page.
+
+   `appearance: none` takes the native control away and the background paints
+   the chevron back. A pseudo-element could not: a <select> renders only its
+   options, and ::after on one is never drawn. */
+
+.select {
+  width: 100%;
+  height: var(--control-h);
+  /* Asymmetric on purpose - the right side is holding the chevron. */
+  padding: 0 var(--space-8) 0 var(--space-3);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background-color: var(--surface);
+  background-image: var(--select-chevron);
+  background-repeat: no-repeat;
+  background-position: right var(--space-3) center;
+  background-size: 16px 16px;
+  color: var(--text);
+  font-size: var(--text-base);
+  appearance: none;
+  cursor: pointer;
+  transition: border-color 0.12s ease, box-shadow 0.12s ease;
+}
+
+/* The same focus treatment as .input, written out rather than shared through a
+   grouped selector: these are two components, and one of them growing a
+   different focus ring later should not be a rewrite of both. */
+.select:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-subtle);
+}
+
+.select:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* An <option> is drawn by the platform, not by this stylesheet. Naming the
+   colours is the one thing that can be done about a dark theme's open dropdown
+   rendering as black on white. */
+.select option {
+  background: var(--surface);
+  color: var(--text);
+}
 
 /* Table ------------------------------------------------------------------- */
 

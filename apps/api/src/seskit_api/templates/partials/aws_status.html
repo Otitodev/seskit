@@ -287,7 +287,7 @@
         <div class="grow">
           <div class="field">
             <label class="field__label" for="region">Region</label>
-            <select class="input" id="region" name="region">
+            <select class="select" id="region" name="region">
               {% for code, label in regions %}
                 <option value="{{ code }}"
                         {% if connection and connection.region == code %}selected{% endif %}>
