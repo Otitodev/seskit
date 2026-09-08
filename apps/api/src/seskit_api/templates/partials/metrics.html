@@ -34,7 +34,12 @@
     </span>
   </div>
 
-  {# §18's six counts. #}
+  {# §18's six counts, in one grid.
+
+     They were two - four tiles then two - and the second grid sized its pair
+     against the full width, so the last two tiles came out twice as wide as
+     the four above them. Six counts are one set of six, not four and then a
+     postscript. #}
   <div class="grid-metrics">
     {{ metric("Sent", metrics.sent|thousands) }}
     {{ metric("Delivered", metrics.delivered|thousands,
@@ -43,9 +48,6 @@
               meta=metrics.bounce_rate|percent ~ " of sent") }}
     {{ metric("Complaints", metrics.complained|thousands,
               meta=metrics.complaint_rate|percent ~ " of sent") }}
-  </div>
-
-  <div class="grid-metrics">
     {# Open and click say "Not tracked" rather than 0%. Tracking is off unless a
        project turns it on (Phase 7), and 0% would claim nobody opened the mail
        when the truth is that nobody was counting. #}
