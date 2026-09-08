@@ -577,11 +577,17 @@ svg {
 
    auto-fit collapses the empty tracks on the last row and hands their width to
    whatever is on it, so six tiles in four columns end as four of one size and
-   two of another. auto-fill keeps the empty tracks, and every tile is the same
-   width at every window size - which is the whole job of a grid of counts. */
+   two of another. auto-fill keeps the tracks, and every tile is the same width
+   at every window size - which is the whole job of a grid of counts.
+
+   The tradeoff auto-fill makes is a ragged right edge on a part-full row, and
+   220px is chosen so the two grids that exist land well: the Emails page's
+   four counts fill a row exactly at the content width, and the Overview's six
+   fall as four and two. Equal tiles with a gap beside them, rather than a full
+   row of two different sizes. */
 .grid-metrics {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
   gap: var(--space-4);
 }
 
