@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import pytest
 from seskit_core.ids import IDPrefix, has_prefix
-from seskit_core.models import Project, User, normalise_email
+from seskit_core.models import AWSConnection, Project, User, normalise_email
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -155,3 +155,65 @@ async def test_each_test_starts_from_an_empty_database(db_session: AsyncSession)
     the whole suite would be quietly order-dependent.
     """
     assert await db_session.scalar(select(func.count()).select_from(User)) == 0
+
+
+# ------------------------------------------------- the stored access key ---
+
+
+@pytest.mark.parametrize(
+    ("key", "shown"),
+    [
+        ("AKIAIOSFODNN7EXAMPLE", "AKIA\u2026MPLE"),
+        ("AKIAROTATEDKEY123456", "AKIA\u20263456"),
+        ("AKIASHORT", "AKIASHORT"),
+        ("", ""),
+        (None, ""),
+    ],
+    ids=["typical", "another", "too-short-to-shorten", "empty", "unset"],
+)
+def test_the_access_key_is_shortened_for_a_screen(key: str | None, shown: str) -> None:
+    """Not redaction - an access key id is an identifier, and AWS shows them in
+    full in its own console. It is that a dashboard gets screenshotted, and the
+    first four and last four answer the only question anyone asks of it.
+    """
+    assert AWSConnection(aws_access_key_id=key).access_key_display == shown
+
+
+def test_two_keys_are_told_apart_by_what_is_shown() -> None:
+    """The first four characters are always AKIA, so shortening to a prefix
+    alone would render every key identically.
+    """
+    first = AWSConnection(aws_access_key_id="AKIAIOSFODNN7EXAMPLE").access_key_display
+    second = AWSConnection(aws_access_key_id="AKIAIOSFODNN7DIFFER").access_key_display
+
+    assert first != second
+
+
+def test_a_connection_without_a_key_is_not_usable() -> None:
+    """Every row from before Phase 14 is this. The migration marks them broken,
+    and this is the belt to that braces.
+    """
+    assert AWSConnection(aws_access_key_id=None).has_credentials is False
+    assert AWSConnection(aws_access_key_id="AKIA123").has_credentials is False
+
+
+def test_a_connection_with_both_halves_is_usable() -> None:
+    connection = AWSConnection(
+        aws_access_key_id="AKIA123",
+        aws_secret_access_key_encrypted="gAAAAA-not-really-a-token",
+    )
+
+    assert connection.has_credentials is True
+
+
+def test_the_repr_carries_no_credential() -> None:
+    """Reprs end up in logs and tracebacks. This one is id and status only, and
+    adding the columns must not have changed that.
+    """
+    connection = AWSConnection(
+        aws_access_key_id="AKIAIOSFODNN7EXAMPLE",
+        aws_secret_access_key_encrypted="gAAAAA-secret-token",
+    )
+
+    assert "AKIA" not in repr(connection)
+    assert "gAAAAA" not in repr(connection)
