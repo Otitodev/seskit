@@ -66,6 +66,12 @@ cp .env.example .env
 docker compose up
 ```
 
+On a server, one line does the same and generates a real `SECRET_KEY`:
+
+```bash
+curl -fsSL https://otitodev.github.io/seskit/install.sh | sh
+```
+
 Dashboard at <http://localhost:8000>, Mailpit inbox at <http://localhost:8025>.
 Create the owner account, make an API key, and send:
 
