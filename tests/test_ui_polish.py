@@ -12,6 +12,8 @@ as the email body on the Emails page.
 
 from __future__ import annotations
 
+import re
+
 from httpx import AsyncClient
 from seskit_core.models import APIKey, WebhookEndpoint
 from sqlalchemy import select
@@ -306,6 +308,41 @@ def test_every_control_reads_its_height_from_the_scale() -> None:
         assert "var(--control-h" in declarations, (
             f"{selector} sets a height that is not on the scale: {declarations.strip()}"
         )
+
+
+def test_a_select_is_styled_as_a_select() -> None:
+    """Both dropdowns wore `.input` - a rule written for a text field.
+
+    Nothing fails when a <select> borrows it. The browser simply paints its own
+    chevron over the padding meant for text and sizes the control however it
+    likes, which is why the region picker and the project switcher matched
+    neither each other nor the fields beside them.
+    """
+    css = _stylesheet()
+
+    assert ".select {" in css
+    assert "appearance: none" in _rule(css, ".select")
+
+    borrowed = [
+        name
+        for name, markup in _templates()
+        if any('class="input' in tag for tag in re.findall(r"<select[^>]*>", markup))
+    ]
+
+    assert not borrowed, f"a <select> is wearing .input in: {borrowed}"
+
+
+def test_the_chevron_is_drawn_for_both_themes() -> None:
+    """A data URI cannot read a custom property, so its stroke colour is baked
+    in and each theme needs its own. Miss one and the arrow is there but
+    invisible - the failure that looks like nothing at all.
+    """
+    css = _stylesheet()
+
+    assert css.count("--select-chevron:") == 3, (
+        "one per theme block: :root, the prefers-color-scheme override, and the "
+        "explicit [data-theme='dark']"
+    )
 
 
 def test_no_table_can_scroll_the_page_sideways() -> None:
