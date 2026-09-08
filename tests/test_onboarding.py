@@ -189,7 +189,7 @@ async def test_an_unverified_identity_does_not_count(db_session: AsyncSession) -
         Identity(
             project_id=project_id,
             value="example.com",
-            type=IdentityType.DOMAIN.value,
+            identity_type=IdentityType.DOMAIN.value,
             region=REGION,
             verification_status=VerificationStatus.PENDING.value,
             dkim_tokens=[],
@@ -206,7 +206,7 @@ async def test_a_verified_identity_ticks_the_last_step(db_session: AsyncSession)
         Identity(
             project_id=project_id,
             value="example.com",
-            type=IdentityType.DOMAIN.value,
+            identity_type=IdentityType.DOMAIN.value,
             region=REGION,
             verification_status=VerificationStatus.SUCCESS.value,
             dkim_tokens=[],
@@ -313,7 +313,7 @@ async def test_the_checklist_goes_away_when_it_is_done(
         Identity(
             project_id=project_id,
             value="example.com",
-            type=IdentityType.DOMAIN.value,
+            identity_type=IdentityType.DOMAIN.value,
             region=REGION,
             verification_status=VerificationStatus.SUCCESS.value,
             dkim_tokens=[],

@@ -268,15 +268,20 @@ async def test_a_range_only_counts_its_own_window(
 async def test_a_project_that_has_sent_keeps_its_panel(
     signed_in_client: AsyncClient, db_session: AsyncSession
 ) -> None:
-    """The page-level version of the above: no onboarding state once there is
+    """The page-level version of the above: no empty state once there is
     history, whatever range is selected.
+
+    The setup checklist is a different thing and may still be there - a project
+    with messages but no AWS connection genuinely has setting up left to do. So
+    this asserts on the empty state's own copy rather than on the call to
+    action it happens to share with a checklist step.
     """
     await _sent(db_session, count=1, at=utcnow() - timedelta(days=3))
 
     page = await signed_in_client.get("/?range=24h")
 
     assert "No delivery activity" not in page.text
-    assert "Create an API key" not in page.text
+    assert "Nothing sent yet" not in page.text
 
 
 async def test_the_metrics_fragment_is_served_on_its_own(
