@@ -56,6 +56,17 @@ Every colour, size, and font is a CSS custom property defined in
 A literal hex value inside a component rule is a bug - it will break one of the
 two themes.
 
+Three of these rules are enforced by `tests/test_design_system.py` rather than
+left as prose, because each is the kind of thing a single later declaration
+breaks in silence: no colour written out below the token blocks, no type size
+off the scale, and no `var()` naming a token that was never defined. That last
+one is there because it had already happened - a component asked for
+`--fg-muted`, which does not exist in this system, and the fallback made it
+look deliberate.
+
+Not everything is a token. A 1px border and a 16px icon are dimensions, not
+decisions, and the guard stops there on purpose.
+
 ### Colour
 
 Neutrals carry a slight blue bias. A pure grey reads as unconsidered.
@@ -98,6 +109,16 @@ internet access, so a `<link>` to a font CDN is not an option.
 Anything with digits that line up in a column gets
 `font-variant-numeric: tabular-nums`.
 
+### Size
+
+Anything a pointer lands on takes its height from `--control-h`, with
+`--control-h-sm` for a row action inside a table and `--control-h-lg` for the
+one full-width primary button on the auth pages.
+
+Three, and no more. There were five before they were tokens - a 32px button, a
+34px input, a 30px select, a 36px auth submit - and every form on the dashboard
+that sets a button beside a field showed the difference.
+
 ---
 
 ## Components
@@ -117,6 +138,15 @@ them. If a page needs a variant, add the variant to the component.
 
 Icons are inline SVG from `templates/components/icons.html`, stroke-based on a
 24px grid, inheriting `currentColor` so they theme for free.
+
+`.select` is a class rather than a macro, since the two selects in the
+dashboard have different enough surroundings to be worth writing out. It is
+still a component: a select must not borrow `.input`, which is a rule written
+for a text field, or the browser paints its own chevron over the padding and
+sizes the control to the platform's taste.
+
+A card body lays its children out - it does not only pad them. Pages put
+several things in one card and should not have to space them individually.
 
 ### Empty states get real design attention
 
