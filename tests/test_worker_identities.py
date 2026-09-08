@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from datetime import timedelta
 
-from fakes.ses import FakeProviderFactory, denied
+from fakes.ses import TEST_SECRET_KEY, FakeProviderFactory, denied
 from seskit_core.models import utcnow
 from seskit_core.services import (
     add_identity,
@@ -36,7 +36,14 @@ async def _identity(session: AsyncSession, factory: FakeProviderFactory, value: 
         session, email=f"{value}@example.com", password=PASSWORD, allow_signup=True
     )
     project = await create_project(session, user_id=user.id, name="Sending")
-    return await add_identity(session, factory, project_id=project.id, value=value, region=REGION)
+    return await add_identity(
+        session,
+        factory,
+        project_id=project.id,
+        value=value,
+        region=REGION,
+        secret_key=TEST_SECRET_KEY,
+    )
 
 
 # ------------------------------------------------------------ registration ---
@@ -71,7 +78,7 @@ async def test_a_due_identity_is_picked_up_and_updated(db_session: AsyncSession)
     factory.provider.mark_verified(DOMAIN)
     due = await identities_due(db_session, unverified_seconds=UNVERIFIED, verified_seconds=VERIFIED)
     for row in due:
-        await check_identity(db_session, factory, row)
+        await check_identity(db_session, factory, row, secret_key=TEST_SECRET_KEY)
 
     assert identity.is_verified is True
 
@@ -100,9 +107,9 @@ async def test_one_failure_does_not_stop_the_pass(db_session: AsyncSession) -> N
     # The fake fails whatever it is asked next, so check the broken one first
     # and then clear the error, mimicking one bad identity in a longer list.
     factory.provider.error = denied()
-    await check_identity(db_session, factory, broken)
+    await check_identity(db_session, factory, broken, secret_key=TEST_SECRET_KEY)
     factory.provider.error = None
-    await check_identity(db_session, factory, healthy)
+    await check_identity(db_session, factory, healthy, secret_key=TEST_SECRET_KEY)
 
     assert broken.last_error is not None
     assert healthy.is_verified is True
@@ -113,7 +120,7 @@ async def test_a_failed_check_records_rather_than_raises(db_session: AsyncSessio
     identity = await _identity(db_session, factory)
     factory.provider.error = denied()
 
-    await check_identity(db_session, factory, identity)
+    await check_identity(db_session, factory, identity, secret_key=TEST_SECRET_KEY)
 
     assert identity.last_error is not None
     assert identity.last_checked_at is not None

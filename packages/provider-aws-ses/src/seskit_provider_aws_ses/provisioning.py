@@ -46,7 +46,7 @@ from typing import Any
 
 from botocore.exceptions import ClientError
 from seskit_core.logging import get_logger
-from seskit_core.providers.types import EventInfrastructure
+from seskit_core.providers.types import AWSCredentials, EventInfrastructure
 
 from seskit_provider_aws_ses.client import BOTO_CONFIG, build_session, call
 from seskit_provider_aws_ses.errors import error_code, normalise_boto_error
@@ -152,9 +152,9 @@ class SESEventProvisioner:
     a cached client outlives the credentials it was built with.
     """
 
-    def __init__(self, region: str) -> None:
+    def __init__(self, region: str, credentials: AWSCredentials) -> None:
         self.region = region
-        self._session = build_session(region)
+        self._session = build_session(region, credentials)
 
     # ------------------------------------------------------------- create ---
 

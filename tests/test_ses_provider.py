@@ -12,6 +12,7 @@ from typing import Any
 
 import pytest
 from botocore.exceptions import ClientError, EndpointConnectionError, NoCredentialsError
+from fakes.ses import FAKE_CREDENTIALS
 from seskit_core.errors import APIError, ErrorType
 from seskit_core.providers import EmailProvider, SendingQuota
 from seskit_provider_aws_ses import SESProvider, normalise_boto_error
@@ -65,7 +66,7 @@ def _provider(
     account: dict[str, Any] = SANDBOX_ACCOUNT,
     raises: Exception | None = None,
 ) -> SESProvider:
-    provider = SESProvider(REGION)
+    provider = SESProvider(REGION, FAKE_CREDENTIALS)
     fake = FakeBotoClient(account, raises)
     monkeypatch.setattr(provider._session, "client", lambda *a, **kw: fake)
     return provider
@@ -78,7 +79,7 @@ def test_the_ses_provider_satisfies_the_interface() -> None:
     """Structural conformance. Phases 5 and 6 add methods to this Protocol; if
     the adapter drifts out of shape, this is where it shows.
     """
-    assert isinstance(SESProvider(REGION), EmailProvider)
+    assert isinstance(SESProvider(REGION, FAKE_CREDENTIALS), EmailProvider)
 
 
 # ---------------------------------------------------------------- parsing ---

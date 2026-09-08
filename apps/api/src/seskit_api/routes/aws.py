@@ -22,6 +22,7 @@ from seskit_core.db import get_session
 from seskit_core.errors import APIError, ErrorType
 from seskit_core.logging import get_logger
 from seskit_core.models import Project
+from seskit_core.providers import AWSCredentials
 from seskit_core.redis import get_redis
 from seskit_core.services import (
     ProviderFactory,
@@ -129,18 +130,48 @@ async def connect(
     current: Annotated[CurrentUser, Depends(require_user)],
     project: Annotated[Project, Depends(require_project)],
     provider_factory: Annotated[ProviderFactory, Depends(get_provider_factory)],
+    settings: Annotated[Settings, Depends(get_app_settings)],
     region: Annotated[str, Form()] = "",
+    access_key_id: Annotated[str, Form()] = "",
+    secret_access_key: Annotated[str, Form()] = "",
 ) -> HTMLResponse:
-    """Verify the configured AWS identity and record what it is."""
+    """Verify a pasted access key against AWS and store it if it works.
+
+    Nothing is written until AWS confirms the key, so a typo leaves whatever
+    was there before in place rather than replacing a working connection with
+    a broken one.
+    """
     region = region.strip()
+    access_key_id = access_key_id.strip()
+    secret_access_key = secret_access_key.strip()
 
     if not is_known_region(region):
         return await _page(
             request, db, current, project, error=UNKNOWN_REGION_MESSAGE, status_code=400
         )
 
+    if not access_key_id or not secret_access_key:
+        return await _page(
+            request,
+            db,
+            current,
+            project,
+            error="Both the access key ID and the secret access key are required.",
+            status_code=400,
+        )
+
     try:
-        await connect_aws(db, redis, provider_factory, project_id=project.id, region=region)
+        await connect_aws(
+            db,
+            redis,
+            provider_factory,
+            project_id=project.id,
+            region=region,
+            credentials=AWSCredentials(
+                access_key_id=access_key_id, secret_access_key=secret_access_key
+            ),
+            secret_key=settings.SECRET_KEY,
+        )
     except APIError as error:
         await db.commit()  # keep the recorded failure, if there was a row to mark
         return await _page(
@@ -182,6 +213,7 @@ async def refresh(
             provider_factory,
             connection,
             interval_seconds=settings.AWS_STATUS_CACHE_TTL_SECONDS,
+            secret_key=settings.SECRET_KEY,
         )
     except APIError as error:
         await db.commit()
@@ -206,6 +238,7 @@ async def disconnect(
     current: Annotated[CurrentUser, Depends(require_user)],
     project: Annotated[Project, Depends(require_project)],
     provisioners: Annotated[ProvisionerFactory, Depends(get_provisioner_factory)],
+    settings: Annotated[Settings, Depends(get_app_settings)],
 ) -> HTMLResponse:
     """Forget the connection.
 
@@ -217,11 +250,14 @@ async def disconnect(
     if connection is None:
         return await _page(request, db, current, project)
 
-    await disconnect_aws(db, redis, connection, provisioner_factory=provisioners)
+    await disconnect_aws(
+        db, redis, connection, secret_key=settings.SECRET_KEY, provisioner_factory=provisioners
+    )
     await db.commit()
 
-    # §9: SESKit never held the credentials, so this removes what it recorded
-    # about them and nothing in the user's AWS account.
+    # Removes the stored access key along with everything SESKit recorded. The
+    # key itself still exists in IAM - deleting somebody's credential is not
+    # something a "disconnect" button should reach.
     return await _page(request, db, current, project, flash="AWS connection removed from SESKit.")
 
 
@@ -259,6 +295,7 @@ async def setup_event_reporting(
             resource_prefix=settings.EVENT_RESOURCE_PREFIX,
             configuration_set=settings.EVENT_CONFIGURATION_SET,
             https_endpoint=settings.event_https_endpoint,
+            secret_key=settings.SECRET_KEY,
         )
     except APIError as error:
         await db.rollback()
@@ -309,7 +346,7 @@ async def remove_event_reporting(
         return await _page(request, db, current, project, settings=settings)
 
     try:
-        await teardown_events(db, provisioners, connection)
+        await teardown_events(db, provisioners, connection, secret_key=settings.SECRET_KEY)
     except APIError as error:
         await db.rollback()
         return await _page(
@@ -361,7 +398,9 @@ async def change_tracking(
     on = enabled == "on"
 
     try:
-        await set_open_click_tracking(db, provisioners, connection, enabled=on)
+        await set_open_click_tracking(
+            db, provisioners, connection, enabled=on, secret_key=settings.SECRET_KEY
+        )
     except APIError as error:
         await db.rollback()
         return await _page(

@@ -7,7 +7,7 @@ person can actually do, and what they are told when it will not work.
 
 from __future__ import annotations
 
-from fakes.ses import FakeProviderFactory
+from fakes.ses import FAKE_CREDENTIALS, TEST_SECRET_KEY, FakeProviderFactory
 from httpx import AsyncClient
 from redis.asyncio import Redis
 from seskit_core.services import connect_aws
@@ -215,9 +215,16 @@ async def test_a_user_cannot_delete_another_projects_identity(
         provider_factory,
         project_id=other_project.id,
         region=REGION,
+        credentials=FAKE_CREDENTIALS,
+        secret_key=TEST_SECRET_KEY,
     )
     theirs = await add_identity(
-        db_session, provider_factory, project_id=other_project.id, value=DOMAIN, region=REGION
+        db_session,
+        provider_factory,
+        project_id=other_project.id,
+        value=DOMAIN,
+        region=REGION,
+        secret_key=TEST_SECRET_KEY,
     )
     await db_session.flush()
 

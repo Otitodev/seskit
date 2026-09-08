@@ -29,6 +29,7 @@ from seskit_core.services.aws import (
     get_connection,
     refresh_connection,
 )
+from seskit_core.services.credentials import stored_credentials
 from seskit_core.services.events import (
     ProvisionerFactory,
     count_other_users,
@@ -181,6 +182,7 @@ __all__ = [
     "set_open_click_tracking",
     "setup_events",
     "signup_allowed",
+    "stored_credentials",
     "suppress",
     "suppressed_among",
     "teardown_events",

@@ -183,7 +183,7 @@ def test_identity_status_is_immutable() -> None:
 
 from datetime import timedelta
 
-from fakes.ses import FakeProviderFactory, denied
+from fakes.ses import TEST_SECRET_KEY, FakeProviderFactory, denied
 from redis.asyncio import Redis
 from seskit_core.errors import APIError
 from seskit_core.models import Project, utcnow
@@ -251,6 +251,7 @@ async def test_adding_a_domain_stores_its_tokens(db_session: AsyncSession) -> No
         project_id=project_id,
         value=DOMAIN,
         region=REGION,
+        secret_key=TEST_SECRET_KEY,
     )
 
     assert identity.is_domain is True
@@ -269,6 +270,7 @@ async def test_adding_an_address_stores_no_tokens(db_session: AsyncSession) -> N
         project_id=project_id,
         value=ADDRESS,
         region=REGION,
+        secret_key=TEST_SECRET_KEY,
     )
 
     assert identity.is_domain is False
@@ -282,10 +284,20 @@ async def test_adding_twice_updates_rather_than_duplicating(db_session: AsyncSes
     factory = FakeProviderFactory()
 
     first = await add_identity(
-        db_session, factory, project_id=project_id, value=DOMAIN, region=REGION
+        db_session,
+        factory,
+        project_id=project_id,
+        value=DOMAIN,
+        region=REGION,
+        secret_key=TEST_SECRET_KEY,
     )
     second = await add_identity(
-        db_session, factory, project_id=project_id, value=DOMAIN, region=REGION
+        db_session,
+        factory,
+        project_id=project_id,
+        value=DOMAIN,
+        region=REGION,
+        secret_key=TEST_SECRET_KEY,
     )
 
     assert first.id == second.id
@@ -302,11 +314,23 @@ async def test_a_second_project_adopts_an_already_verified_domain(
     theirs = await _make_project(db_session, email="them@example.com")
     factory = FakeProviderFactory()
 
-    await add_identity(db_session, factory, project_id=mine, value=DOMAIN, region=REGION)
+    await add_identity(
+        db_session,
+        factory,
+        project_id=mine,
+        value=DOMAIN,
+        region=REGION,
+        secret_key=TEST_SECRET_KEY,
+    )
     factory.provider.mark_verified(DOMAIN)
 
     adopted = await add_identity(
-        db_session, factory, project_id=theirs, value=DOMAIN, region=REGION
+        db_session,
+        factory,
+        project_id=theirs,
+        value=DOMAIN,
+        region=REGION,
+        secret_key=TEST_SECRET_KEY,
     )
 
     assert adopted.is_verified is True
@@ -327,10 +351,24 @@ async def test_removing_one_of_two_references_leaves_ses_alone(
     theirs = await _make_project(db_session, email="them@example.com")
     factory = FakeProviderFactory()
 
-    await add_identity(db_session, factory, project_id=mine, value=DOMAIN, region=REGION)
-    ours = await add_identity(db_session, factory, project_id=theirs, value=DOMAIN, region=REGION)
+    await add_identity(
+        db_session,
+        factory,
+        project_id=mine,
+        value=DOMAIN,
+        region=REGION,
+        secret_key=TEST_SECRET_KEY,
+    )
+    ours = await add_identity(
+        db_session,
+        factory,
+        project_id=theirs,
+        value=DOMAIN,
+        region=REGION,
+        secret_key=TEST_SECRET_KEY,
+    )
 
-    deleted_in_ses = await remove_identity(db_session, factory, ours)
+    deleted_in_ses = await remove_identity(db_session, factory, ours, secret_key=TEST_SECRET_KEY)
 
     assert deleted_in_ses is False
     assert factory.provider.delete_calls == 0
@@ -341,10 +379,17 @@ async def test_removing_the_last_reference_deletes_in_ses(db_session: AsyncSessi
     project_id = await _make_project(db_session)
     factory = FakeProviderFactory()
     identity = await add_identity(
-        db_session, factory, project_id=project_id, value=DOMAIN, region=REGION
+        db_session,
+        factory,
+        project_id=project_id,
+        value=DOMAIN,
+        region=REGION,
+        secret_key=TEST_SECRET_KEY,
     )
 
-    deleted_in_ses = await remove_identity(db_session, factory, identity)
+    deleted_in_ses = await remove_identity(
+        db_session, factory, identity, secret_key=TEST_SECRET_KEY
+    )
 
     assert deleted_in_ses is True
     assert factory.provider.delete_calls == 1
@@ -361,9 +406,21 @@ async def test_the_same_domain_in_two_regions_is_two_identities(
     factory = FakeProviderFactory()
 
     first = await add_identity(
-        db_session, factory, project_id=project_id, value=DOMAIN, region=REGION
+        db_session,
+        factory,
+        project_id=project_id,
+        value=DOMAIN,
+        region=REGION,
+        secret_key=TEST_SECRET_KEY,
     )
-    await add_identity(db_session, factory, project_id=project_id, value=DOMAIN, region="eu-west-1")
+    await add_identity(
+        db_session,
+        factory,
+        project_id=project_id,
+        value=DOMAIN,
+        region="eu-west-1",
+        secret_key=TEST_SECRET_KEY,
+    )
 
     assert await count_other_references(db_session, first) == 0
 
@@ -377,11 +434,18 @@ async def test_refresh_reads_the_current_state(
     project_id = await _make_project(db_session)
     factory = FakeProviderFactory()
     identity = await add_identity(
-        db_session, factory, project_id=project_id, value=DOMAIN, region=REGION
+        db_session,
+        factory,
+        project_id=project_id,
+        value=DOMAIN,
+        region=REGION,
+        secret_key=TEST_SECRET_KEY,
     )
     factory.provider.mark_verified(DOMAIN)
 
-    await refresh_identity(db_session, redis_client, factory, identity, interval_seconds=60)
+    await refresh_identity(
+        db_session, redis_client, factory, identity, interval_seconds=60, secret_key=TEST_SECRET_KEY
+    )
 
     assert identity.is_verified is True
 
@@ -393,12 +457,21 @@ async def test_a_second_refresh_inside_the_interval_does_not_call_ses(
     project_id = await _make_project(db_session)
     factory = FakeProviderFactory()
     identity = await add_identity(
-        db_session, factory, project_id=project_id, value=DOMAIN, region=REGION
+        db_session,
+        factory,
+        project_id=project_id,
+        value=DOMAIN,
+        region=REGION,
+        secret_key=TEST_SECRET_KEY,
     )
 
-    await refresh_identity(db_session, redis_client, factory, identity, interval_seconds=60)
+    await refresh_identity(
+        db_session, redis_client, factory, identity, interval_seconds=60, secret_key=TEST_SECRET_KEY
+    )
     calls = factory.provider.get_calls
-    await refresh_identity(db_session, redis_client, factory, identity, interval_seconds=60)
+    await refresh_identity(
+        db_session, redis_client, factory, identity, interval_seconds=60, secret_key=TEST_SECRET_KEY
+    )
 
     assert factory.provider.get_calls == calls
 
@@ -412,11 +485,18 @@ async def test_a_failed_check_is_recorded_not_raised(
     project_id = await _make_project(db_session)
     factory = FakeProviderFactory()
     identity = await add_identity(
-        db_session, factory, project_id=project_id, value=DOMAIN, region=REGION
+        db_session,
+        factory,
+        project_id=project_id,
+        value=DOMAIN,
+        region=REGION,
+        secret_key=TEST_SECRET_KEY,
     )
     factory.provider.error = denied()
 
-    await refresh_identity(db_session, redis_client, factory, identity, interval_seconds=0)
+    await refresh_identity(
+        db_session, redis_client, factory, identity, interval_seconds=0, secret_key=TEST_SECRET_KEY
+    )
 
     assert identity.last_error is not None
 
@@ -472,10 +552,20 @@ async def test_due_selects_only_what_needs_checking(db_session: AsyncSession) ->
     project_id = await _make_project(db_session)
     factory = FakeProviderFactory()
     fresh = await add_identity(
-        db_session, factory, project_id=project_id, value=DOMAIN, region=REGION
+        db_session,
+        factory,
+        project_id=project_id,
+        value=DOMAIN,
+        region=REGION,
+        secret_key=TEST_SECRET_KEY,
     )
     stale = await add_identity(
-        db_session, factory, project_id=project_id, value="other.example", region=REGION
+        db_session,
+        factory,
+        project_id=project_id,
+        value="other.example",
+        region=REGION,
+        secret_key=TEST_SECRET_KEY,
     )
     stale.last_checked_at = utcnow() - timedelta(days=1)
     await db_session.flush()
@@ -493,7 +583,12 @@ async def test_due_selects_only_what_needs_checking(db_session: AsyncSession) ->
 async def test_deleting_a_project_deletes_its_identities(db_session: AsyncSession) -> None:
     project_id = await _make_project(db_session)
     await add_identity(
-        db_session, FakeProviderFactory(), project_id=project_id, value=DOMAIN, region=REGION
+        db_session,
+        FakeProviderFactory(),
+        project_id=project_id,
+        value=DOMAIN,
+        region=REGION,
+        secret_key=TEST_SECRET_KEY,
     )
 
     project = await db_session.get(Project, project_id)

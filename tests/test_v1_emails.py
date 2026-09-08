@@ -13,7 +13,7 @@ import base64
 from typing import Any
 
 from fakes.queue import FakeQueue
-from fakes.ses import FakeProviderFactory
+from fakes.ses import FAKE_CREDENTIALS, TEST_SECRET_KEY, FakeProviderFactory
 from httpx import AsyncClient
 from seskit_core.models import EmailStatus
 from seskit_core.services import (
@@ -191,6 +191,8 @@ async def test_an_unverified_sender_on_a_connected_project_is_refused(
         provider_factory,
         project_id=project.id,
         region=REGION,
+        credentials=FAKE_CREDENTIALS,
+        secret_key=TEST_SECRET_KEY,
     )
     issued = await create_api_key(db_session, project_id=project.id, name="prod")
 
@@ -217,12 +219,19 @@ async def test_a_verified_sender_goes_through(
         provider_factory,
         project_id=project.id,
         region=REGION,
+        credentials=FAKE_CREDENTIALS,
+        secret_key=TEST_SECRET_KEY,
     )
     identity = await add_identity(
-        db_session, provider_factory, project_id=project.id, value="example.com", region=REGION
+        db_session,
+        provider_factory,
+        project_id=project.id,
+        value="example.com",
+        region=REGION,
+        secret_key=TEST_SECRET_KEY,
     )
     provider_factory.provider.mark_verified("example.com")
-    await check_identity(db_session, provider_factory, identity)
+    await check_identity(db_session, provider_factory, identity, secret_key=TEST_SECRET_KEY)
     issued = await create_api_key(db_session, project_id=project.id, name="prod")
 
     response = await app_client.post(EMAILS_URL, json=BODY, headers=_auth(issued.raw_key))

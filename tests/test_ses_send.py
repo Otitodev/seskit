@@ -12,6 +12,7 @@ from typing import Any
 
 import pytest
 from botocore.exceptions import ClientError
+from fakes.ses import FAKE_CREDENTIALS
 from seskit_core.errors import APIError, ErrorType
 from seskit_core.providers.types import Attachment, OutboundEmail
 from seskit_provider_aws_ses import SESProvider
@@ -37,7 +38,7 @@ class FakeSESClient:
 
 
 def _provider(monkeypatch: pytest.MonkeyPatch, client: FakeSESClient) -> SESProvider:
-    provider = SESProvider(REGION)
+    provider = SESProvider(REGION, FAKE_CREDENTIALS)
     monkeypatch.setattr(provider._session, "client", lambda *a, **kw: client)
     return provider
 

@@ -47,7 +47,7 @@ async def recheck_identities(ctx: dict[str, Any]) -> int:
 
         for identity in due:
             try:
-                await check_identity(session, SESProvider, identity)
+                await check_identity(session, SESProvider, identity, secret_key=settings.SECRET_KEY)
                 checked += 1
             except Exception:
                 # check_identity already records an APIError on the row; this

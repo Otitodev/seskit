@@ -30,7 +30,7 @@ from seskit_core.config import get_settings
 from seskit_core.db import get_session_factory
 from seskit_core.events import MalformedEnvelope, Outcome, ingest_event, unwrap
 from seskit_core.logging import get_logger
-from seskit_core.providers import NotificationQueue, QueuedNotification
+from seskit_core.providers import AWSCredentials, NotificationQueue, QueuedNotification
 from seskit_core.services import distinct_event_queues, pending_delivery_ids
 from seskit_provider_aws_ses import SQSNotificationQueue
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -40,7 +40,7 @@ logger = get_logger(__name__)
 #: How the job turns a queue URL into a reader. Injectable so a test can
 #: substitute one without patching a module attribute - the same seam
 #: ``build_provider`` gives the send job.
-QueueBuilder = Callable[[str, str], NotificationQueue]
+QueueBuilder = Callable[[str, str, AWSCredentials], NotificationQueue]
 
 #: How a session is opened. Injectable for the same reason the send job's was
 #: split in Phase 6: a job that manages its own session cannot be tested
@@ -53,12 +53,12 @@ SessionFactory = Callable[[], AsyncSession]
 Enqueue = Callable[[str], Awaitable[None]]
 
 
-def build_queue(region: str, queue_url: str) -> NotificationQueue:
-    """Map a region and queue URL onto a reader.
+def build_queue(region: str, queue_url: str, credentials: AWSCredentials) -> NotificationQueue:
+    """Map a region, queue URL and access key onto a reader.
 
     Lives here rather than in core, which must not import a provider (§32.8).
     """
-    return SQSNotificationQueue(region, queue_url)
+    return SQSNotificationQueue(region, queue_url, credentials)
 
 
 async def poll_events(
@@ -84,12 +84,12 @@ async def poll_events(
     recorded = 0
 
     async with factory() as session:
-        queues = await distinct_event_queues(session)
+        queues = await distinct_event_queues(session, secret_key=settings.SECRET_KEY)
 
-    for region, queue_url in queues:
+    for region, queue_url, credentials in queues:
         try:
             recorded += await drain(
-                build(region, queue_url),
+                build(region, queue_url, credentials),
                 session_factory=factory,
                 enqueue=enqueue,
                 max_batches=settings.EVENT_POLL_MAX_BATCHES,

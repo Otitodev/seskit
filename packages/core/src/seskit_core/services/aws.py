@@ -26,7 +26,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from seskit_core.errors import APIError
 from seskit_core.logging import get_logger
 from seskit_core.models import AWSConnection, ConnectionStatus, utcnow
-from seskit_core.providers import AccountStatus, EmailProvider
+from seskit_core.providers import AccountStatus, AWSCredentials, EmailProvider
+from seskit_core.security.aws_credentials import encrypt_secret_access_key
+from seskit_core.services.credentials import stored_credentials
 from seskit_core.services.events import ProvisionerFactory, teardown_events
 
 logger = get_logger(__name__)
@@ -34,9 +36,10 @@ logger = get_logger(__name__)
 #: Marks that a live AWS check ran recently for a project.
 CHECK_MARKER_PREFIX = "aws_checked:"
 
-#: Builds a provider for a region. Injected so tests - and, later, a second
-#: provider - can substitute one without the service importing an adapter.
-ProviderFactory = Callable[[str], EmailProvider]
+#: Builds a provider for a region, on one project's credentials. Injected so
+#: tests - and, later, a second provider - can substitute one without the
+#: service importing an adapter.
+ProviderFactory = Callable[[str, AWSCredentials], EmailProvider]
 
 
 def _marker_key(project_id: str) -> str:
@@ -85,13 +88,20 @@ async def connect_aws(
     *,
     project_id: str,
     region: str,
+    credentials: AWSCredentials,
+    secret_key: str,
 ) -> AWSConnection:
-    """Verify the AWS identity and record what it is.
+    """Verify an access key against AWS and record what it turned out to be.
+
+    The credentials are the ones the user just typed, not anything stored -
+    this is where they arrive. They are only written to the row once AWS has
+    confirmed they work, so a mistyped key leaves the previous one in place
+    rather than replacing a working connection with a broken one.
 
     Raises the normalised ``APIError`` on failure rather than returning a
     half-built row, so the route can show the user what AWS actually said.
     """
-    provider = provider_factory(region)
+    provider = provider_factory(region, credentials)
     connection = await get_connection(session, project_id)
 
     try:
@@ -114,6 +124,10 @@ async def connect_aws(
         raise
 
     connection = _apply(connection, status, project_id=project_id, region=region)
+    connection.aws_access_key_id = credentials.access_key_id
+    connection.aws_secret_access_key_encrypted = encrypt_secret_access_key(
+        credentials.secret_access_key, secret_key=secret_key
+    )
     session.add(connection)
     await session.flush()
     await clear_check_marker(redis, project_id)
@@ -134,6 +148,7 @@ async def refresh_connection(
     connection: AWSConnection,
     *,
     interval_seconds: int,
+    secret_key: str,
 ) -> AWSConnection:
     """Re-check an existing connection against AWS, if the interval allows.
 
@@ -145,7 +160,9 @@ async def refresh_connection(
         logger.debug("aws_refresh_skipped", project_id=connection.project_id)
         return connection
 
-    provider = provider_factory(connection.region)
+    provider = provider_factory(
+        connection.region, stored_credentials(connection, secret_key=secret_key)
+    )
 
     try:
         status = await provider.verify_account()
@@ -166,6 +183,7 @@ async def disconnect_aws(
     redis: Redis,
     connection: AWSConnection,
     *,
+    secret_key: str,
     provisioner_factory: ProvisionerFactory | None = None,
 ) -> None:
     """Forget the connection, and remove what SESKit built in AWS.
@@ -189,7 +207,7 @@ async def disconnect_aws(
                 "This connection has event infrastructure in AWS. Disconnecting needs a "
                 "provisioner factory so it can be removed rather than abandoned."
             )
-        await teardown_events(session, provisioner_factory, connection)
+        await teardown_events(session, provisioner_factory, connection, secret_key=secret_key)
 
     await session.delete(connection)
     await session.flush()
