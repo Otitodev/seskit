@@ -140,10 +140,14 @@ Setting it on the API alone is the easy mistake, and it is invisible: the
 dashboard looks configured, and mail simply goes out with no Unsubscribe
 button. `doctor.py` reports what each process sees.
 
-For AWS, give the process credentials the boto3 way. An **IAM role** on the
-instance or task is better than any key, because there is no secret to leak or
-rotate. See [connect an AWS account](../guides/connect-aws.md) and
-[Configuration](../reference/configuration.md).
+**Nothing here is about AWS.** An access key belongs to a project and is
+entered on the dashboard once the instance is up — there is no AWS variable to
+set on the server and no CLI to install on it. See
+[get an access key](../guides/get-an-access-key.md).
+
+The one thing the deployment owes AWS credentials is `SECRET_KEY`: it derives
+the key they are encrypted with, so both processes need the same value and
+changing it disconnects every project.
 
 ## Migrations
 

@@ -38,6 +38,25 @@ The last one prints the SQL instead of executing it. Worth reading against a
 database with data you care about, particularly for anything that drops a
 column or rewrites a table.
 
+## Rotating `SECRET_KEY` disconnects every project
+
+Stored AWS access keys are encrypted with a key derived from `SECRET_KEY`.
+Change it and none of them can be read: every project shows as not working and
+has to be connected again with its key.
+
+That is a real cost of deriving the encryption key rather than configuring a
+second one, and it is the trade taken knowingly — a second secret to set is a
+second secret to lose, and it would have added a step to a setup meant to be
+short.
+
+If you must rotate it, plan the reconnection: have the access keys to hand
+first, rotate, then connect each project. Sending fails in between, and fails
+with a message saying exactly this rather than something about AWS.
+
+Upgrading to the version that introduced stored keys has the same effect for
+the same reason — no migration can invent a key that was never stored, so every
+existing connection is marked as needing one.
+
 ## Downgrades are not a recovery plan
 
 Alembic can generate them. That does not make them a rollback: a downgrade that

@@ -87,7 +87,7 @@ SESKit is in active development. This is honest about what is built:
 |---|---|---|
 | ✅ | Accounts, sessions, projects | Server-rendered dashboard |
 | ✅ | API keys | SHA-256 hashed, shown once, revocable |
-| ✅ | AWS connection | Credentials never stored; sandbox and quota surfaced |
+| ✅ | AWS connection | Paste an access key per project; sandbox and quota surfaced |
 | ✅ | Sender verification | Email addresses and domains, with DKIM records |
 | ✅ | Sending | `POST /v1/emails`, attachments, idempotency, queued delivery |
 | ✅ | Delivery events | Delivered, bounced, complained — via SQS or HTTPS |
@@ -112,6 +112,7 @@ in the tree.
 [the dashboard](https://otitodev.github.io/seskit/getting-started/dashboard-tour/)
 
 **Guides** — [no AWS account yet?](https://otitodev.github.io/seskit/guides/no-aws-account-yet/) ·
+[get an access key](https://otitodev.github.io/seskit/guides/get-an-access-key/) ·
 [connect AWS](https://otitodev.github.io/seskit/guides/connect-aws/) ·
 [IAM policies](https://otitodev.github.io/seskit/guides/iam-policies/) ·
 [verify a sender](https://otitodev.github.io/seskit/guides/verify-a-sender/) ·
