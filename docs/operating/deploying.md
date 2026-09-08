@@ -151,10 +151,21 @@ changing it disconnects every project.
 
 ## Migrations
 
-Run before starting the new version:
+**Under Compose they run themselves.** A one-shot `migrate` service applies the
+schema and exits, and the API and worker wait for it to succeed — so
+`docker compose up` on a clean machine produces a working instance rather than
+one that starts and then fails on its first query.
+
+A one-shot service rather than something in the API's startup, because two API
+replicas booting together would race, and migrations are not a thing to run on
+every boot. It is visible in `docker compose ps`, and a failure stops the stack
+instead of being buried in an application log.
+
+Running them by hand, if you deploy some other way:
 
 ```bash
-uv run alembic upgrade head
+docker compose run --rm migrate      # with the shipped image
+uv run alembic upgrade head          # from a checkout, with the dev group
 ```
 
 See [upgrading](upgrading.md) for the ordering that matters.

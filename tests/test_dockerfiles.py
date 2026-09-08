@@ -20,7 +20,9 @@ is a property of the source, not of the daemon that happens to be installed.
 from __future__ import annotations
 
 import re
+import tomllib
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -130,3 +132,52 @@ def test_only_the_api_publishes_a_port() -> None:
     """
     assert any(line.startswith("EXPOSE") for line in _instructions(API))
     assert not any(line.startswith("EXPOSE") for line in _instructions(WORKER))
+
+
+# ------------------------------------------------------------------ compose ---
+
+
+def _compose() -> dict[str, Any]:
+    yaml = pytest.importorskip("yaml", reason="pyyaml arrives with the docs group")
+    loaded: dict[str, Any] = yaml.safe_load(
+        (ROOT / "docker-compose.yml").read_text(encoding="utf-8")
+    )
+    return loaded
+
+
+def test_the_stack_applies_its_own_migrations() -> None:
+    """`docker compose up` on a clean machine has to produce a working
+    instance.
+
+    Before this existed it produced one with no schema: every documented way to
+    migrate was `uv run alembic upgrade head`, which needs uv, a checkout and
+    the dev dependency group - none of which a server following the quickstart
+    has, and alembic was not in the image either.
+    """
+    services = _compose()["services"]
+
+    assert "migrate" in services
+    assert services["migrate"]["command"] == ["alembic", "upgrade", "head"]
+
+
+@pytest.mark.parametrize("service", ["api", "worker"])
+def test_nothing_starts_before_the_schema_exists(service: str) -> None:
+    """Waiting for it to *complete*, not merely to start. A migration that
+    fails must stop the stack rather than leaving an application to discover
+    the missing column on its first query.
+    """
+    depends = _compose()["services"][service]["depends_on"]
+
+    assert depends["migrate"]["condition"] == "service_completed_successfully"
+
+
+def test_the_image_can_run_alembic() -> None:
+    """The migrate service uses the shipped image, so alembic has to be a
+    runtime dependency rather than a development one.
+    """
+    # Parsed rather than sliced: `uvicorn[standard]` contains a bracket, and a
+    # string split on "]" reads the dependency list as ending there.
+    manifest = tomllib.loads((ROOT / "apps" / "api" / "pyproject.toml").read_text("utf-8"))
+    dependencies = manifest["project"]["dependencies"]
+
+    assert any(name.startswith("alembic") for name in dependencies), dependencies

@@ -1865,6 +1865,7 @@ name = "seskit-api"
 version = "0.1.0"
 source = { editable = "apps/api" }
 dependencies = [
+    { name = "alembic" },
     { name = "arq" },
     { name = "fastapi" },
     { name = "jinja2" },
@@ -1877,6 +1878,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
+    { name = "alembic", specifier = ">=1.13" },
     { name = "arq", specifier = ">=0.26" },
     { name = "fastapi", specifier = ">=0.115" },
     { name = "jinja2", specifier = ">=3.1" },

@@ -133,7 +133,10 @@ async def check_postgres(settings: Settings) -> list[Result]:
                 "migrations",
                 False,
                 f"at {applied or 'nothing'}, head is {expected}",
-                fix="Run: uv run alembic upgrade head",
+                fix=(
+                    "Run: docker compose up migrate  (or, outside Docker, "
+                    "uv run alembic upgrade head)"
+                ),
             )
         )
     return results

@@ -12,6 +12,11 @@ dependencies = [
     "seskit-provider-aws-ses",
     "seskit-provider-smtp",
     "arq>=0.26",
+    # Runtime, not development. The image has to be able to apply its own
+    # migrations: a deployment that clones and runs `docker compose up` has
+    # no uv, no repository checkout and no dev dependency group to borrow
+    # one from.
+    "alembic>=1.13",
 ]
 
 [build-system]

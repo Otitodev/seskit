@@ -56,6 +56,34 @@ services:
       - "1025:1025"
       - "8025:8025"
 
+  # Applies the schema, then exits. api and worker wait for it to succeed, so
+  # `docker compose up` on a clean machine produces a working instance rather
+  # than one that starts and then fails on its first query.
+  #
+  # A one-shot service rather than something in the API's startup: two API
+  # replicas booting together would race, and migrations are not a thing to run
+  # on every boot. Here it is visible in `docker compose ps`, and a failure
+  # stops the stack instead of being buried in an application log.
+  migrate:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    command: ["alembic", "upgrade", "head"]
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-seskit}:${POSTGRES_PASSWORD:-seskit}@db:5432/${POSTGRES_DB:-seskit}
+      REDIS_URL: redis://redis:6379/0
+      PYTHONPATH: /app/packages/core/src:/app/apps/api/src:/app/apps/worker/src
+    volumes:
+      - ./apps:/app/apps
+      - ./packages:/app/packages
+      - ./migrations:/app/migrations
+      - /app/.venv
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+
   api:
     build:
       context: .
@@ -91,6 +119,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:8000/healthz"]
       interval: 10s
@@ -118,6 +148,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
 
 volumes:
   seskit-db-data:
