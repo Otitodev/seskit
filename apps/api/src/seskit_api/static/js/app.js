@@ -87,6 +87,36 @@
     });
   }
 
+  /* Auto-submitting selects ------------------------------------------------
+   * The sidebar project switcher. This was an onchange attribute until the
+   * CSP arrived: `script-src 'self' 'nonce-...'` refuses an inline handler,
+   * and a nonce cannot license one, so the dropdown silently stopped
+   * switching anything.
+   *
+   * The submit button is in the markup and is hidden here, once the listener
+   * exists. Doing it that way round means the form still works if this file
+   * never arrives - which <noscript> would not cover, because a blocked or
+   * refused script leaves scripting enabled.
+   */
+
+  function initAutoSubmit() {
+    var selects = document.querySelectorAll("select[data-auto-submit]");
+    if (!selects.length) return;
+
+    Array.prototype.forEach.call(selects, function (select) {
+      select.addEventListener("change", function () {
+        if (select.form) select.form.submit();
+      });
+    });
+
+    Array.prototype.forEach.call(
+      document.querySelectorAll("[data-auto-submit-fallback]"),
+      function (button) {
+        button.hidden = true;
+      }
+    );
+  }
+
   /* Toast ------------------------------------------------------------------
    * The server renders the message into the document; this floats it and takes
    * it away again. Doing it in this order means the text is in the HTML for a
@@ -135,6 +165,7 @@
     syncToggleLabel();
     initCopy();
     initToast();
+    initAutoSubmit();
 
     var toggle = document.querySelector("[data-theme-toggle]");
     if (toggle) toggle.addEventListener("click", toggleTheme);
