@@ -27,7 +27,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from seskit_core.db import Base
 from seskit_core.ids import IDPrefix, generate_id
 from seskit_core.models.base import TimestampMixin
-from seskit_core.providers.types import CredentialMode, EventInfrastructure, SendingQuota
+from seskit_core.providers.types import EventInfrastructure, SendingQuota
 
 if TYPE_CHECKING:
     from seskit_core.models.project import Project
@@ -73,9 +73,6 @@ class AWSConnection(Base, TimestampMixin):
     aws_account_id: Mapped[str] = mapped_column(String(32), nullable=False)
     region: Mapped[str] = mapped_column(String(32), nullable=False)
 
-    credential_mode: Mapped[str] = mapped_column(
-        String(32), nullable=False, default=CredentialMode.UNKNOWN.value
-    )
     status: Mapped[str] = mapped_column(
         String(32), nullable=False, default=ConnectionStatus.ERROR.value
     )

@@ -23,24 +23,6 @@ from enum import StrEnum
 SANDBOX_DAILY_LIMIT = 200
 
 
-class CredentialMode(StrEnum):
-    """Which source boto3 resolved credentials from (§9).
-
-    Recorded because "why did this stop working" has a very different answer for
-    an expired environment variable than for a detached instance role. The
-    values mirror botocore's own credential-provider method names.
-    """
-
-    ENVIRONMENT = "environment"
-    SHARED_CREDENTIALS_FILE = "shared-credentials-file"
-    CONFIG_FILE = "config-file"
-    IAM_ROLE = "iam-role"
-    CONTAINER_ROLE = "container-role"
-    ASSUME_ROLE = "assume-role"
-    SSO = "sso"
-    UNKNOWN = "unknown"
-
-
 @dataclass(frozen=True, slots=True)
 class SendingQuota:
     """What the account is allowed to send, as the provider reports it.
@@ -77,7 +59,6 @@ class AccountStatus:
     sending_enabled: bool
     enforcement_status: str
     quota: SendingQuota
-    credential_mode: CredentialMode = CredentialMode.UNKNOWN
 
 
 # ------------------------------------------------------------ identities ---

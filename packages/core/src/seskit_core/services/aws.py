@@ -123,7 +123,6 @@ async def connect_aws(
         project_id=project_id,
         region=region,
         sandbox=status.sandbox,
-        credential_mode=status.credential_mode.value,
     )
     return connection
 
@@ -211,7 +210,6 @@ def _apply(
 
     connection.region = region
     connection.aws_account_id = status.account_id
-    connection.credential_mode = status.credential_mode.value
     connection.status = ConnectionStatus.CONNECTED.value
     connection.sandbox = status.sandbox
     connection.sending_enabled = status.sending_enabled

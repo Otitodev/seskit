@@ -13,7 +13,7 @@ from typing import Any
 import pytest
 from botocore.exceptions import ClientError, EndpointConnectionError, NoCredentialsError
 from seskit_core.errors import APIError, ErrorType
-from seskit_core.providers import CredentialMode, EmailProvider, SendingQuota
+from seskit_core.providers import EmailProvider, SendingQuota
 from seskit_provider_aws_ses import SESProvider, normalise_boto_error
 from seskit_provider_aws_ses.errors import NO_CREDENTIALS_MESSAGE
 from seskit_provider_aws_ses.provider import SES_ACCOUNT_ACTION
@@ -200,15 +200,3 @@ def test_an_unmapped_error_is_never_re_raised_as_itself() -> None:
 
     assert isinstance(error, APIError)
     assert "kaboom" not in error.message
-
-
-# ------------------------------------------------------------ credentials ---
-
-
-def test_an_unresolvable_credential_mode_is_unknown_not_a_guess() -> None:
-    """Returning UNKNOWN rather than raising: the caller finds out for real on
-    the first API call, which produces a far better error than a guess here.
-    """
-    provider = SESProvider(REGION)
-
-    assert provider.credential_mode in set(CredentialMode)

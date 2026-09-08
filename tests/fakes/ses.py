@@ -17,7 +17,6 @@ from typing import ClassVar
 from seskit_core.errors import APIError, ErrorType
 from seskit_core.providers import (
     AccountStatus,
-    CredentialMode,
     EventInfrastructure,
     IdentityStatus,
     IdentityType,
@@ -77,7 +76,6 @@ class FakeProvider:
             sending_enabled=self.sending_enabled,
             enforcement_status="HEALTHY",
             quota=SANDBOX_QUOTA if self.sandbox else PRODUCTION_QUOTA,
-            credential_mode=CredentialMode.ENVIRONMENT,
         )
 
     async def get_sending_quota(self) -> SendingQuota:
