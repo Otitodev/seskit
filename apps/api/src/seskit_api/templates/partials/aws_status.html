@@ -40,6 +40,14 @@
           <dd><code>{{ connection.region }}</code></dd>
         </div>
         <div class="datalist__row">
+          <dt>Access key</dt>
+          {# Shortened rather than redacted: an access key id is an identifier,
+             not a secret. Enough of it to answer "which of my keys is this?"
+             without putting the whole string into every screenshot. The secret
+             is not here and no route can return it. #}
+          <dd><code>{{ connection.access_key_display }}</code></dd>
+        </div>
+        <div class="datalist__row">
           <dt>SES status</dt>
           <dd>
             {% if connection.sending_enabled %}
@@ -191,6 +199,33 @@
           </form>
         </div>
       {% endif %}
+    {{ card_close() }}
+
+    {{ card_open("Replace the access key") }}
+      {# Rotating a key is routine, and without this the only way to change one
+         would be Disconnect - which tears down the queue, topic and
+         configuration set that delivery events depend on, to fix something
+         that has nothing to do with them.
+
+         Posts to the same endpoint as the first connection. It checks the new
+         key against AWS before storing anything, so a wrong one leaves the
+         working key in place rather than breaking a live project. #}
+      <p class="muted">
+        Rotated the key in IAM? Paste the new one. It is checked against AWS
+        before it replaces the current one, and delivery events are left alone.
+      </p>
+      <form class="stack" method="post" action="/aws/connect">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <input type="hidden" name="region" value="{{ connection.region }}">
+
+        {{ field("access_key_id", "New access key ID",
+                 placeholder="AKIAIOSFODNN7EXAMPLE",
+                 attrs='maxlength="128" autocomplete="off" spellcheck="false"') }}
+        {{ field("secret_access_key", "New secret access key", type="password",
+                 attrs='maxlength="256" autocomplete="off"') }}
+
+        {{ button("Replace key", type="submit") }}
+      </form>
     {{ card_close() }}
 
     <div class="row row--end">

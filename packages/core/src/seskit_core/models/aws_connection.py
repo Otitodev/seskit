@@ -141,6 +141,24 @@ class AWSConnection(Base, TimestampMixin):
     project: Mapped[Project] = relationship(back_populates="aws_connection")
 
     @property
+    def access_key_display(self) -> str:
+        """The stored access key id, shortened for a screen.
+
+        An access key id is an identifier rather than a secret - AWS shows them
+        in full in the IAM console - so this is not redaction. It is that a
+        dashboard gets screenshotted and screen-shared, and the whole string
+        buys nothing over enough of it to answer the only question anyone asks
+        here: *which of my keys is this one?*
+
+        First four and last four, because the first four are always ``AKIA``
+        and the last four are what actually distinguish two keys in a list.
+        """
+        key = self.aws_access_key_id or ""
+        if len(key) <= 12:
+            return key
+        return f"{key[:4]}…{key[-4:]}"
+
+    @property
     def has_credentials(self) -> bool:
         """Whether this row can actually reach AWS.
 

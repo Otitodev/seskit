@@ -22,6 +22,7 @@ from seskit_core.services import (
     refresh_connection,
     register_user,
 )
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 PASSWORD = "correct-horse-battery"
@@ -688,3 +689,110 @@ async def test_no_credential_material_is_ever_stored(
     forbidden = {"access_key", "secret_key", "secret_access_key", "credentials", "session_token"}
 
     assert not columns & forbidden
+
+
+# ------------------------------------------------------------- access key ---
+
+
+async def test_the_stored_key_is_shown_shortened(
+    app_client: AsyncClient, db_session: AsyncSession
+) -> None:
+    """Which of my keys is this? - the only question the page is asked about
+    it. An access key id is an identifier rather than a secret, so this is
+    shortening for a screen, not redaction.
+    """
+    await _sign_in(app_client)
+    token = await _csrf(app_client)
+
+    page = await app_client.post("/aws/connect", data=_connect_form(token))
+
+    assert "AKIA\u2026MPLE" in page.text
+    assert FAKE_CREDENTIALS.access_key_id not in page.text
+
+
+async def test_the_secret_never_reaches_the_page(
+    app_client: AsyncClient, db_session: AsyncSession
+) -> None:
+    """The claim the whole design rests on. There is no route that can return
+    it, and this is what would notice if one appeared.
+    """
+    await _sign_in(app_client)
+    token = await _csrf(app_client)
+
+    page = await app_client.post("/aws/connect", data=_connect_form(token))
+
+    assert FAKE_CREDENTIALS.secret_access_key not in page.text
+    assert "wJalr" not in page.text
+
+
+async def test_the_secret_is_not_echoed_back_after_a_failure(
+    app_client: AsyncClient, db_session: AsyncSession
+) -> None:
+    """A form that repopulates itself would put the secret in the HTML of an
+    error page - which is the page most likely to be screenshotted and pasted
+    into a support thread.
+    """
+    await _sign_in(app_client)
+    token = await _csrf(app_client)
+
+    page = await app_client.post("/aws/connect", data=_connect_form(token, region="mars-central-1"))
+
+    assert page.status_code == 400
+    assert FAKE_CREDENTIALS.secret_access_key not in page.text
+
+
+async def test_a_connected_project_can_replace_its_key(
+    app_client: AsyncClient, db_session: AsyncSession
+) -> None:
+    """Rotation is routine. Without this the only way to change a key would be
+    Disconnect, which tears down the delivery-event infrastructure to fix
+    something unrelated to it.
+    """
+    await _sign_in(app_client)
+    token = await _csrf(app_client)
+    await app_client.post("/aws/connect", data=_connect_form(token))
+
+    page = await app_client.post(
+        "/aws/connect",
+        data={
+            "csrf_token": token,
+            "region": REGION,
+            "access_key_id": "AKIAROTATEDKEY123456",
+            "secret_access_key": "a-freshly-rotated-secret",
+        },
+    )
+
+    assert page.status_code == 200
+    project_id = await db_session.scalar(select(Project.id))
+    connection = await get_connection(db_session, str(project_id))
+    assert connection is not None
+    assert connection.aws_access_key_id == "AKIAROTATEDKEY123456"
+
+
+async def test_replacing_the_key_is_offered_while_connected(
+    app_client: AsyncClient, db_session: AsyncSession
+) -> None:
+    await _sign_in(app_client)
+    token = await _csrf(app_client)
+
+    page = await app_client.post("/aws/connect", data=_connect_form(token))
+
+    assert "Replace the access key" in page.text
+
+
+async def test_both_key_fields_are_required(
+    app_client: AsyncClient, db_session: AsyncSession
+) -> None:
+    """A blank secret must not be stored as a blank secret and discovered at
+    the first send.
+    """
+    await _sign_in(app_client)
+    token = await _csrf(app_client)
+
+    page = await app_client.post(
+        "/aws/connect",
+        data={"csrf_token": token, "region": REGION, "access_key_id": "AKIA123"},
+    )
+
+    assert page.status_code == 400
+    assert "required" in page.text
