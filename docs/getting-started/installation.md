@@ -53,8 +53,19 @@ uv run uvicorn seskit_api.main:app --reload
 uv run arq seskit_worker.main.WorkerSettings   # in a second shell
 ```
 
+**Two processes, one codebase.** The API serves `/v1` and the dashboard; the
+worker sends the mail, delivers webhooks and polls for delivery events. They
+never talk to each other — the API records the message and puts a job in Redis,
+and the worker picks it up. That is why a send answers `queued` rather than
+`sent`.
+
 The worker is not optional. Sending is queued, so with no worker running a
 message stays at `queued` for ever and nothing tells you why.
+
+Both need the *same* `DATABASE_URL`, `REDIS_URL` and `SECRET_KEY` — which is
+why they are exported once above and inherited by both shells. See
+[how the two processes fit together](../operating/deploying.md#how-the-two-processes-fit-together)
+before running this anywhere real.
 
 ## Creating the owner account
 
