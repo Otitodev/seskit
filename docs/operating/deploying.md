@@ -17,9 +17,81 @@ dashboard is server-rendered by the same process that serves the API.
     Sending is queued. With no worker running, messages stay at `queued` for
     ever and nothing on the dashboard explains why.
 
+## How the two processes fit together
+
+**They never talk to each other.** There is no RPC between them, no port one
+opens for the other, and no service discovery. Everything passes through
+PostgreSQL and Redis:
+
+```text
+   your application
+         │ POST /v1/emails
+         ▼
+  ┌──────────────────┐   records the message   ┌────────────┐
+  │       API        │ ──────────────────────► │ PostgreSQL │
+  │     uvicorn      │                         └─────┬──────┘
+  │ /v1 + dashboard  │                               │ reads it back
+  └────────┬─────────┘                               │
+           │ enqueues a job                          │
+           ▼                                         │
+      ┌─────────┐      takes the job        ┌────────┴───────┐
+      │  Redis  │ ────────────────────────► │     Worker     │ ──► SES
+      └─────────┘                           │      arq       │     or SMTP
+                                            └────────────────┘
+```
+
+The API's work ends the moment the message is recorded and a job is queued.
+That is why a send answers `queued` rather than `sent` — see
+[your first email](../getting-started/first-email.md).
+
+The worker owns everything that talks to something remote and slow: sending,
+webhook delivery, polling SQS for delivery events, and re-checking identity
+verification.
+
+Four things follow from the split, and they are the ones that catch people:
+
+- **The worker needs no inbound port.** Nothing connects *to* it. It only makes
+  outbound connections, so it can sit in a private subnet with no load
+  balancer, no hostname and no certificate.
+- **Either can be scaled independently.** Both are stateless; the queue and the
+  database hold everything. Run three workers behind one API if sending is your
+  bottleneck.
+- **A worker outage is invisible from the API.** Sends keep returning `201` and
+  pile up at `queued`, because from the API's side nothing is wrong. That is
+  what [`doctor.py`](troubleshooting.md#start-here) checks and what the
+  [troubleshooting page](troubleshooting.md) opens with.
+- **They must share the same Postgres, the same Redis and the same
+  `SECRET_KEY`.** See [Environment](#environment) below — a mismatched secret
+  fails silently rather than loudly.
+
+## Building the images
+
+Two Dockerfiles, identical up to the last line:
+
+| | Starts | For |
+|---|---|---|
+| `docker/Dockerfile` | `uvicorn seskit_api.main:app` | The API and dashboard |
+| `docker/Dockerfile.worker` | `arq seskit_worker.main.WorkerSettings` | The worker |
+
+**Compose only uses the first.** It builds one image and overrides `command:`
+for the worker service, which is the normal way to run one image two ways.
+
+`Dockerfile.worker` exists for platforms that build from a Dockerfile and offer
+no per-deployment command override — several treat the Dockerfile as the sole
+source of truth for how the image starts, so there is nowhere to put the
+`arq` command. On those, deploy the worker as a second service from the same
+repository, pointed at `docker/Dockerfile.worker`.
+
+!!! warning "Keep the two in step"
+    They differ only in their final `CMD`. A change to the build stages of one
+    belongs in the other, and nothing enforces that but review.
+
+Both build the whole workspace, so one repository produces both services and
+they cannot drift to different versions of the code.
+
 ## The smallest real deployment
 
-The shipped `compose.yaml` is a development stack, not a production one — it
+The shipped `docker-compose.yml` is a development stack, not a production one — it
 runs Mailpit, mounts your source for live reload, and publishes database ports
 to the host. For a server, take it as a starting point and:
 
@@ -31,13 +103,42 @@ to the host. For a server, take it as a starting point and:
 
 ## Environment
 
-The required minimum:
+The required minimum, **for both processes**:
 
 ```bash
 SECRET_KEY=...                     # long and random
 DATABASE_URL=postgresql+asyncpg://...
 REDIS_URL=redis://...
 ```
+
+Give them the same values. The worker is not a lesser process with a smaller
+configuration — it reads the same settings from the same file, and two of them
+have to match exactly.
+
+!!! danger "A mismatched `SECRET_KEY` fails silently"
+    The worker signs one-click unsubscribe links with it; the API verifies them
+    with it. Give the two processes different secrets and every unsubscribe
+    link in every message answers "this link is not valid" — while sending,
+    delivery, webhooks and the dashboard all keep working perfectly. Nothing
+    logs an error, because from each side the other's token is simply a forgery.
+
+    Generate one, put it in a shared secret store, and give both processes the
+    same reference:
+
+    ```bash
+    python -c 'import secrets; print(secrets.token_urlsafe(32))'
+    ```
+
+### `PUBLIC_BASE_URL` is read by both, for different reasons
+
+| Process | Uses it for | Unset means |
+|---|---|---|
+| **Worker** | Building the `List-Unsubscribe` link on every message | The headers are left off the message entirely |
+| **API** | The endpoint SNS is subscribed to, for `https` [event ingestion](../guides/delivery-events.md) | HTTPS ingestion cannot be set up; SQS polling is unaffected |
+
+Setting it on the API alone is the easy mistake, and it is invisible: the
+dashboard looks configured, and mail simply goes out with no Unsubscribe
+button. `doctor.py` reports what each process sees.
 
 For AWS, give the process credentials the boto3 way. An **IAM role** on the
 instance or task is better than any key, because there is no secret to leak or
