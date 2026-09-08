@@ -31,10 +31,20 @@ ADDRESS = "hello@example.com"
 SENDER = "Acme <hello@example.com>"
 
 
-async def _project(session: AsyncSession, *, email: str = "owner@example.com") -> str:
+async def _project(
+    session: AsyncSession, *, email: str = "owner@example.com", connected: bool = True
+) -> str:
+    """A project, connected to AWS unless the test is about not being.
+
+    Most of this file is about which provider a *connected* project sends
+    through, so connecting is the default. The two tests that check the SMTP
+    fallback need the other case, and saying so at the call site is clearer
+    than two nearly identical helpers.
+    """
     user = await register_user(session, email=email, password=PASSWORD, allow_signup=True)
     project = await create_project(session, user_id=user.id, name="Sending")
-    await connect_project(session, project.id)
+    if connected:
+        await connect_project(session, project.id)
     return str(project.id)
 
 
@@ -58,7 +68,7 @@ async def _verified(
 
 async def test_without_a_connection_it_uses_smtp(db_session: AsyncSession) -> None:
     """Rung zero of the friction ladder: a send works before AWS exists."""
-    project_id = await _project(db_session)
+    project_id = await _project(db_session, connected=False)
 
     provider = await choose_provider(
         db_session, project_id=project_id, sender=SENDER, smtp_configured=True
@@ -71,7 +81,7 @@ async def test_with_nothing_configured_it_says_what_to_do(db_session: AsyncSessi
     """A project that cannot send should be told how to make it able to, not
     handed a provider error from a server that was never configured.
     """
-    project_id = await _project(db_session)
+    project_id = await _project(db_session, connected=False)
 
     with pytest.raises(APIError) as caught:
         await choose_provider(

@@ -14,6 +14,7 @@ from __future__ import annotations
 from dataclasses import replace
 from typing import Any, ClassVar
 
+from seskit_core.config import get_settings
 from seskit_core.errors import APIError, ErrorType
 from seskit_core.providers import (
     AccountStatus,
@@ -46,9 +47,14 @@ FAKE_CREDENTIALS = AWSCredentials(
     secret_access_key="wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
 )
 
-#: The instance secret a test encrypts under. Whatever stores a credential and
-#: whatever reads it back must agree, so both come from here.
-TEST_SECRET_KEY = "test-instance-secret-key"
+#: The instance secret a test encrypts under.
+#:
+#: The application's own, not a literal. A test that stores a credential under
+#: one key while the route reads it back under another gets an
+#: `InvalidSignature` deep inside Fernet, which says nothing about the actual
+#: mistake. Reading it from settings means the service-level tests and the ones
+#: that go through HTTP cannot disagree.
+TEST_SECRET_KEY = get_settings().SECRET_KEY
 
 
 class FakeProvider:
