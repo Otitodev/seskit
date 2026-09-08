@@ -276,6 +276,38 @@ def _stylesheet() -> str:
     return (root / "static/css/app.css").read_text(encoding="utf-8")
 
 
+def _rule(css: str, selector: str) -> str:
+    """The declarations of one rule, by its exact selector."""
+    start = css.index(selector + " {") + len(selector) + 2
+    return css[start : css.index("}", start)]
+
+
+def test_every_control_reads_its_height_from_the_scale() -> None:
+    """There were five heights: a 32px button, a 34px input, a 30px select, a
+    36px auth submit and a 26px small button.
+
+    That is what "the spacing looks off" turned out to mean. Every
+    `row row--end` form on the dashboard bottom-aligns a button against an
+    input, so two of those sat side by side with the button standing 2px proud
+    of the field it belonged to.
+
+    Asserted on the tokens rather than on the numbers, because the point is not
+    which pixel value won - it is that a sixth one cannot be added without
+    saying so here first.
+    """
+    css = _stylesheet()
+
+    for token in ("--control-h-sm:", "--control-h:", "--control-h-lg:"):
+        assert token in css, f"{token} is not defined"
+
+    for selector in (".btn", ".input", ".btn--sm", ".auth__submit"):
+        declarations = _rule(css, selector)
+        assert "height:" in declarations, selector
+        assert "var(--control-h" in declarations, (
+            f"{selector} sets a height that is not on the scale: {declarations.strip()}"
+        )
+
+
 def test_no_table_can_scroll_the_page_sideways() -> None:
     """Wide content scrolls inside `.table-wrap`; the body never does.
 
