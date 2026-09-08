@@ -28,7 +28,6 @@ from seskit_core.errors import APIError, ErrorType
 from seskit_core.logging import get_logger
 from seskit_core.providers.types import (
     AccountStatus,
-    CredentialMode,
     IdentityStatus,
     IdentityType,
     OutboundEmail,
@@ -40,7 +39,6 @@ from seskit_provider_aws_ses.client import (
     BOTO_CONFIG,
     build_session,
     call,
-    resolve_credential_mode,
 )
 from seskit_provider_aws_ses.errors import error_code, normalise_boto_error
 from seskit_provider_aws_ses.identities import to_identity_status
@@ -107,7 +105,6 @@ class SESProvider:
                 max_send_rate=float(quota.get("MaxSendRate", 0.0)),
                 sent_last_24_hours=float(quota.get("SentLast24Hours", 0.0)),
             ),
-            credential_mode=self.credential_mode,
         )
 
     async def get_sending_quota(self) -> SendingQuota:
@@ -118,10 +115,6 @@ class SESProvider:
         worth a second code path.
         """
         return (await self.verify_account()).quota
-
-    @property
-    def credential_mode(self) -> CredentialMode:
-        return resolve_credential_mode(self._session)
 
     # ----------------------------------------------------------- identities ---
 

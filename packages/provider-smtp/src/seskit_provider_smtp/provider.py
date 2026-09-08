@@ -27,7 +27,6 @@ from seskit_core.errors import APIError, ErrorType
 from seskit_core.logging import get_logger
 from seskit_core.providers.types import (
     AccountStatus,
-    CredentialMode,
     IdentityStatus,
     IdentityType,
     OutboundEmail,
@@ -85,7 +84,6 @@ class SMTPProvider:
             quota=SendingQuota(
                 max_24_hour_send=UNLIMITED, max_send_rate=UNLIMITED, sent_last_24_hours=0.0
             ),
-            credential_mode=CredentialMode.UNKNOWN,
         )
 
     async def get_sending_quota(self) -> SendingQuota:

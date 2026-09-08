@@ -70,16 +70,6 @@ async def test_the_adapter_reads_a_real_sts_response(aws_credentials: None) -> N
         assert await provider._account_id() == MOTO_ACCOUNT_ID
 
 
-def test_credentials_resolve_from_the_environment(aws_credentials: None) -> None:
-    """Proves the credential chain is boto3's, not something reimplemented
-    here - the env vars above are picked up without being passed anywhere.
-    """
-    from seskit_core.providers import CredentialMode
-
-    with mock_aws():
-        assert SESProvider(REGION).credential_mode is CredentialMode.ENVIRONMENT
-
-
 def test_moto_still_does_not_implement_get_account(aws_credentials: None) -> None:
     """A canary, not a specification.
 

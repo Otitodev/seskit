@@ -13,7 +13,6 @@ from seskit_core.models import ConnectionStatus
 from seskit_core.models.aws_connection import AWSConnection
 from seskit_core.providers import (
     AccountStatus,
-    CredentialMode,
     EmailProvider,
     SendingQuota,
 )
@@ -70,22 +69,6 @@ def test_account_status_carries_the_sandbox_flag() -> None:
 
     assert status.sandbox is True
     assert status.quota.max_24_hour_send == 200.0
-
-
-def test_credential_mode_defaults_to_unknown() -> None:
-    """A provider that cannot tell us where credentials came from should say so,
-    not claim a source it did not resolve.
-    """
-    status = AccountStatus(
-        account_id="123456789012",
-        region="us-east-1",
-        sandbox=False,
-        sending_enabled=True,
-        enforcement_status="HEALTHY",
-        quota=SANDBOX_QUOTA,
-    )
-
-    assert status.credential_mode is CredentialMode.UNKNOWN
 
 
 # --------------------------------------------------------------- protocol ---
