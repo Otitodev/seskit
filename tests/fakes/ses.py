@@ -12,7 +12,7 @@ Phase 5 or 6 breaks here too rather than only in production.
 from __future__ import annotations
 
 from dataclasses import replace
-from typing import ClassVar
+from typing import Any, ClassVar
 
 from seskit_core.errors import APIError, ErrorType
 from seskit_core.providers import (
@@ -234,3 +234,38 @@ def denied(action: str = "ses:GetAccount") -> APIError:
         f"The AWS identity is not permitted to call {action}. "
         f"Add {action} to its IAM policy and try again.",
     )
+
+
+async def connect_project(
+    session: Any,
+    project_id: str,
+    *,
+    region: str = "us-east-1",
+) -> Any:
+    """A project with a usable stored access key.
+
+    Every service that reaches SES now resolves the project's connection to
+    find its key, so a test that verifies a sender needs one. That matches the
+    product: the Domains page has always refused to add an identity to a
+    project with no AWS connection, and until Phase 14 the service underneath
+    it did not.
+
+    The key is encrypted the way `connect_aws` encrypts it, so anything that
+    reads it back exercises the real path rather than a shortcut.
+    """
+    from seskit_core.models import AWSConnection, ConnectionStatus
+    from seskit_core.security.aws_credentials import encrypt_secret_access_key
+
+    connection = AWSConnection(
+        project_id=project_id,
+        region=region,
+        aws_account_id=ACCOUNT_ID,
+        status=ConnectionStatus.CONNECTED.value,
+        aws_access_key_id=FAKE_CREDENTIALS.access_key_id,
+        aws_secret_access_key_encrypted=encrypt_secret_access_key(
+            FAKE_CREDENTIALS.secret_access_key, secret_key=TEST_SECRET_KEY
+        ),
+    )
+    session.add(connection)
+    await session.flush()
+    return connection

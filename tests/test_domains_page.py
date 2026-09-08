@@ -37,7 +37,15 @@ async def _connect(client: AsyncClient) -> str:
     """Sign in and connect AWS, which adding an identity requires."""
     await _sign_in(client)
     token = await _csrf(client)
-    response = await client.post("/aws/connect", data={"csrf_token": token, "region": REGION})
+    response = await client.post(
+        "/aws/connect",
+        data={
+            "csrf_token": token,
+            "region": REGION,
+            "access_key_id": FAKE_CREDENTIALS.access_key_id,
+            "secret_access_key": FAKE_CREDENTIALS.secret_access_key,
+        },
+    )
     assert response.status_code == 200, response.text
     return token
 

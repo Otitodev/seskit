@@ -18,7 +18,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from fakes.ses import FakeProvisioner
+from fakes.ses import FAKE_CREDENTIALS, TEST_SECRET_KEY, FakeProvisioner
 from httpx import AsyncClient
 from seskit_core.models import (
     AWSConnection,
@@ -30,6 +30,7 @@ from seskit_core.models import (
     Project,
 )
 from seskit_core.providers import EventInfrastructure
+from seskit_core.security.aws_credentials import encrypt_secret_access_key
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -47,6 +48,10 @@ async def _connect(session: AsyncSession, *, events: bool = False) -> AWSConnect
         status=ConnectionStatus.CONNECTED.value,
         sandbox=True,
         sending_enabled=True,
+        aws_access_key_id=FAKE_CREDENTIALS.access_key_id,
+        aws_secret_access_key_encrypted=encrypt_secret_access_key(
+            FAKE_CREDENTIALS.secret_access_key, secret_key=TEST_SECRET_KEY
+        ),
     )
     if events:
         connection.record_event_infrastructure(
