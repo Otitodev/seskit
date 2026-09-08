@@ -44,6 +44,31 @@ async def test_static_assets_are_referenced(signed_in_client: AsyncClient) -> No
     assert "/static/js/htmx.min.js" in body
 
 
+async def test_a_static_asset_is_revalidated_before_it_is_reused(
+    client: AsyncClient,
+) -> None:
+    """`StaticFiles` sends `last-modified` and an `etag` and no `Cache-Control`
+    at all, and a browser with no directive is free to guess how long a file
+    stays fresh. Every major browser guesses a tenth of the file's age, so an
+    asset last changed a hundred days ago is good for ten more without asking.
+
+    SESKit ships its whole interface in two of those files. The effect is an
+    upgrade that half arrives: new HTML rendered against the stylesheet and the
+    script from the version before. Nothing errors, it just looks wrong, and a
+    reload does not fix it.
+
+    Found by upgrading the running stack and watching a fix not take effect -
+    the browser was holding a copy of app.js from before it.
+    """
+    response = await client.get("/static/css/app.css")
+
+    assert response.status_code == 200
+    assert response.headers["cache-control"] == "no-cache"
+    # Still cached, just never reused without asking - so an unchanged file
+    # costs a 304 with no body rather than a fresh download.
+    assert response.headers["etag"]
+
+
 async def test_theme_is_applied_before_stylesheet_to_avoid_a_flash(
     signed_in_client: AsyncClient,
 ) -> None:
