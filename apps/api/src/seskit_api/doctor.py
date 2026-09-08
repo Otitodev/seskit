@@ -33,7 +33,7 @@ from seskit_core.config import INSECURE_PLACEHOLDER, Settings, get_settings
 from seskit_core.models import Email, EmailStatus
 from seskit_core.models.base import utcnow
 from sqlalchemy import func, select, text
-from sqlalchemy.ext.asyncio import create_async_engine
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 ROOT = Path(__file__).resolve().parents[4]
 
@@ -216,6 +216,24 @@ async def check_redis(settings: Settings) -> list[Result]:
     return [Result("redis", True, "connected")]
 
 
+def unreadable_keys(connections: list[Any], *, secret_key: str) -> list[str]:
+    """The projects whose stored AWS key cannot be decrypted.
+
+    Its own function so it can be tested without a database. `check_sending`
+    opens its own engine - it has to, since the doctor runs outside a request -
+    and that engine cannot see a test's uncommitted transaction.
+    """
+    from seskit_core.services import stored_credentials
+
+    broken = []
+    for connection in connections:
+        try:
+            stored_credentials(connection, secret_key=secret_key)
+        except Exception:
+            broken.append(connection.project_id)
+    return broken
+
+
 async def check_sending(settings: Settings) -> list[Result]:
     """Which path a send would actually take today.
 
@@ -225,24 +243,48 @@ async def check_sending(settings: Settings) -> list[Result]:
     from seskit_core.models import AWSConnection, ConnectionStatus
 
     engine = create_async_engine(str(settings.DATABASE_URL))
+    connected: list[AWSConnection] = []
     try:
-        async with engine.connect() as connection:
-            connected = await connection.scalar(
-                select(func.count())
-                .select_from(AWSConnection)
-                .where(AWSConnection.status == ConnectionStatus.CONNECTED.value)
+        maker = async_sessionmaker(engine, expire_on_commit=False)
+        async with maker() as session:
+            rows = await session.scalars(
+                select(AWSConnection).where(
+                    AWSConnection.status == ConnectionStatus.CONNECTED.value
+                )
             )
+            connected = list(rows)
     except Exception:
-        connected = None
+        connected = []
     finally:
         await engine.dispose()
 
     if connected:
+        # Reading the key, not just counting the row. A rotated SECRET_KEY
+        # leaves every connection saying `connected` with both columns
+        # populated and not one of them decryptable - and every send failing.
+        # Counting rows reported that as healthy, which is the exact shape of
+        # "it starts and nothing works" this whole script exists to catch.
+        unreadable = unreadable_keys(connected, secret_key=settings.SECRET_KEY)
+
+        if unreadable:
+            return [
+                Result(
+                    "sending",
+                    False,
+                    f"{len(unreadable)} of {len(connected)} connected project(s) "
+                    "have an AWS key that cannot be decrypted",
+                    fix=(
+                        "SECRET_KEY has changed since those keys were stored. "
+                        "Reconnect each project on the AWS page with its access key."
+                    ),
+                )
+            ]
+
         return [
             Result(
                 "sending",
                 True,
-                f"{connected} project(s) connected to AWS - sends go to SES, "
+                f"{len(connected)} project(s) connected to AWS - sends go to SES, "
                 "if the sender is verified",
             )
         ]

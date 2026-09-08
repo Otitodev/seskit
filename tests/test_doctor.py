@@ -23,8 +23,11 @@ from seskit_api.doctor import (
     check_postgres,
     report,
     run,
+    unreadable_keys,
 )
 from seskit_core.config import INSECURE_PLACEHOLDER, Settings
+from seskit_core.models import AWSConnection, ConnectionStatus
+from seskit_core.security.aws_credentials import encrypt_secret_access_key
 
 #: Refused immediately rather than after a DNS timeout, so the failure path is
 #: fast enough to be a test.
@@ -245,3 +248,67 @@ def test_a_typed_revision_annotation_is_still_read(tmp_path: Path) -> None:
 def test_the_real_migrations_have_one_head() -> None:
     """The repository's own history, which is what the check reads in anger."""
     assert _alembic_head() is not None
+
+
+# ----------------------------------------------------- unreadable AWS keys ---
+
+
+def _connection(project_id: str, *, secret_key: str) -> AWSConnection:
+    return AWSConnection(
+        project_id=project_id,
+        region="us-east-1",
+        aws_account_id="123456789012",
+        status=ConnectionStatus.CONNECTED.value,
+        aws_access_key_id="AKIAIOSFODNN7EXAMPLE",
+        aws_secret_access_key_encrypted=encrypt_secret_access_key(
+            "a-secret", secret_key=secret_key
+        ),
+    )
+
+
+def test_a_readable_key_is_not_reported() -> None:
+    connection = _connection("proj_one", secret_key="the-instance-secret")
+
+    assert unreadable_keys([connection], secret_key="the-instance-secret") == []
+
+
+def test_a_rotated_secret_key_is_caught() -> None:
+    """The failure this check was added for, found by rotating SECRET_KEY by
+    hand and watching the doctor say everything was fine.
+
+    After a rotation every connection still reads `connected`, with both key
+    columns populated - and not one of them can be decrypted. Counting rows
+    called that healthy while every send failed, which is the exact shape of
+    "it starts and nothing works" the doctor exists to catch.
+    """
+    connection = _connection("proj_one", secret_key="the-old-secret")
+
+    assert unreadable_keys([connection], secret_key="the-new-secret") == ["proj_one"]
+
+
+def test_a_connection_with_no_key_at_all_is_caught() -> None:
+    """Every connection made before Phase 14. The migration marks them broken,
+    but a row edited back to `connected` by hand would otherwise pass.
+    """
+    connection = AWSConnection(
+        project_id="proj_old",
+        region="us-east-1",
+        aws_account_id="123456789012",
+        status=ConnectionStatus.CONNECTED.value,
+    )
+
+    assert unreadable_keys([connection], secret_key="whatever") == ["proj_old"]
+
+
+def test_only_the_broken_projects_are_named() -> None:
+    """An instance with several projects, one of which was reconnected after a
+    rotation. Naming all of them would send somebody to fix what is not wrong.
+    """
+    good = _connection("proj_good", secret_key="current")
+    bad = _connection("proj_bad", secret_key="previous")
+
+    assert unreadable_keys([good, bad], secret_key="current") == ["proj_bad"]
+
+
+def test_nothing_connected_is_nothing_to_report() -> None:
+    assert unreadable_keys([], secret_key="current") == []
