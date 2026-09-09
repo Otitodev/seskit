@@ -820,6 +820,24 @@ svg {
   color: var(--text-muted);
 }
 
+/* A field whose control has an action on its line - "Name [ ... ] [Create]".
+
+   The button used to sit outside the field, in a `row--end`, which aligns on
+   the bottom. A field is label, control *and* hint, so the bottom it aligned
+   to was the hint's: the button came out 28px below the input it submits, on
+   four pages. Inside the field it is beside the control, which is the thing it
+   acts on, and the hint explains both from underneath. */
+.field__control {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.field__control .input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
 .field__error {
   font-size: var(--text-sm);
   color: var(--danger);
@@ -1375,6 +1393,11 @@ svg {
    with the middle of the label-plus-input stack. */
 .row--end { align-items: flex-end; }
 .row--end .field { margin: 0; }
+
+/* Fields side by side line up on their labels, not their hints. Bottom-aligned,
+   two fields whose hints wrap to different numbers of lines put their inputs at
+   different heights - which is the same bug as the button, one row over. */
+.row--start { align-items: flex-start; }
 
 .grow { flex: 1 1 auto; min-width: 0; }
 

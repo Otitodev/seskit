@@ -20,7 +20,9 @@
   {% endif %}
 
   {{ card_open("Suppress an address") }}
-    <form class="row row--end" method="post" action="/suppressions">
+    {# Top-aligned: two fields whose hints wrap to different numbers of lines
+       would otherwise sit their inputs at different heights. #}
+    <form class="row row--start" method="post" action="/suppressions">
       <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
       <div class="grow">
         {{ field("address", "Email address", type="email",
@@ -33,9 +35,9 @@
         {{ field("note", "Note", placeholder="Asked us to stop, ticket #4412",
                  hint="Optional. The next person to read this will want to know
                        why.",
-                 attrs='maxlength="500" autocomplete="off"') }}
+                 attrs='maxlength="500" autocomplete="off"',
+                 action=button("Suppress", variant="primary", type="submit")) }}
       </div>
-      {{ button("Suppress", variant="primary", type="submit") }}
     </form>
   {{ card_close() }}
 

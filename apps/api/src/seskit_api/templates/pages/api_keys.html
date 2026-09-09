@@ -17,14 +17,12 @@
   {% endif %}
 
   {{ card_open("Create a key") }}
-    <form class="row row--end" method="post" action="/api-keys">
+    <form method="post" action="/api-keys">
       <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-      <div class="grow">
-        {{ field("name", "Name", placeholder="production",
-                 hint="What this key is for. Only you see it.",
-                 attrs='maxlength="64" autocomplete="off"') }}
-      </div>
-      {{ button("Create key", variant="primary", type="submit") }}
+      {{ field("name", "Name", placeholder="production",
+               hint="What this key is for. Only you see it.",
+               attrs='maxlength="64" autocomplete="off"',
+               action=button("Create key", variant="primary", type="submit")) }}
     </form>
   {{ card_close() }}
 
