@@ -36,17 +36,15 @@
   {% else %}
 
     {{ card_open("Add an identity") }}
-      <form class="row row--end" method="post" action="/domains">
+      <form method="post" action="/domains">
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-        <div class="grow">
-          {{ field("value", "Domain or email address",
-                   placeholder="example.com",
-                   hint="An email address verifies in minutes with no DNS
-                         changes - the fastest way to send something real. A
-                         domain lets you send from any address on it.",
-                   attrs='maxlength="255" autocomplete="off" autocapitalize="off" spellcheck="false"') }}
-        </div>
-        {{ button("Add", variant="primary", type="submit") }}
+        {{ field("value", "Domain or email address",
+                 placeholder="example.com",
+                 hint="An email address verifies in minutes with no DNS
+                       changes - the fastest way to send something real. A
+                       domain lets you send from any address on it.",
+                 attrs='maxlength="255" autocomplete="off" autocapitalize="off" spellcheck="false"',
+                 action=button("Add", variant="primary", type="submit")) }}
       </form>
       <p class="muted">
         Identities live in <code>{{ connection.region }}</code>, the region this

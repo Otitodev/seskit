@@ -67,18 +67,24 @@
 {%- endmacro %}
 
 {# ---------------------------------------------------------------- field #}
+{# `action` is a control that belongs on the input's line - a submit button,
+   usually. It goes inside the field rather than beside it, because a field is
+   label, control *and* hint: a button next to the whole field aligns with the
+   bottom of the hint, which is 28px below the input it submits. #}
 {% macro field(name, label, type="text", value="", placeholder="", hint=None,
-               error=None, required=False, mono=False, attrs="") -%}
+               error=None, required=False, mono=False, attrs="", action=None) -%}
   <div class="field">
     <label class="field__label" for="{{ name }}">
       {{ label }}{% if required %} <span class="subtle">*</span>{% endif %}
     </label>
+    {%- if action %}<div class="field__control">{% endif %}
     <input class="input{{ ' input--mono' if mono else '' }}"
            id="{{ name }}" name="{{ name }}" type="{{ type }}"
            value="{{ value }}" placeholder="{{ placeholder }}"
            {%- if required %} required{% endif %}
            {%- if error %} aria-invalid="true" aria-describedby="{{ name }}-error"{% endif %}
            {{ attrs|safe }}>
+    {%- if action %}{{ action }}</div>{% endif %}
     {%- if error %}
       <p class="field__error" id="{{ name }}-error">{{ error }}</p>
     {%- elif hint %}
