@@ -54,9 +54,17 @@ def _components() -> str:
 
 
 def _rule(css: str, selector: str) -> str:
-    """The declarations of one rule, by its exact selector."""
-    start = css.index(selector + " {") + len(selector) + 2
-    return css[start : css.index("}", start)]
+    """The declarations of one rule, by its exact selector.
+
+    Anchored to the start of a line, because a substring search finds a
+    descendant rule first: `.field__control .input {` contains `.input {`, sits
+    above `.input` in the file, and made this return the wrong block entirely.
+    CI caught that; the search had been fine only because no rule had yet
+    described a component inside another one.
+    """
+    match = re.search(rf"^{re.escape(selector)}\s*\{{([^}}]*)\}}", css, re.MULTILINE)
+    assert match, f"no rule for {selector}"
+    return match.group(1)
 
 
 def _theme_blocks(css: str) -> list[str]:
@@ -183,6 +191,21 @@ def test_the_guards_would_notice() -> None:
     assert _RELATIVE.fullmatch("0.9em")
     assert _REFERENCED.findall("color: var(--fg-muted, inherit);") == ["--fg-muted"]
     assert _DEFINED.findall("  --text-sm: 0.8125rem;") == ["--text-sm"]
+
+    # `_rule` takes the rule whose selector *is* the one asked for, not the
+    # first one containing it as a substring. A descendant rule reads as a
+    # match and can sit above its own component in the file, which is how a
+    # height assertion ended up reading `.field__control .input`.
+    nested = """.field__control .input {
+  flex: 1 1 auto;
+}
+
+.input {
+  height: 34px;
+}
+"""
+    assert "height" in _rule(nested, ".input")
+    assert "flex" in _rule(nested, ".field__control .input")
 
     # Comments are not declarations: the token block explains its contrast
     # ratios against hex values, and reading those would fail the file for

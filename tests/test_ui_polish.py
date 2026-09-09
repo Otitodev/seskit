@@ -279,9 +279,17 @@ def _stylesheet() -> str:
 
 
 def _rule(css: str, selector: str) -> str:
-    """The declarations of one rule, by its exact selector."""
-    start = css.index(selector + " {") + len(selector) + 2
-    return css[start : css.index("}", start)]
+    """The declarations of one rule, by its exact selector.
+
+    Anchored to the start of a line, because a substring search finds a
+    descendant rule first: `.field__control .input {` contains `.input {`, sits
+    above `.input` in the file, and made this return the wrong block entirely.
+    CI caught that; the search had been fine only because no rule had yet
+    described a component inside another one.
+    """
+    match = re.search(rf"^{re.escape(selector)}\s*\{{([^}}]*)\}}", css, re.MULTILINE)
+    assert match, f"no rule for {selector}"
+    return match.group(1)
 
 
 def test_every_control_reads_its_height_from_the_scale() -> None:
