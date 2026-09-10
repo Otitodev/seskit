@@ -27,11 +27,23 @@
      while it is unfinished is one that stops meaning anything, and there is
      nothing here that a project which has done all four still needs. #}
   {% if not setup_done %}
-    {{ card_open("Finish setting up") }}
+    {% set done_count = setup | selectattr("done") | list | length %}
+    {# Folds, and remembers being folded. Somebody three steps in who knows what
+       is left should not have to scroll past it on every visit, and the count
+       in the header means a folded card still says where they are. #}
+    {{ card_open("Finish setting up",
+                 meta=done_count ~ " of " ~ (setup | length) ~ " done",
+                 collapsible=True, remember="setup") }}
+      {# Numbered rather than bulleted: these are steps in an order, and the
+         number stays with a step whether or not it is finished - step 3 is
+         step 3 even once 1 and 2 are ticked. A tick replaces the number when
+         it is done, because "which one is this" stops being the question. #}
       <ol class="setup">
         {% for step in setup %}
           <li class="setup__step{% if step.done %} setup__step--done{% endif %}">
-            <span class="setup__mark" aria-hidden="true">{% if step.done %}&check;{% else %}&nbsp;{% endif %}</span>
+            <span class="setup__mark" aria-hidden="true">
+              {%- if step.done %}&check;{% else %}{{ loop.index }}{% endif -%}
+            </span>
             <span class="setup__body">
               {% if step.done %}
                 <span class="setup__title">{{ step.title }}</span>
@@ -44,7 +56,7 @@
           </li>
         {% endfor %}
       </ol>
-    {{ card_close() }}
+    {{ card_close(collapsible=True) }}
   {% endif %}
 
   {% if metrics.has_activity or counts.total %}

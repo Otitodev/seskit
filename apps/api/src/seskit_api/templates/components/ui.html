@@ -41,20 +41,42 @@
 {# ----------------------------------------------------------------- card #}
 {# Split open/close rather than a `caller()` block so pages can stream long
    table bodies into a card without buffering the whole thing. #}
-{% macro card_open(title=None, flush=False, actions=None) -%}
-  <section class="card{{ ' card--flush' if flush else '' }}">
+{# `collapsible` turns the card into <details> and its header into <summary>,
+   which folds without a line of JavaScript and keeps working with scripts
+   blocked. `meta` is a second line in the header - a progress count, say - so a
+   folded card still says something.
+
+   `remember` names a key under which app.js stores whether it is open. Without
+   one, the card springs open again on every page load, and the dashboard is
+   server-rendered with full page loads. #}
+{% macro card_open(title=None, flush=False, actions=None, collapsible=False,
+                   open=True, meta=None, remember=None) -%}
+  {%- set tag = "details" if collapsible else "section" -%}
+  <{{ tag }} class="card{{ ' card--flush' if flush else '' }}{{ ' card--collapsible' if collapsible else '' }}"
+     {%- if collapsible and open %} open{% endif %}
+     {%- if remember %} data-remember="{{ remember }}"{% endif %}>
     {%- if title or actions %}
+    {%- if collapsible %}
+    <summary class="card__header">
+      <span class="card__heading">
+        <h3 class="card__title">{{ title }}</h3>
+        {%- if meta %}<span class="card__meta">{{ meta }}</span>{% endif -%}
+      </span>
+      {{ icon("chevron", class="card__chevron") }}
+    </summary>
+    {%- else %}
     <header class="card__header">
       {%- if title %}<h3 class="card__title">{{ title }}</h3>{% endif -%}
       {%- if actions %}<div class="row">{{ actions|safe }}</div>{% endif -%}
     </header>
     {%- endif %}
+    {%- endif %}
     <div class="card__body">
 {%- endmacro %}
 
-{% macro card_close() -%}
+{% macro card_close(collapsible=False) -%}
     </div>
-  </section>
+  </{{ "details" if collapsible else "section" }}>
 {%- endmacro %}
 
 {# --------------------------------------------------------------- metric #}

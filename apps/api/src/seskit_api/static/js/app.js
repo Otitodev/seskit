@@ -87,6 +87,46 @@
     });
   }
 
+  /* Remembering a folded card ----------------------------------------------
+   * <details> handles the folding; this only remembers it. The dashboard is
+   * server-rendered with full page loads, so without this the setup checklist
+   * springs open again on every page a user visits and folding it away is not
+   * worth doing.
+   *
+   * Per browser, in localStorage, like the theme. Nothing here is worth a
+   * column and a round trip, and the card stops existing once setup is done.
+   */
+
+  var CARD_PREFIX = "seskit-card-";
+
+  function initRememberedCards() {
+    var cards = document.querySelectorAll("details[data-remember]");
+
+    Array.prototype.forEach.call(cards, function (card) {
+      var key = CARD_PREFIX + card.getAttribute("data-remember");
+
+      try {
+        var stored = localStorage.getItem(key);
+        // Only a stored "closed" changes anything. An absent value leaves the
+        // server's choice alone, which is what decides whether a card starts
+        // open the first time somebody sees it.
+        if (stored === "closed") card.open = false;
+        if (stored === "open") card.open = true;
+      } catch (e) {
+        // Private windows and blocked site-data throw on access. The card
+        // still folds; it just forgets.
+      }
+
+      card.addEventListener("toggle", function () {
+        try {
+          localStorage.setItem(key, card.open ? "open" : "closed");
+        } catch (e) {
+          // Not persisting is survivable.
+        }
+      });
+    });
+  }
+
   /* Auto-submitting selects ------------------------------------------------
    * The sidebar project switcher. This was an onchange attribute until the
    * CSP arrived: `script-src 'self' 'nonce-...'` refuses an inline handler,
@@ -166,6 +206,7 @@
     initCopy();
     initToast();
     initAutoSubmit();
+    initRememberedCards();
 
     var toggle = document.querySelector("[data-theme-toggle]");
     if (toggle) toggle.addEventListener("click", toggleTheme);

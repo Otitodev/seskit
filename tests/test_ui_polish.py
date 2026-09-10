@@ -577,3 +577,72 @@ def test_the_static_helper_is_root_relative_and_keeps_a_sub_path() -> None:
     assert static({"request": _request("/seskit")}, "/css/app.css") == (
         "/seskit/static/css/app.css"
     )
+
+
+# ---------------------------------------------------------- setup checklist ---
+
+
+def test_the_checklist_numbers_its_steps() -> None:
+    """They are steps in an order, and the order is the point - the friction
+    ladder, not the dependency graph.
+
+    The number stays with a step whether or not it is finished, so step 3 is
+    step 3 once 1 and 2 are ticked. A tick replaces the number when it is done,
+    because "which one is this" stops being the question then.
+    """
+    overview = dict(_templates())["pages/overview.html"]
+
+    assert '<ol class="setup">' in overview
+    assert "loop.index" in overview, "the step number is not rendered"
+
+
+def test_the_checklist_folds_without_javascript() -> None:
+    """`<details>`/`<summary>`, not a button and a handler.
+
+    It folds with no script at all, it is keyboard-operable and announced as
+    expanded or collapsed with no ARIA of ours, and it survives a blocked
+    script - which on this dashboard is not hypothetical, since the CSP refuses
+    inline ones outright.
+    """
+    ui = dict(_templates())["components/ui.html"]
+    overview = dict(_templates())["pages/overview.html"]
+
+    assert '<summary class="card__header">' in ui
+    assert "collapsible=True" in overview
+
+    # The fold is markup; the script only remembers it.
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[1] / "apps/api/src/seskit_api"
+    js = (root / "static/js/app.js").read_text(encoding="utf-8")
+    assert "data-remember" in js
+    assert "localStorage" in js
+
+
+def test_a_folded_card_still_says_where_you_are() -> None:
+    """Folded, a card headed only "Finish setting up" tells you nothing you did
+    not already know. The count is what makes closing it reasonable rather than
+    hiding the thing you need.
+    """
+    overview = dict(_templates())["pages/overview.html"]
+
+    assert "done_count" in overview
+    assert "meta=" in overview
+
+
+def test_every_card_close_matches_its_open() -> None:
+    """`card_close(collapsible=True)` emits `</details>` and the plain one
+    emits `</section>`. Mismatched, the page still renders - browsers repair
+    it - and the layout quietly goes wrong somewhere below.
+    """
+    for name, markup in _templates():
+        # Counted rather than matched with a regex: a `card_open(` call spans
+        # lines and contains parentheses of its own - `(setup | length)` - so
+        # "up to the closing bracket" stops in the wrong place. Every
+        # `collapsible=True` belongs to either an open or a close, so the
+        # opens are what is left after taking the closes away.
+        closes = markup.count("card_close(collapsible=True)")
+        opens = markup.count("collapsible=True") - closes
+        assert opens == closes, (
+            f"{name}: {opens} collapsible card_open, {closes} matching card_close"
+        )

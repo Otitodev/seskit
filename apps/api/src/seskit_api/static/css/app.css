@@ -635,6 +635,64 @@ svg {
 
 .card--flush .card__body { padding: 0; }
 
+/* A card that folds ------------------------------------------------------- */
+
+/* <details> and <summary> rather than a button and a script: it folds with no
+   JavaScript at all, it is keyboard-operable and announced as expanded or
+   collapsed without any ARIA of ours, and it survives a blocked script - which
+   for this dashboard is not hypothetical, since the CSP refuses inline ones. */
+
+.card--collapsible > .card__header {
+  cursor: pointer;
+  /* The UA marker is replaced by our own chevron, which can be themed and
+     rotated. Two rules, because Safari uses the pseudo-element and the rest
+     use `list-style`. */
+  list-style: none;
+  user-select: none;
+}
+
+.card--collapsible > .card__header::-webkit-details-marker {
+  display: none;
+}
+
+.card--collapsible > .card__header:hover {
+  background: var(--surface-hover);
+}
+
+/* The border under the header belongs to the open state. Closed, it is a line
+   under nothing. */
+.card--collapsible:not([open]) > .card__header {
+  border-bottom: none;
+}
+
+.card__heading {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.card__meta {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.card__chevron {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  stroke: var(--text-subtle);
+  fill: none;
+  stroke-width: 1.5;
+  transition: transform 0.15s ease;
+}
+
+.card--collapsible[open] > .card__header .card__chevron {
+  transform: rotate(180deg);
+}
+
 /* A heading inside a body starts a new section, so it wants more room above it
    than the even rhythm gives. Only when something precedes it - a first child
    is not a break from anything. */
@@ -1608,11 +1666,23 @@ svg {
 
 /* Fixed width so the titles line up whether or not a step is done - a list
    whose left edge moves as you complete it reads as two different lists. */
+/* Fixed width so the titles line up whether a step shows a number or a tick -
+   a list whose left edge moves as you complete it reads as two different
+   lists. Tabular figures for the same reason, at two digits. */
 .setup__mark {
-  flex: 0 0 1.25rem;
+  flex: 0 0 1.5rem;
   text-align: center;
-  color: var(--success);
+  color: var(--text-subtle);
+  font-size: var(--text-sm);
   font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.5;
+}
+
+/* The tick earns the colour; a step number is not a success. */
+.setup__step--done .setup__mark {
+  color: var(--success);
+  font-size: var(--text-base);
 }
 
 .setup__body {
