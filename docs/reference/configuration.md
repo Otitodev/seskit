@@ -61,6 +61,17 @@ anything — Postgres only reads them when it initialises an empty data
 directory. The host ports are high and SESKit-specific on purpose:
 [why](../getting-started/installation.md#why-postgres-and-redis-are-on-unusual-ports).
 
+## One variable is read by the container
+
+`MIGRATE_ON_START` is read by the image's entrypoint before Python starts, so
+it is not a setting either. Set it to `true` and the container applies
+migrations before starting the process.
+
+Off by default, and left off under Compose, where the one-shot `migrate`
+service already does this. It is for a platform that runs the image directly
+and gives you no release hook, no one-off job and no shell — see
+[deploying](../operating/deploying.md#on-a-platform-with-no-compose).
+
 ## There is no AWS credential setting
 
 !!! note "They are per project, not per instance"

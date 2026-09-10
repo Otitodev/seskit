@@ -195,9 +195,31 @@ Failing that, a one-off job or a shell into the service works, as long as it
 happens before the new code serves anything.
 
 If the platform offers neither — some only run the container's command — set
-the service's command to `alembic upgrade head`, deploy once, and set it back.
-Clumsy, but it beats the alternative of migrating from inside the application's
-startup, where two replicas booting together race each other.
+`MIGRATE_ON_START=true` in the service's environment, alongside `DATABASE_URL`:
+
+```
+MIGRATE_ON_START=true
+```
+
+The container then applies migrations before starting the process. Nothing else
+changes, and the setting is off unless you set it to a clear yes — an empty
+value, which is how most platforms represent "declared, not set", leaves it
+off.
+
+**Two replicas starting together is safe.** Migrations take a Postgres advisory
+lock, so one applies them and the other waits and then finds nothing left to
+do. The lock is in `migrations/env.py` rather than in the entrypoint, so it
+protects the Compose service and a hand-run upgrade equally.
+
+A failed migration stops the container rather than starting anyway. Starting
+would turn one clear failure into a stream of query errors against a schema
+that is not what the code expects.
+
+!!! note "Prefer a release hook where you have one"
+    A migration is a deployment step, not a startup step. Where the platform
+    can run one before the new version takes traffic, that is the better place:
+    it happens once rather than once per replica, and its failure is reported
+    as a failed deploy rather than as a container that would not start.
 
 To see where things stand without changing anything:
 
