@@ -4,6 +4,7 @@ Keeps business rules out of route handlers, so they can be tested without HTTP
 and reused from a CLI later (§32.12). Phase 6's send logic belongs here too.
 """
 
+from seskit_core.services.accepting import Outgoing, accept_email, refuse_suppressed
 from seskit_core.services.analytics import (
     ActivityPoint,
     Metrics,
@@ -114,11 +115,13 @@ __all__ = [
     "EmailAlreadyRegistered",
     "IssuedKey",
     "Metrics",
+    "Outgoing",
     "ProviderFactory",
     "ProvisionerFactory",
     "SetupStep",
     "SignupClosed",
     "TimeRange",
+    "accept_email",
     "activity_series",
     "add_identity",
     "attachment_rows",
@@ -175,6 +178,7 @@ __all__ = [
     "record_sent",
     "refresh_connection",
     "refresh_identity",
+    "refuse_suppressed",
     "register_user",
     "remove_identity",
     "remove_suppression",
