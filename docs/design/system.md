@@ -130,7 +130,7 @@ them. If a page needs a variant, add the variant to the component.
 |---|---|
 | `button` | `default`, `primary`, `ghost`, `danger`; sizes `""` / `sm` |
 | `badge` | Delivery state. `tone` is semantic, never decorative |
-| `card_open` / `card_close` | Section container, optional header and actions |
+| `card_open` / `card_close` | Section container, optional header and actions. `collapsible=True` makes it a `<details>` whose header is the `<summary>` |
 | `metric` | A single number on the Overview |
 | `field` | Labelled input with hint and error slots |
 | `empty` | Empty state - see below |
@@ -147,6 +147,19 @@ sizes the control to the platform's taste.
 
 A card body lays its children out - it does not only pad them. Pages put
 several things in one card and should not have to space them individually.
+
+A card that folds uses `<details>` and `<summary>`, not a button and a handler.
+It folds with no script, it is keyboard-operable and announced as expanded or
+collapsed without any ARIA of ours, and it survives a blocked script - which is
+not hypothetical, because the CSP refuses inline handlers outright. Pass `meta`
+so a folded card still says something: a header that reads only "Finish setting
+up" tells a reader nothing they did not already know. `remember` names a key
+under which app.js keeps the open state per browser, which matters because the
+dashboard is server-rendered and a card without it springs open on every page.
+
+`card_close(collapsible=True)` closes what `collapsible=True` opened. Mismatched
+they still render - browsers repair the tag - and the layout goes wrong quietly
+somewhere below, so a test counts them.
 
 ### Empty states get real design attention
 
