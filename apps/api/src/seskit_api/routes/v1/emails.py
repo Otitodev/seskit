@@ -15,17 +15,13 @@ from arq.connections import ArqRedis
 from fastapi import APIRouter, Depends, Header, Path, Query, Response, status
 from seskit_core.config import Settings
 from seskit_core.db import get_session
-from seskit_core.email import assert_within_size
 from seskit_core.errors import APIError, ErrorType
 from seskit_core.logging import get_logger
 from seskit_core.models import Email, EmailStatus
-from seskit_core.providers.types import Attachment, OutboundEmail
 from seskit_core.services import (
-    attachment_rows,
-    choose_provider,
-    configuration_set_for,
+    Outgoing,
+    accept_email,
     find_by_idempotency_key,
-    suppressed_among,
 )
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -54,48 +50,6 @@ DEFAULT_PAGE = 25
 #: one, a project with a year of sends can ask for all of it in a single query
 #: and hold a connection open while the rows are serialised.
 MAX_PAGE = 100
-
-
-async def _refuse_suppressed(
-    db: AsyncSession, *, project_id: str, payload: SendEmailRequest
-) -> None:
-    """Stop a message aimed at an address this project has suppressed.
-
-    **Fails the whole request**, not the suppressed recipients. Sending to the
-    rest would need a second response shape saying who was dropped, and a
-    caller who did not read it would believe everyone got the message. §31 asks
-    for closed rather than partial, and refusing is the answer a retry loop can
-    act on.
-
-    Bcc is checked too. A suppressed address is suppressed however it was
-    reached, and a blind copy is still a send.
-
-    Before `choose_provider` deliberately: a project with no AWS connection is
-    told what SESKit already knows about its own list rather than being sent
-    away to configure sending first.
-    """
-    blocked = await suppressed_among(
-        db,
-        project_id=project_id,
-        addresses=[*payload.to_list, *payload.cc_list, *payload.bcc_list],
-    )
-    if not blocked:
-        return
-
-    ordered = sorted(blocked)
-    if len(ordered) == 1:
-        named, verb, pronoun = ordered[0], "is", "it"
-    else:
-        named = f"{', '.join(ordered[:-1])} and {ordered[-1]}"
-        verb, pronoun = "are", "them"
-
-    raise APIError(
-        ErrorType.SUPPRESSED_RECIPIENT,
-        f"{named} {verb} on this project's suppression list, so nothing was sent. "
-        "An address lands there after a hard bounce or a complaint, when the "
-        "recipient unsubscribes, or by hand. The Suppressions page says which, "
-        f"and can take {pronoun} off if you believe mail can be delivered there again.",
-    )
 
 
 @router.post(
@@ -135,64 +89,27 @@ async def send_email(
         if existing is not None:
             return SendEmailResponse(id=existing.id, status=existing.status)
 
-    await _refuse_suppressed(db, project_id=project_id, payload=payload)
-
-    provider = await choose_provider(
+    email = await accept_email(
         db,
         project_id=project_id,
-        sender=payload.sender,
+        message=Outgoing(
+            sender=payload.sender,
+            to=payload.to_list,
+            subject=payload.subject,
+            html=payload.html,
+            text=payload.text,
+            cc=payload.cc_list,
+            bcc=payload.bcc_list,
+            reply_to=payload.reply_to_list,
+            headers=payload.headers,
+            attachments=[
+                (item.filename, item.content_type, item.decoded()) for item in payload.attachments
+            ],
+        ),
         smtp_configured=settings.smtp_configured,
-    )
-
-    attachments = [
-        (item.filename, item.content_type, item.decoded()) for item in payload.attachments
-    ]
-
-    # Assemble once here purely to validate: it is what catches a malformed
-    # address, an injected header and an oversized message, and doing it now
-    # means those come back to the caller rather than surfacing in a worker log
-    # an hour later.
-    outbound = OutboundEmail(
-        sender=payload.sender,
-        to=payload.to_list,
-        subject=payload.subject,
-        html=payload.html,
-        text=payload.text,
-        cc=payload.cc_list,
-        bcc=payload.bcc_list,
-        reply_to=payload.reply_to_list,
-        headers=payload.headers,
-        attachments=[
-            Attachment(filename=name, content=content, content_type=content_type)
-            for name, content_type, content in attachments
-        ],
-    )
-    assert_within_size(outbound, max_bytes=settings.EMAIL_MAX_MESSAGE_BYTES)
-
-    email = Email(
-        project_id=project_id,
-        from_address=payload.sender,
-        to_addresses=payload.to_list,
-        cc_addresses=payload.cc_list,
-        bcc_addresses=payload.bcc_list,
-        reply_to=payload.reply_to_list,
-        subject=payload.subject,
-        html_body=payload.html,
-        text_body=payload.text,
-        # Stored, not just validated above. The worker assembles the message
-        # from this row, so a header that does not reach the row is a header
-        # the caller was told we would send and we did not.
-        headers=payload.headers,
-        status=EmailStatus.QUEUED.value,
+        max_message_bytes=settings.EMAIL_MAX_MESSAGE_BYTES,
         idempotency_key=idempotency_key,
-        provider=provider.value,
-        # Without this SES publishes no events for the message and its delivery
-        # history stays permanently empty - so it is settled here, where the
-        # project's setup is known, rather than in the worker.
-        configuration_set=await configuration_set_for(db, project_id=project_id, provider=provider),
     )
-    email.attachments.extend(attachment_rows(attachments))
-    db.add(email)
 
     try:
         await db.commit()
@@ -211,7 +128,7 @@ async def send_email(
     await queue.enqueue_job(SEND_JOB, email.id)
     # The id only. §6 is explicit that bodies should not be scattered through
     # logs, and recipients are no better.
-    logger.info("email_queued", email_id=email.id, project_id=project_id, provider=provider.value)
+    logger.info("email_queued", email_id=email.id, project_id=project_id, provider=email.provider)
 
     return SendEmailResponse(id=email.id, status=email.status)
 
