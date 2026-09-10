@@ -399,18 +399,24 @@ async def _verified_sender(session: AsyncSession, value: str = "otito.site") -> 
     project = await session.scalar(select(Project))
     assert project is not None
 
-    session.add(
-        AWSConnection(
-            project_id=project.id,
-            region="eu-west-2",
-            aws_account_id=ACCOUNT_ID,
-            status=ConnectionStatus.CONNECTED.value,
-            aws_access_key_id=FAKE_CREDENTIALS.access_key_id,
-            aws_secret_access_key_encrypted=encrypt_secret_access_key(
-                FAKE_CREDENTIALS.secret_access_key, secret_key=TEST_SECRET_KEY
-            ),
-        )
+    # One connection per project - there is a unique index on project_id - so a
+    # second call to this helper adds only the identity.
+    existing = await session.scalar(
+        select(AWSConnection).where(AWSConnection.project_id == project.id)
     )
+    if existing is None:
+        session.add(
+            AWSConnection(
+                project_id=project.id,
+                region="eu-west-2",
+                aws_account_id=ACCOUNT_ID,
+                status=ConnectionStatus.CONNECTED.value,
+                aws_access_key_id=FAKE_CREDENTIALS.access_key_id,
+                aws_secret_access_key_encrypted=encrypt_secret_access_key(
+                    FAKE_CREDENTIALS.secret_access_key, secret_key=TEST_SECRET_KEY
+                ),
+            )
+        )
     session.add(
         Identity(
             project_id=project.id,
