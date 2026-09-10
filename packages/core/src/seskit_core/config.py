@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from enum import StrEnum
 from functools import lru_cache
-from typing import Literal, Self
+from typing import Any, Literal, Self
 
 from pydantic import Field, PostgresDsn, RedisDsn, computed_field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -247,6 +247,44 @@ class Settings(BaseSettings):
     SMTP_USER: str | None = None
     SMTP_PASSWORD: str | None = None
     EMAILS_FROM_EMAIL: str | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def _blank_means_unset(cls, values: Any) -> Any:
+        """A variable that is present but empty is a variable nobody set.
+
+        Most hosting platforms represent "declared, no value" as an empty
+        string rather than by leaving the variable out. Pydantic sees `''` and
+        tries to parse it, so `LOG_LEVEL=` is not "use the default" but a
+        literal error, and `SMTP_PORT=` is not 1025 but a refusal to start.
+
+        This was found by a deployment. Five blank variables took the container
+        into a restart loop, and the message - five validation errors about
+        values nobody had knowingly set - described the symptom rather than the
+        cause. 28 of the 39 optional settings fail this way; every integer,
+        boolean, enum and literal among them. Which five you hit depends only
+        on which ones your platform declared.
+
+        The other 11 are worse for being quiet. `AWS_DEFAULT_REGION=` would
+        hand boto3 an empty region, `EVENT_CONFIGURATION_SET=` would stop SES
+        publishing events at all, and `SESSION_COOKIE_NAME=` would break every
+        session with nothing to say why. Those start well and fail later,
+        somewhere unrelated.
+
+        Only fields that have a default are dropped. `SECRET_KEY`,
+        `DATABASE_URL` and `REDIS_URL` have none, and an empty one of those is
+        a real misconfiguration - defaulting it away is how an instance ends up
+        running on a signing key nobody chose.
+        """
+        if not isinstance(values, dict):
+            return values
+
+        optional = {name for name, field in cls.model_fields.items() if not field.is_required()}
+        return {
+            key: value
+            for key, value in values.items()
+            if not (key in optional and isinstance(value, str) and not value.strip())
+        }
 
     @computed_field  # type: ignore[prop-decorator]
     @property

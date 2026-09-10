@@ -32,6 +32,16 @@ python -c "import secrets; print(secrets.token_urlsafe(32))"
 
 Everything else on this page has a working default.
 
+!!! tip "A blank variable is the same as an unset one"
+    `LOG_LEVEL=` gets you `INFO`, not an error. Most hosting platforms
+    represent "declared, no value" as an empty string rather than by leaving
+    the variable out, so a deploy form with rows you left empty is the normal
+    case, not a broken one.
+
+    The three above are the exception. They have nothing to fall back to, so a
+    blank one refuses to boot exactly as an absent one does — defaulting a
+    signing key away is worse than failing to start.
+
 ## Variables that are not SESKit settings
 
 Five variables in `.env.example` are read by **Docker Compose**, not by SESKit.
