@@ -22,6 +22,33 @@ docker compose up
 
 Then [send your first email](first-email.md).
 
+## You do not install PostgreSQL or Redis
+
+`docker compose up` starts all of it. Nothing on this list is something you
+install, configure or start yourself:
+
+| Service | What it is | |
+|---|---|---|
+| `db` | PostgreSQL 16 | Every message, project, key and event |
+| `redis` | Redis 7 | The job queue, the auth cache and rate limits |
+| `mailpit` | [Mailpit](https://mailpit.axllent.org/) | Catches local mail so no AWS account is needed |
+| `migrate` | Runs once and exits | `alembic upgrade head`, before anything else starts |
+| `api` | The web process | `/v1` and the dashboard, on port 8000 |
+| `worker` | The background process | Sends the mail, delivers webhooks, polls for events |
+
+`api` and `worker` wait for `migrate` to finish successfully, so the schema is
+always in place before either of them accepts anything. A failed migration
+stops the stack rather than starting an instance with no tables.
+
+The database and Redis keep their data in named Docker volumes, so
+`docker compose down` and back up again does not lose anything.
+`docker compose down -v` **does** — that deletes the volumes.
+
+Bring your own PostgreSQL and Redis instead if you would rather: point
+`DATABASE_URL` and `REDIS_URL` at them and run only the services you need.
+[Running without Docker](#running-without-docker) is the same idea further
+along.
+
 ## On a server
 
 ```bash
