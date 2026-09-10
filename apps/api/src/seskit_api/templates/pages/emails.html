@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "components/ui.html" import card_open, card_close, empty, metric, code_block %}
+{% from "components/ui.html" import button, card_open, card_close, empty, field, metric %}
 
 {% block title %}Emails · SESKit{% endblock %}
 
@@ -10,6 +10,90 @@
       Messages <code>{{ project.name }}</code> has sent, newest first.
     </p>
   </div>
+
+  {% if error %}
+    <div class="alert alert--danger" role="alert">
+      <p>{{ error }}</p>
+    </div>
+  {% endif %}
+
+  {# The one send control in the dashboard.
+
+     It exists because a dashboard that can only show you sends has no answer
+     to "does mail actually leave this thing", which is the first question
+     anybody has after connecting AWS - and the answer used to be a curl
+     command, which is homework rather than an answer.
+
+     It posts to a route that calls `accept_email`, the same service
+     `POST /v1/emails` calls, so what it proves is what an application would
+     experience. Including the refusals. #}
+  {{ card_open("Send a test message") }}
+    {% if senders %}
+      <form class="stack" method="post" action="/emails/test">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+
+        <div class="row row--start">
+          <div class="grow">
+            <div class="field">
+              <label class="field__label" for="sender">From</label>
+              {# Verified identities only, so an unverified sender is
+                 impossible rather than an error after the fact. #}
+              <select class="select" id="sender" name="sender">
+                {% for identity in senders %}
+                  {% if identity.is_domain %}
+                    <option value="hello@{{ identity.value }}">hello@{{ identity.value }}</option>
+                  {% else %}
+                    <option value="{{ identity.value }}">{{ identity.value }}</option>
+                  {% endif %}
+                {% endfor %}
+              </select>
+              <p class="field__hint">
+                Only verified senders appear here. Add more on the
+                <a class="link" href="/domains">Domains page</a>.
+              </p>
+            </div>
+          </div>
+          <div class="grow">
+            {{ field("to", "To", type="email", placeholder="you@example.com",
+                     hint="While your AWS account is in the SES sandbox this has to be
+                           a verified address too.",
+                     required=True,
+                     attrs='maxlength="320" autocomplete="off"') }}
+          </div>
+        </div>
+
+        {{ field("subject", "Subject", value="A test from SESKit",
+                 required=True, attrs='maxlength="255"') }}
+
+        <div class="field">
+          <label class="field__label" for="body">Message</label>
+          <textarea class="textarea" id="body" name="body" required
+                    maxlength="10000">If you are reading this, SESKit sent it.</textarea>
+          <p class="field__hint">
+            Sent as plain text. The API takes HTML, attachments, cc and the
+            rest - this is here to answer one question.
+          </p>
+        </div>
+
+        <div class="row">
+          {{ button("Send", variant="primary", type="submit") }}
+          <span class="muted text-sm">
+            Goes through the same path as the API, and appears below once the
+            worker has sent it.
+          </span>
+        </div>
+      </form>
+    {% else %}
+      {{ empty(
+        "No verified sender yet",
+        "Amazon SES will only send from an address or domain you have proved you
+         own. Verify one and this becomes a send button.",
+        icon_name="globe",
+        action_label="Verify a sender",
+        action_href="/domains"
+      ) }}
+    {% endif %}
+  {{ card_close() }}
 
   {# `counts.total`, not `emails`: the list can be empty because a filter
      narrowed it, which is a different situation from an empty project and gets
@@ -26,24 +110,17 @@
       {% include "partials/email_table.html" %}
     {{ card_close() }}
   {% else %}
+    {# No curl block any more. It stood in for a send control, and a command
+       to copy into a terminal is homework rather than an answer - the form
+       above is the answer. POST /v1/emails is documented for when this stops
+       being a test and becomes an application. #}
     {{ card_open("Emails") }}
       {{ empty(
         "Nothing sent yet",
-        "Create an API key and post to /v1/emails. With no AWS account connected
-         this delivers to Mailpit, so you can see a real message without
-         verifying anything first.",
-        icon_name="mail",
-        action_label="Create an API key",
-        action_href="/api-keys"
-      ) }}
-
-      {{ code_block(
-        'curl -X POST http://localhost:8000/v1/emails \\\n'
-        '  -H "Authorization: Bearer sk_..." \\\n'
-        '  -H "Content-Type: application/json" \\\n'
-        '  -d \'{"from":"hello@example.com","to":["you@example.com"],'
-        '"subject":"Hello","html":"<h1>Hello from SESKit</h1>"}\'',
-        language="cURL"
+        "Send a test message above and it appears here, with whatever Amazon
+         SES goes on to say about it afterwards. Your application sends the
+         same way, through POST /v1/emails.",
+        icon_name="mail"
       ) }}
     {{ card_close() }}
   {% endif %}
