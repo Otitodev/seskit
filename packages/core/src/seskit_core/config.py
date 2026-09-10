@@ -107,11 +107,15 @@ class Settings(BaseSettings):
 
     # -- AWS (§8, §9) --------------------------------------------------------
     #
-    # Deliberately no AWS_ACCESS_KEY_ID or AWS_SECRET_ACCESS_KEY here. §9 says
-    # credentials are resolved the standard boto3 way - instance role,
-    # environment, credential file, workload identity - and are never handled by
-    # SESKit as data. boto3 reads the conventional variables itself; naming them
-    # here would invite them into logs and into this object's repr.
+    # Deliberately no AWS_ACCESS_KEY_ID or AWS_SECRET_ACCESS_KEY here, though
+    # the reason changed in Phase 14 and the old one survived here for a while.
+    #
+    # It is no longer that credentials are resolved the boto3 way and never
+    # handled as data - they are: a key is pasted into the dashboard and stored
+    # encrypted. It is that a key belongs to a *project* rather than to this
+    # instance, which is what lets two projects send through two different AWS
+    # accounts. An instance-wide setting could not express that, and naming one
+    # here would invite a credential into logs and into this object's repr.
 
     #: Pre-selects the region in the connect form. Not a credential, and not
     #: authoritative - the region actually in use is stored per connection.
