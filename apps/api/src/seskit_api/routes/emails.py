@@ -195,7 +195,11 @@ async def send_test(
         )
         await db.commit()
     except APIError as error:
-        await db.rollback()
+        # No rollback, matching the Domains page. Nothing was committed - every
+        # refusal in `accept_email` is raised before the row is added - and a
+        # rollback expires every object in the session, so the template would
+        # then lazy-load `project.name` outside async context and raise
+        # MissingGreenlet instead of showing the refusal.
         return await _page(request, db, current, project, error=error.message, status_code=400)
 
     await queue.enqueue_job(SEND_JOB, email.id)
