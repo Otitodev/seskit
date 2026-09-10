@@ -6,8 +6,8 @@
 {% block head %}
   {# Loaded only on this page. Two hundred kilobytes of charting library has no
      business on the API keys screen. #}
-  <script defer src="{{ url_for('static', path='/js/vendor/chart.umd.js') }}"></script>
-  <script defer src="{{ url_for('static', path='/js/charts.js') }}"></script>
+  <script defer src="{{ static('/js/vendor/chart.umd.js') }}"></script>
+  <script defer src="{{ static('/js/charts.js') }}"></script>
 {% endblock %}
 
 {% block content %}
