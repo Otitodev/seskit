@@ -29,6 +29,28 @@ from seskit_provider_aws_ses.client import BOTO_CONFIG, polling_config
 from seskit_provider_aws_ses.sqs import MAX_WAIT_SECONDS
 
 
+def _total_attempts(config: Config) -> int:
+    """How many attempts a config allows in total, however botocore has spelt it.
+
+    botocore rewrites `retries` **in place** the first time a client is built
+    from a config, and not only by renaming: `{"max_attempts": 3}` becomes
+    `{"total_max_attempts": 4}`, because `max_attempts` counts retries and the
+    total counts the first try as well.
+
+    `BOTO_CONFIG` is a module-level object shared by every AWS call, so in a
+    full suite another test has usually built a client from it before this one
+    runs, while running this file alone leaves it untouched. Comparing the raw
+    dicts therefore passes locally and fails in CI - and comparing whichever key
+    happens to exist compares 3 against 4, which fails differently.
+
+    Normalising to one meaning is the only comparison that holds either way.
+    """
+    retries = _option(config, "retries") or {}
+    if "total_max_attempts" in retries:
+        return int(retries["total_max_attempts"])
+    return int(retries["max_attempts"]) + 1
+
+
 def _option(config: Config, name: str) -> Any:
     """Read one botocore config option.
 
@@ -80,10 +102,7 @@ def test_polling_keeps_the_retry_and_connect_behaviour(wait: int) -> None:
     config = polling_config(wait)
 
     assert _option(config, "connect_timeout") == _option(BOTO_CONFIG, "connect_timeout")
-    assert (
-        _option(config, "retries")["max_attempts"]
-        == _option(BOTO_CONFIG, "retries")["max_attempts"]
-    )
+    assert _total_attempts(config) == _total_attempts(BOTO_CONFIG)
 
 
 def test_a_receive_asks_for_the_wait_its_client_was_built_for() -> None:
