@@ -9,7 +9,7 @@
    ordinary navigation that still works. #}
 {% from "components/ui.html" import badge %}
 
-<div id="email-table">
+<div class="stack" id="email-table">
   <nav class="segmented" aria-label="Filter by status">
     {% for option in statuses %}
       <a class="segmented__item{{ ' is-active' if option == selected_status else '' }}"

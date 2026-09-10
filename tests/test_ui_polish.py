@@ -646,3 +646,32 @@ def test_every_card_close_matches_its_open() -> None:
         assert opens == closes, (
             f"{name}: {opens} collapsible card_open, {closes} matching card_close"
         )
+
+
+def test_a_partial_that_wraps_itself_says_how_its_children_are_laid_out() -> None:
+    """Every partial swapped by HTMX wraps itself in an element with an `id`,
+    so there is something for `hx-target` to replace. That wrapper is also the
+    layout for everything inside it, and a bare `<div id="...">` provides none
+    - the reset zeroes every margin, so its children touch.
+
+    This was fixed once, on `#metrics`, and the fix did not generalise: the AWS
+    page shipped a sandbox notice, four cards and a button row stacked flush
+    against each other inside `<div id="aws-status">`, and nothing here
+    noticed. The earlier guard checks that named containers declare a gap, and
+    an ad-hoc wrapper is not one of them.
+
+    A class rather than a specific class, deliberately. `.stack` is usually the
+    answer, but the check is that somebody decided - a wrapper with one child
+    needs no gap and should be allowed to say so.
+    """
+    import re as _re
+
+    bare: list[str] = []
+    for name, markup in _templates():
+        for match in _re.finditer(r"<div\s+id=\"[a-z-]+\"\s*>", markup):
+            bare.append(f"{name}: {match.group(0)}")
+
+    assert not bare, (
+        "wrapper elements with an id and no class - give them a layout "
+        f"(`.stack` unless there is a reason not to): {bare}"
+    )

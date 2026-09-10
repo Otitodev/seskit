@@ -5,7 +5,11 @@
    everything it needs and assumes no surrounding markup. #}
 {% from "components/ui.html" import button, card_open, card_close, empty, badge, metric, field %}
 
-<div id="aws-status">
+{# `.stack` because this wrapper is the layout for everything below it - the
+   sandbox notice, four cards and the button row are siblings here, and the
+   reset zeroes every margin. Without it they touch, which is what a bare
+   wrapper div gets you. #}
+<div class="stack" id="aws-status">
   {% if connection and connection.is_connected %}
 
     {% if connection.sandbox %}
