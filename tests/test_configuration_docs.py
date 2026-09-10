@@ -54,6 +54,12 @@ COMPOSE_ONLY = frozenset(
 VALUE_LITERALS = frozenset({"DEBUG", "INFO", "WARNING", "ERROR"})
 
 
+#: Read by the container entrypoint before Python starts, so it is not a
+#: setting and never reaches `Settings`. A third category, and a small one -
+#: `docker/entrypoint.sh` is the only thing that looks at it.
+ENTRYPOINT_ONLY = frozenset({"MIGRATE_ON_START"})
+
+
 def _settings_fields() -> list[str]:
     fields = _FIELD.findall(CONFIG.read_text(encoding="utf-8"))
     assert fields, "no settings found - has the class moved?"
@@ -96,7 +102,13 @@ def test_the_reference_describes_nothing_that_does_not_exist() -> None:
     something that does nothing is worse than no row: it is a setting somebody
     will try, and then wonder why nothing changed.
     """
-    known = set(_settings_fields()) | COMPOSE_ONLY | _installer_variables() | VALUE_LITERALS
+    known = (
+        set(_settings_fields())
+        | COMPOSE_ONLY
+        | ENTRYPOINT_ONLY
+        | _installer_variables()
+        | VALUE_LITERALS
+    )
 
     # Only names in a table cell or in `backticks`, so prose like "AWS" or a
     # heading does not read as a setting.
@@ -128,7 +140,9 @@ def test_env_example_sets_nothing_that_does_nothing() -> None:
     fields = set(_settings_fields())
 
     strays = sorted(
-        name for name in set(_ENV_VAR.findall(_env_example())) if name not in fields | COMPOSE_ONLY
+        name
+        for name in set(_ENV_VAR.findall(_env_example()))
+        if name not in fields | COMPOSE_ONLY | ENTRYPOINT_ONLY
     )
 
     assert not strays, f".env.example sets variables that are not settings: {strays}"

@@ -80,6 +80,13 @@ RUN apt-get update \
 
 COPY --from=builder --chown=seskit:seskit /app /app
 
+# The entrypoint applies migrations when MIGRATE_ON_START is set, and otherwise
+# does nothing but hand over. Copied and made executable as root, before the
+# USER switch, so an unprivileged process cannot rewrite what it runs as.
+COPY --chown=root:root docker/entrypoint.sh /usr/local/bin/seskit-entrypoint
+RUN chmod 0755 /usr/local/bin/seskit-entrypoint
+
 USER seskit
 
+ENTRYPOINT ["seskit-entrypoint"]
 CMD ["arq", "seskit_worker.main.WorkerSettings"]
