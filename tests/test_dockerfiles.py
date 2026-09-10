@@ -181,3 +181,31 @@ def test_the_image_can_run_alembic() -> None:
     dependencies = manifest["project"]["dependencies"]
 
     assert any(name.startswith("alembic") for name in dependencies), dependencies
+
+
+def test_alembic_needs_no_configuration_of_its_own() -> None:
+    """`alembic upgrade head` inside the image works with the variables the
+    service already has, and `docs/operating/deploying.md` tells people so.
+
+    Three things make that true, and each would break the instruction quietly:
+    the config and the migration scripts sit at the repository root, which is
+    `/app` and the working directory; `sqlalchemy.url` is left empty; and
+    `env.py` fills it in from `DATABASE_URL`.
+
+    Filling in `sqlalchemy.url` would be the tempting change - it looks like a
+    missing value. It would send every migration to whatever was written there
+    rather than to the database the service is configured with.
+    """
+    assert (ROOT / "alembic.ini").is_file()
+    assert (ROOT / "migrations" / "env.py").is_file()
+
+    ini = (ROOT / "alembic.ini").read_text("utf-8")
+    url_lines = [line for line in ini.splitlines() if line.startswith("sqlalchemy.url")]
+
+    assert url_lines == ["sqlalchemy.url ="], (
+        f"alembic.ini must leave the URL to env.py, found: {url_lines}"
+    )
+
+    env = (ROOT / "migrations" / "env.py").read_text("utf-8")
+    assert "DATABASE_URL" in env
+    assert 'set_main_option("sqlalchemy.url"' in env
