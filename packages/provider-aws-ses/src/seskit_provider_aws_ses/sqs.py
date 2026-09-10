@@ -26,7 +26,7 @@ from typing import Any
 from seskit_core.logging import get_logger
 from seskit_core.providers.types import AWSCredentials, QueuedNotification
 
-from seskit_provider_aws_ses.client import BOTO_CONFIG, build_session, call
+from seskit_provider_aws_ses.client import BOTO_CONFIG, build_session, call, polling_config
 from seskit_provider_aws_ses.errors import normalise_boto_error
 
 logger = get_logger(__name__)
@@ -55,8 +55,16 @@ class SQSNotificationQueue:
         self.queue_url = queue_url
         self._session = build_session(region, credentials)
 
-    def _client(self) -> Any:
-        return self._session.client("sqs", config=BOTO_CONFIG)
+    def _client(self, *, wait_seconds: int | None = None) -> Any:
+        """A client whose read timeout suits the call being made.
+
+        A receive that long-polls needs a read timeout longer than the wait, or
+        it times out on every empty queue by construction. Everything else -
+        deleting a message, which returns immediately - keeps the short
+        request-path timeout.
+        """
+        config = BOTO_CONFIG if wait_seconds is None else polling_config(wait_seconds)
+        return self._session.client("sqs", config=config)
 
     async def receive(
         self,
@@ -73,12 +81,13 @@ class SQSNotificationQueue:
         the unique constraint on ``provider_event_id`` then absorbs, but only
         because it is there.
         """
+        wait = min(wait_seconds, MAX_WAIT_SECONDS)
         try:
             response = await call(
-                self._client().receive_message,
+                self._client(wait_seconds=wait).receive_message,
                 QueueUrl=self.queue_url,
                 MaxNumberOfMessages=min(max_messages, MAX_MESSAGES_PER_RECEIVE),
-                WaitTimeSeconds=min(wait_seconds, MAX_WAIT_SECONDS),
+                WaitTimeSeconds=wait,
                 VisibilityTimeout=visibility_timeout,
             )
         except Exception as exc:
