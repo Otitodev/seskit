@@ -364,3 +364,197 @@ async def test_the_overview_reports_real_counts(
     page = await app_client.get("/")
 
     assert "1 message recorded" in page.text
+
+
+# ----------------------------------------------------- send a test message ---
+
+# The dashboard's one send control. It exists because the checklist's second
+# step says "Send a test message" and this page used to answer with a curl
+# command - homework rather than an answer to "does mail actually leave this
+# thing", which is the first question anybody has after connecting AWS.
+#
+# What is worth testing is that it is not a special case. It calls
+# `accept_email`, the same service `POST /v1/emails` calls, so a message sent
+# from here has to meet every refusal an application would meet. A form with
+# its own quieter rules would prove nothing about the product.
+
+
+async def _csrf_from(client: AsyncClient, path: str) -> str:
+    page = await client.get(path)
+    marker = 'name="csrf_token" value="'
+    start = page.text.index(marker) + len(marker)
+    return page.text[start : page.text.index('"', start)]
+
+
+async def _verified_sender(session: AsyncSession, value: str = "otito.site") -> str:
+    """A connected project with one verified domain, which is what the form
+    needs before it will offer anything.
+    """
+    from fakes.ses import ACCOUNT_ID, FAKE_CREDENTIALS, TEST_SECRET_KEY
+    from seskit_core.models import AWSConnection, ConnectionStatus, Identity, Project
+    from seskit_core.providers.types import IdentityType, VerificationStatus
+    from seskit_core.security.aws_credentials import encrypt_secret_access_key
+    from sqlalchemy import select
+
+    project = await session.scalar(select(Project))
+    assert project is not None
+
+    session.add(
+        AWSConnection(
+            project_id=project.id,
+            region="eu-west-2",
+            aws_account_id=ACCOUNT_ID,
+            status=ConnectionStatus.CONNECTED.value,
+            aws_access_key_id=FAKE_CREDENTIALS.access_key_id,
+            aws_secret_access_key_encrypted=encrypt_secret_access_key(
+                FAKE_CREDENTIALS.secret_access_key, secret_key=TEST_SECRET_KEY
+            ),
+        )
+    )
+    session.add(
+        Identity(
+            project_id=project.id,
+            value=value,
+            identity_type=IdentityType.DOMAIN.value,
+            region="eu-west-2",
+            verification_status=VerificationStatus.SUCCESS.value,
+            dkim_tokens=[],
+        )
+    )
+    await session.commit()
+    return str(project.id)
+
+
+async def test_the_form_offers_only_verified_senders(
+    app_client: AsyncClient, db_session: AsyncSession
+) -> None:
+    """An unverified sender becomes impossible rather than an error afterwards.
+
+    SES refuses one, so a form that let you pick it would be a form whose main
+    job is producing a failure you could have been spared.
+    """
+    await _sign_in(app_client)
+    await _verified_sender(db_session)
+    await _verified_sender(db_session, value="unverified.example")
+
+    page = await app_client.get("/emails")
+
+    assert 'id="sender"' in page.text
+    assert "hello@otito.site" in page.text
+
+
+async def test_with_nothing_verified_the_card_says_so(app_client: AsyncClient) -> None:
+    """Rather than a form that can only fail. There is nothing it could
+    honestly offer, so it points at the page that fixes that.
+    """
+    await _sign_in(app_client)
+
+    page = await app_client.get("/emails")
+
+    assert "No verified sender yet" in page.text
+    assert 'action="/emails/test"' not in page.text
+
+
+async def test_a_test_message_is_queued_and_listed(
+    app_client: AsyncClient, db_session: AsyncSession
+) -> None:
+    await _sign_in(app_client)
+    await _verified_sender(db_session)
+
+    response = await app_client.post(
+        "/emails/test",
+        data={
+            "csrf_token": await _csrf_from(app_client, "/emails"),
+            "sender": "hello@otito.site",
+            "to": "someone@example.com",
+            "subject": "A test from SESKit",
+            "body": "If you are reading this, SESKit sent it.",
+        },
+    )
+
+    assert response.status_code == 200
+    assert "Queued for someone@example.com" in response.text
+    # On the page it just rendered, not only in the database.
+    assert "A test from SESKit" in response.text
+
+
+async def test_an_unverified_sender_is_refused_even_if_asked_for_directly(
+    app_client: AsyncClient, db_session: AsyncSession
+) -> None:
+    """The select offers only verified senders; that is a convenience, not the
+    check. A hand-made POST has to meet the same refusal the API would give,
+    because `accept_email` is what decides and not the form.
+    """
+    await _sign_in(app_client)
+    await _verified_sender(db_session)
+
+    response = await app_client.post(
+        "/emails/test",
+        data={
+            "csrf_token": await _csrf_from(app_client, "/emails"),
+            "sender": "hello@somewhere-else.example",
+            "to": "someone@example.com",
+            "subject": "Nope",
+            "body": "Nope",
+        },
+    )
+
+    assert response.status_code == 400
+    assert "not a verified sender" in response.text
+
+
+async def test_a_suppressed_recipient_is_refused(
+    app_client: AsyncClient, db_session: AsyncSession
+) -> None:
+    """Same list, same refusal, same wording as the API gives. A dashboard that
+    could send to a suppressed address would be a way around the suppression
+    list, which is the one thing it must not be.
+    """
+    from seskit_core.models import SuppressionReason
+    from seskit_core.services import suppress
+
+    await _sign_in(app_client)
+    project_id = await _verified_sender(db_session)
+    await suppress(
+        db_session,
+        project_id=project_id,
+        address="blocked@example.com",
+        reason=SuppressionReason.BOUNCE,
+    )
+    await db_session.commit()
+
+    response = await app_client.post(
+        "/emails/test",
+        data={
+            "csrf_token": await _csrf_from(app_client, "/emails"),
+            "sender": "hello@otito.site",
+            "to": "blocked@example.com",
+            "subject": "Nope",
+            "body": "Nope",
+        },
+    )
+
+    assert response.status_code == 400
+    assert "suppression list" in response.text
+
+
+async def test_the_send_form_needs_a_csrf_token(
+    app_client: AsyncClient, db_session: AsyncSession
+) -> None:
+    """It sends mail from a signed-in session, so a cross-site POST that could
+    reach it is a way to send from somebody else's instance.
+    """
+    await _sign_in(app_client)
+    await _verified_sender(db_session)
+
+    response = await app_client.post(
+        "/emails/test",
+        data={
+            "sender": "hello@otito.site",
+            "to": "someone@example.com",
+            "subject": "No token",
+            "body": "No token",
+        },
+    )
+
+    assert response.status_code == 403
