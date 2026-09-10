@@ -60,6 +60,13 @@ VALUE_LITERALS = frozenset({"DEBUG", "INFO", "WARNING", "ERROR"})
 ENTRYPOINT_ONLY = frozenset({"MIGRATE_ON_START"})
 
 
+#: Read by Uvicorn, which is the server SESKit runs under rather than SESKit
+#: itself. `FORWARDED_ALLOW_IPS` decides whether `X-Forwarded-Proto` is
+#: believed, and so whether the application knows it is behind HTTPS - which
+#: the session cookie's Secure flag and every redirect depend on.
+SERVER_ONLY = frozenset({"FORWARDED_ALLOW_IPS"})
+
+
 def _settings_fields() -> list[str]:
     fields = _FIELD.findall(CONFIG.read_text(encoding="utf-8"))
     assert fields, "no settings found - has the class moved?"
@@ -106,6 +113,7 @@ def test_the_reference_describes_nothing_that_does_not_exist() -> None:
         set(_settings_fields())
         | COMPOSE_ONLY
         | ENTRYPOINT_ONLY
+        | SERVER_ONLY
         | _installer_variables()
         | VALUE_LITERALS
     )

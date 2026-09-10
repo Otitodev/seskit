@@ -14,12 +14,40 @@ from typing import Any
 from fastapi import Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
+from jinja2 import pass_context
 
 from seskit_api.dependencies import CurrentUser
 
 TEMPLATES_DIR = Path(__file__).parent / "templates"
 
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
+
+
+@pass_context
+def static(context: dict[str, Any], path: str) -> str:
+    """A root-relative URL for a file under ``/static``.
+
+    Starlette's ``url_for`` returns an absolute URL, scheme and host included,
+    built from what the application believes the request was. Behind a proxy
+    that terminates TLS - which is every managed platform - the application
+    sees plain HTTP unless it has been told to trust ``X-Forwarded-Proto``. It
+    then serves an HTTPS page whose stylesheet is an ``http://`` URL, and the
+    browser refuses it as mixed content. The CSP refuses it too: a different
+    scheme is a different origin.
+
+    What that looks like is a dashboard with no styling at all, and nothing in
+    the application log to say why. A deployment found it.
+
+    A root-relative URL cannot have the wrong scheme, because it has none. The
+    ``root_path`` prefix is kept for an instance mounted under a sub-path,
+    which is the one thing ``url_for`` was doing here that mattered.
+    """
+    request: Request = context["request"]
+    root = str(request.scope.get("root_path", "")).rstrip("/")
+    return f"{root}/static/{path.lstrip('/')}"
+
+
+templates.env.globals["static"] = static
 
 #: What a rate with no denominator renders as. Not "0%", which asserts that
 #: nothing was delivered out of things that were sent - on an empty account

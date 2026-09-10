@@ -521,3 +521,59 @@ async def test_the_skip_link_can_be_seen_when_focused(signed_in_client: AsyncCli
 
     assert 'class="skip-link" href="#main"' in page.text
     assert 'id="main"' in page.text
+
+
+# ------------------------------------------------------- assets and proxies ---
+
+
+def test_no_template_builds_an_absolute_asset_url() -> None:
+    """`url_for` returns a URL with a scheme and host, built from what the
+    application believes the request was.
+
+    Behind a proxy that terminates TLS - every managed platform - the app sees
+    plain HTTP unless it has been told to trust `X-Forwarded-Proto`. It then
+    serves an HTTPS page whose stylesheet is an `http://` URL, the browser
+    refuses it as mixed content, and the CSP refuses it too because a different
+    scheme is a different origin.
+
+    The result is a dashboard with no styling whatsoever and nothing in the log
+    to say why. A deployment found it; no test could have, because everything
+    here is served over HTTP.
+
+    `static()` returns a root-relative URL instead, which cannot carry the
+    wrong scheme because it carries none.
+    """
+    offenders = [name for name, markup in _templates() if "url_for(" in markup]
+
+    assert not offenders, (
+        f"templates building absolute asset URLs: {offenders} - use static() instead"
+    )
+
+
+def test_the_static_helper_is_root_relative_and_keeps_a_sub_path() -> None:
+    """The one thing `url_for` was doing here that mattered is the `root_path`
+    prefix, for an instance mounted somewhere other than the root.
+    """
+    from seskit_api.templating import static
+    from starlette.requests import Request
+
+    def _request(root: str) -> Request:
+        return Request(
+            {
+                "type": "http",
+                "method": "GET",
+                "path": "/",
+                "headers": [],
+                "root_path": root,
+                "scheme": "http",
+                "server": ("example", 80),
+                "query_string": b"",
+            }
+        )
+
+    assert static({"request": _request("")}, "/css/app.css") == "/static/css/app.css"
+    # A leading slash on the argument is optional, not load-bearing.
+    assert static({"request": _request("")}, "css/app.css") == "/static/css/app.css"
+    assert static({"request": _request("/seskit")}, "/css/app.css") == (
+        "/seskit/static/css/app.css"
+    )

@@ -72,6 +72,11 @@ service already does this. It is for a platform that runs the image directly
 and gives you no release hook, no one-off job and no shell — see
 [deploying](../operating/deploying.md#on-a-platform-with-no-compose).
 
+`FORWARDED_ALLOW_IPS` is read by Uvicorn rather than by SESKit. Set it to `*`
+behind a proxy that terminates TLS, or the session cookie loses its `Secure`
+flag and redirects can point at `http://` — see
+[deploying](../operating/deploying.md#behind-a-proxy-that-terminates-tls).
+
 ## There is no AWS credential setting
 
 !!! note "They are per project, not per instance"

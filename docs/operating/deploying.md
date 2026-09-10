@@ -237,6 +237,37 @@ applies migrations on startup, deliberately — see above.
 
 See [upgrading](upgrading.md) for the ordering that matters.
 
+## Behind a proxy that terminates TLS
+
+Every managed platform does this: the proxy speaks HTTPS to the browser and
+plain HTTP to your container, and says so in an `X-Forwarded-Proto` header.
+Uvicorn only trusts that header from `127.0.0.1`, and the proxy is not on
+localhost — so the application believes every request arrived over HTTP.
+
+Set this in the service's environment:
+
+```
+FORWARDED_ALLOW_IPS=*
+```
+
+Without it, two things are wrong and neither announces itself:
+
+**The session cookie loses its `Secure` flag.** That flag is set from whether
+the application thinks it is on HTTPS, so it is dropped exactly where it is
+needed.
+
+**Redirects can send the browser to `http://`** — after sign-in, for example.
+
+`*` trusts whatever is in front of the container, which is right when only your
+platform's proxy can reach it and wrong if the container is directly exposed:
+`X-Forwarded-For` is also what login rate limiting counts against, and a
+spoofable one is a rate limit that can be walked around. Name the proxy's range
+instead if you know it.
+
+Asset URLs are deliberately not affected by any of this — they are
+root-relative, so a stylesheet cannot end up on the wrong scheme even when this
+is unset.
+
 ## Health
 
 There are two probes and they answer different questions. Pointing the wrong
