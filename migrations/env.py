@@ -44,7 +44,29 @@ def run_migrations_offline() -> None:
         context.run_migrations()
 
 
+#: Identifies SESKit's migration lock among any other advisory locks in the
+#: database. Arbitrary, and only has to be stable: two runners agree because
+#: they are running this same file.
+MIGRATION_LOCK_ID = 8_534_127_001
+
+
 def do_run_migrations(connection: Connection) -> None:
+    # One migration at a time, per database.
+    #
+    # Alembic does not serialise concurrent runs by itself, and nothing here
+    # used to need it: the Compose `migrate` service is a single container that
+    # the API and worker wait on. But migrations can also be started by the
+    # container entrypoint when MIGRATE_ON_START is set, and a platform that
+    # starts two replicas together would then run two upgrades at once against
+    # one database.
+    #
+    # `pg_advisory_lock` blocks rather than failing, so the second runner waits
+    # and then finds there is nothing left to apply - which is the behaviour
+    # worth having, since the alternative is a replica that gives up and starts
+    # against a half-migrated schema. The lock is held on this connection and
+    # released when it closes, including if the process is killed.
+    connection.exec_driver_sql(f"SELECT pg_advisory_lock({MIGRATION_LOCK_ID})")
+
     context.configure(
         connection=connection,
         target_metadata=target_metadata,
@@ -53,8 +75,11 @@ def do_run_migrations(connection: Connection) -> None:
         compare_server_default=True,
     )
 
-    with context.begin_transaction():
-        context.run_migrations()
+    try:
+        with context.begin_transaction():
+            context.run_migrations()
+    finally:
+        connection.exec_driver_sql(f"SELECT pg_advisory_unlock({MIGRATION_LOCK_ID})")
 
 
 async def run_async_migrations() -> None:
