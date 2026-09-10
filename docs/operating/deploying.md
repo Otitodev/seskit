@@ -168,6 +168,51 @@ docker compose run --rm migrate      # with the shipped image
 uv run alembic upgrade head          # from a checkout, with the dev group
 ```
 
+### On a platform with no Compose
+
+Render, Fly, Railway, Aeroplane and the rest run the image directly, so there
+is no `migrate` service to wait on. Nothing extra is needed in the image — it
+already carries everything to migrate itself:
+
+- `alembic` is a **runtime** dependency of `apps/api`, so `uv sync --no-dev`
+  installs it and it is on `PATH`
+- `alembic.ini` and `migrations/` are at `/app`, which is the working directory
+- `alembic.ini` leaves `sqlalchemy.url` empty deliberately: `migrations/env.py`
+  reads `DATABASE_URL` from the settings, so it uses the variable the service
+  already has and needs no configuration of its own
+
+So the command is just:
+
+```bash
+alembic upgrade head
+```
+
+**Run it as a release or pre-deploy command** if your platform has one. That
+hook runs after the image is built and before the new version takes traffic,
+which is exactly what the `migrate` service does under Compose.
+
+Failing that, a one-off job or a shell into the service works, as long as it
+happens before the new code serves anything.
+
+If the platform offers neither — some only run the container's command — set
+the service's command to `alembic upgrade head`, deploy once, and set it back.
+Clumsy, but it beats the alternative of migrating from inside the application's
+startup, where two replicas booting together race each other.
+
+To see where things stand without changing anything:
+
+```bash
+alembic current      # what the database has applied
+alembic heads        # what this code expects
+```
+
+Disagreement between those two is the usual cause of a deployment that builds
+and then fails on its first query.
+
+**Run it once per deployment, not once per process.** The API and the worker
+share one database, so migrating from both is at best redundant. Neither
+applies migrations on startup, deliberately — see above.
+
 See [upgrading](upgrading.md) for the ordering that matters.
 
 ## Health
