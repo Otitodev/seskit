@@ -147,5 +147,11 @@ def test_migrations_serialise_across_replicas() -> None:
     """
     env = (ROOT / "migrations" / "env.py").read_text(encoding="utf-8")
 
-    assert "pg_advisory_lock" in env
-    assert "pg_advisory_unlock" in env
+    assert "pg_advisory_xact_lock" in env
+
+    # Inside the transaction Alembic opens, not before it. Taking the lock
+    # first opens a transaction of its own, Alembic nests inside that rather
+    # than owning it, and the commit at the end applies nothing - migrations
+    # report success and leave an empty database. That shipped for one commit.
+    body = env[env.index("def do_run_migrations") :]
+    assert body.index("begin_transaction") < body.index("pg_advisory_xact_lock")
