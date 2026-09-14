@@ -367,8 +367,20 @@ def test_the_readme_links_to_the_published_site() -> None:
     It used to link to `docs/*.md`, which was right while Pages was serving a
     404 and is wrong now: it lands a reader on raw markdown with no search and
     no navigation, one directory away from the rendered page they wanted.
+
+    The threshold was once "more than twenty", which was really asserting that
+    the README carried a copy of the site's navigation. It no longer does -
+    the site has its own nav, and a front page that duplicates it is a front
+    page nobody reads to the end. What this guards is that the links which
+    remain go to the site: the documentation root, install, first email, and
+    the API reference at the very least.
     """
-    assert len(_readme_site_links()) > 20, "the docs index no longer points at the site"
+    links = _readme_site_links()
+
+    assert len(links) >= 4, "the README no longer points readers at the site"
+    assert any(link.rstrip("/").endswith("seskit") for link in links), (
+        "the README must link to the documentation root"
+    )
 
 
 def test_every_readme_site_link_is_a_real_page() -> None:
