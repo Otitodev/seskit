@@ -138,11 +138,8 @@ plugins:
           - operating/backup.md: What to back up, and that a dump carries the webhook signing secrets.
           - operating/troubleshooting.md: Common failures ordered by how often each is the cause.
         Design notes:
-          - design/why-ses.md: Why SESKit builds on SES directly rather than abstracting over providers.
           - design/security-model.md: Credentials, signatures, SSRF defence, tenancy, and what is not covered yet.
-          - design/prior-art.md: What was learned from comparable projects and the requirements it produced.
           - design/system.md: Design tokens, components, and the rules for changing the dashboard.
-          - design/brief.md: The visual direction for the dashboard.
 
 markdown_extensions:
   - admonition
@@ -195,10 +192,5 @@ nav:
       - Backup and restore: operating/backup.md
       - Troubleshooting: operating/troubleshooting.md
   - Design notes:
-      - Why SES-native: design/why-ses.md
       - Security model: design/security-model.md
-      # Written long before this site existed, and unfindable until it gave
-      # them a home. They now sit with the rest of the design notes.
-      - Prior art: design/prior-art.md
-      - Design brief: design/brief.md
       - Design system: design/system.md
