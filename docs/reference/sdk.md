@@ -194,7 +194,7 @@ client.emails.send(..., idempotency_key=f"order-{order.id}")
 ## What it deliberately does not do
 
 Business logic lives in the API and is never duplicated here. That is a
-constraint from [§13](https://github.com/Otitodev/seskit/blob/main/SESKit_MVP.md),
+constraint from the specification's SDK section,
 and it has a consequence worth stating plainly: **the SDK can never do anything
 a `curl` command cannot.**
 

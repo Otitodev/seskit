@@ -139,9 +139,8 @@ in the tree.
 [backup](https://otitodev.github.io/seskit/operating/backup/) ·
 [troubleshooting](https://otitodev.github.io/seskit/operating/troubleshooting/)
 
-**Design notes** — [why SES-native](https://otitodev.github.io/seskit/design/why-ses/) ·
-[security model](https://otitodev.github.io/seskit/design/security-model/) ·
-[prior art](https://otitodev.github.io/seskit/design/prior-art/)
+**Design notes** — [security model](https://otitodev.github.io/seskit/design/security-model/) ·
+[design system](https://otitodev.github.io/seskit/design/system/)
 
 **Reading this with an agent?** The site publishes
 [`llms.txt`](https://otitodev.github.io/seskit/llms.txt) — every page with a

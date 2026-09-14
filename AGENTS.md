@@ -199,8 +199,8 @@ Read these before proposing a change to the areas they cover:
 
 | | |
 |---|---|
-| `SESKit_MVP.md` | The specification. §31 is the build order |
-| `docs/design/prior-art.md` | What was learned from comparable projects, and the requirements it generated. **AGPL boundary: no code from useSend or Plunk may enter this repository** |
+| `SESKit_MVP.md` | The specification. Kept locally by the maintainer and not in the repository; every `§` in the code cites a section of it, and §31 is the build order. Ask if a citation matters for your change |
+| `docs/design/prior-art.md` | What was learned from comparable projects, and the requirements it generated. Also local; the code cites it by name in some thirty docstrings. **AGPL boundary: no code from useSend or Plunk may enter this repository** |
 | `docs/design/system.md` | Tokens, components, and the one rule: do not make it look like an admin template |
 | `docs/design/security-model.md` | Credentials, signatures, SSRF, and what is not covered yet |
 | `docs/commit-conventions.md` | The long version of the commit rules |

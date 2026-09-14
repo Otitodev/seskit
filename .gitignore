@@ -47,3 +47,15 @@ docker-compose.override.yml
 
 # MkDocs build output.
 site/
+
+# Planning documents, kept by the maintainer and not published. The code cites
+# the specification by "§" and prior-art.md by name; both are in git history
+# up to the commit that made them local, and the maintainer has the current
+# text. security-model.md and system.md stay public: users read the first to
+# decide whether to trust SESKit with an access key, and a test holds the
+# stylesheet to the second.
+SESKit_MVP.md
+research/
+docs/design/brief.md
+docs/design/prior-art.md
+docs/design/why-ses.md
