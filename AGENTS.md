@@ -1,57 +1,50 @@
 # AGENTS.md
 
-Orientation for a coding agent working **on** SESKit.
+Orientation for a coding agent working **on** SESKit — written for whoever
+arrives with no memory of the last session.
 
-`CONTRIBUTING.md` is the human version and covers the same ground more gently;
-this is the compressed one, written for whoever arrives with no memory of the
-last session. If the two ever disagree, `CONTRIBUTING.md` wins.
+Everything operational — setup, the checks, hooks, commit format, the test
+fixtures, ports, Docker traps — is in [`CONTRIBUTING.md`](CONTRIBUTING.md),
+once. This file is what is *not* in there: where things are, the rules that
+are not negotiable, how the work is done, and where the reasoning lives. If
+the two ever disagree, `CONTRIBUTING.md` wins.
 
 If you are writing an application that *uses* SESKit, you want
-[the documentation](https://otitodev.github.io/seskit/) instead — this file is
-about editing the repository.
+[the documentation](https://otitodev.github.io/seskit/) instead.
 
 ---
 
-## The one thing that will waste your time
+## Before anything else
 
-**The test suite needs PostgreSQL and Redis.** Most of it is DB-backed, so
-running `uv run pytest` without the stack up produces a wall of
-`ConnectionRefusedError` that looks like your change broke everything.
+**The test suite needs PostgreSQL and Redis.** `uv run pytest` with nothing
+running produces a wall of `ConnectionRefusedError` that looks like your
+change broke everything. `CONTRIBUTING.md` has the two ways through; the
+short version is that CI runs the full suite in under two minutes, which is
+usually faster than starting Docker.
 
-Two ways through:
-
-```bash
-docker compose up -d db redis          # local, needs Docker running
-```
-
-or push a branch and let CI run it — the full suite takes **under two minutes**
-there, which is often faster than starting Docker.
-
-Tests that read files rather than the database run anywhere:
-
-```bash
-uv run pytest tests/test_ui_polish.py tests/test_webhook_signing.py \
-              tests/test_webhook_destinations.py tests/test_commit_msg.py
-```
+**Do not start Docker Desktop unprompted.** It is heavy on the maintainer's
+machine and has been killed by memory pressure mid-run more than once. Run the
+static gate locally; use CI, or ask, for anything DB-backed.
 
 ## Layout
 
 A **uv workspace**. Members are `apps/*` and `packages/*`.
 
 ```text
-apps/api/                 FastAPI app, Jinja2 templates, static assets
-apps/worker/              ARQ background worker
-packages/core/            Config, logging, persistence, shared domain logic
+apps/api/                   FastAPI app, Jinja2 templates, static assets
+apps/worker/                ARQ background worker
+packages/core/              Config, logging, persistence, shared domain logic
 packages/provider-aws-ses/  Amazon SES
-packages/provider-smtp/   SMTP, for local delivery to Mailpit
-packages/sdk-python/      The `seskit` package on PyPI (a stub until Phase 12)
-migrations/               Alembic
-docs/                     The documentation site (MkDocs)
-scripts/                  Repository tooling
+packages/provider-smtp/     SMTP, for local delivery to Mailpit
+packages/sdk-python/        The `seskit` package on PyPI
+migrations/                 Alembic
+docs/                       The documentation site (MkDocs)
+docker/                     Dockerfiles and the container entrypoint
+scripts/                    Repository tooling
 ```
 
-`apps/api` and `apps/worker` both depend on `packages/core`; neither depends on
-the other. **`core` defines the provider interface and chooses an
+`apps/api` and `apps/worker` both depend on `packages/core`; neither depends
+on the other. **`core` defines the provider interface and chooses an
 implementation, but imports neither provider package** — the dependency only
 ever points one way. Provider-specific code that leaks into `core` or the API
 is a review failure, not a style preference.
@@ -60,138 +53,57 @@ is a review failure, not a style preference.
 
 **No Node.js.** No npm, no `node_modules`, no JavaScript build step, no
 separate frontend service. This is positioning, not taste (spec §5): a
-self-hoster runs one Python service. Anything requiring a Node toolchain is out
-by definition — that includes documentation generators, CSS frameworks and
-component libraries.
+self-hoster runs one Python service. Anything requiring a Node toolchain is
+out by definition — documentation generators, CSS frameworks, component
+libraries included.
 
-**No credentials in the database.** AWS credentials are resolved by boto3 from
-the environment (§9). There is deliberately no setting for them. API keys are
-stored as SHA-256 hashes. Webhook signing secrets are the one plaintext secret,
-because receivers must read them back to verify signatures.
+**AWS credentials belong to a project, not to the instance.** An access key is
+pasted into the dashboard, verified against AWS before it is stored, and kept
+encrypted under a key derived from `SECRET_KEY` (§9, revised in Phase 14).
+There is deliberately no instance-wide setting for one, the secret is never
+rendered back out, and `stored_credentials()` in `core/services/credentials.py`
+is the only place it is ever decrypted. API keys are SHA-256 hashes. Webhook
+signing secrets are the one plaintext secret, because receivers must read them
+back to verify signatures.
 
 **Never `AdministratorAccess`.** The IAM policies SESKit asks for are
-enumerated in `docs/guides/iam-policies.md` and are scoped by resource where
-AWS allows it.
+enumerated in `docs/guides/iam-policies.md` and scoped by resource where AWS
+allows it.
 
 **Do not restyle per page** (§31). The dashboard has a component layer in
 `apps/api/src/seskit_api/templates/components/ui.html` and tokens in
-`static/css/app.css`. Read `docs/design/system.md` before touching any page. A
-change that alters one page's appearance and no component has drifted into
-redecoration.
+`static/css/app.css`, and `tests/test_design_system.py` holds the stylesheet
+to its own rules. Read `docs/design/system.md` before touching any page.
 
-## The static gate
-
-Runs on every commit via the hook, and again in CI:
-
-```bash
-uv run ruff check .
-uv run ruff format --check .
-uv run mypy .
-```
-
-mypy is the project's type gate and passes on the whole tree. **Pyright
-diagnostics reporting `seskit_core.*` as unresolvable are environment noise** —
-an editor not using the workspace venv. Do not chase them.
-
-## Tests
-
-Two tiers, and picking the wrong one is the most common mistake:
-
-| Fixture | Gives you | Use when |
-|---|---|---|
-| `client` | The app with a mocked session and Redis | Testing routing, validation, auth refusals — anything with no persistence |
-| `app_client` | The app against **real** Postgres and Redis | Anything that stores or reads a row |
-| `signed_in_client` | `app_client` holding a real session cookie | Any dashboard page — they are unreachable signed out |
-| `db_session` | A session in a transaction rolled back per test | Setting up or asserting on rows directly |
-| `session_factory` | For code that opens its own session | Worker paths |
-| `redis_client` | Real Redis on a dedicated db index, flushed per test | Rate limits, caches, markers |
-| `queue`, `provider_factory`, `provisioner_factory`, `destination_resolver` | Fakes | Avoiding AWS and outbound HTTP |
-
-Conventions worth copying rather than reinventing:
-
-- **Test names are sentences.** `test_a_refused_url_is_explained_on_the_form`,
-  not `test_create_webhook_400`.
-- **Docstrings say why the test exists**, not what it does. The line worth
-  writing is the failure it prevents.
-- **The local environment permits private addresses.** A test wanting a refused
-  webhook URL must use a scheme refused everywhere (`ftp://`), not
-  `http://127.0.0.1` — loopback is allowed on purpose so a developer can point
-  a webhook at their own machine.
-- **Jinja autoescapes.** Asserting on a string containing an apostrophe will
-  fail, because `'` renders as `&#39;`.
-
-## Commits
-
-Conventional Commits, enforced by `scripts/check_commit_msg.py` on the
-`commit-msg` hook and again in CI on pull requests.
-
-```text
-<type>(<scope>): <subject>
-```
-
-Types: `feat` `fix` `docs` `refactor` `perf` `test` `build` `ci` `chore`
-`revert` `style`. Scopes: `api` `ui` `worker` `core` `provider-ses`
-`provider-smtp` `sdk` `migrations` `docker` `ci` `deps` `docs` `release`.
-
-Subject ≤ 72 characters, imperative mood, no trailing period, not sentence
-case. Body lines ≤ 100. Run the checker before pushing a series:
-
-```bash
-for sha in $(git rev-list origin/main..HEAD); do
-  git log -1 --format=%B "$sha" > /tmp/cm.txt
-  python scripts/check_commit_msg.py /tmp/cm.txt
-done
-```
-
-Hooks are installed with `git config core.hooksPath .githooks` — **not**
-`pre-commit install`, which refuses to run while `core.hooksPath` is set.
+**Never log message bodies, recipients or subjects.** Ids and statuses only.
 
 ## Working method
 
-**Plan before each phase.** The repository is built in numbered phases (spec
-§31, currently at Phase 10). Each one gets a written plan, approved before code
-is written.
+**Plan before each phase.** The project was built in numbered phases (spec
+§31, fourteen so far). Each one gets a written plan, approved before code is
+written. Smaller changes still get a stated plan before a first commit.
 
-**Branch, do not push to `main`.** Open a pull request: CI runs the full suite
-against real Postgres and Redis, which is the only place most tests execute.
+**One concern per commit, and the commit message is the design record.**
+Bodies explain *why*, at length; the diff already says what. Read a few in
+`git log` before writing one.
 
-**Do not start Docker Desktop unprompted.** It is heavy on the maintainer's
-machine. Run the static gate, and either ask or use CI for DB-backed checks.
+**Branch, open a pull request, wait for CI.** Never merge on the other checks
+while the test job is still running — a rebase produces a commit nothing has
+tested, and `gh pr merge --auto` merges immediately when auto-merge is not
+enabled on the repository. Both have put a broken commit on `main` before.
 
-A useful trick for dashboard visual checks that need neither: render the
-template standalone with Jinja, stub `url_for`, serve it beside the real
-stylesheet, and look at it. Anything that is template plus CSS rather than real
-data can be verified this way with no database at all.
+**A guard that passes on the broken code protects nothing.** When adding a
+test for a bug, run it against the code as it was and confirm it fails there.
+Several tests in this repository say so in their docstrings; the habit is
+worth keeping.
 
-## The documentation site
+**Verify in the rendered output, not the accessor.** A header that reads back
+correctly can still be corrupt on the wire; a template that reads fine can
+still 500. Rendering a page offline with Jinja and the real stylesheet needs
+no database and has caught what reading the source did not.
 
-```bash
-uv run --group docs mkdocs serve            # local, :8000
-uv run --group docs mkdocs build --strict   # what CI runs
-```
-
-`--strict` promotes a broken internal link to a build failure. `mkdocs` and
-`mkdocs-material` are pinned below their next major on purpose — Material's own
-analysis of the MkDocs 2.0 rewrite says it removes the plugin system with no
-migration path.
-
-Deploys to GitHub Pages from `main`, with Pages set to **GitHub Actions** as
-the source. Setting it to "Deploy from a branch" makes the deploy job 404.
-
-## Local ports
-
-Deliberately unusual, and the reason is worth knowing:
-
-| | |
-|---|---|
-| PostgreSQL | **55432** |
-| Redis | **56379** |
-| API | 8000 |
-| Mailpit | 8025 (inbox), 1025 (SMTP) |
-
-Machines with PostgreSQL installed often already have clusters on 5432 *and*
-5433. Those bind before Docker does, and the container then looks healthy while
-every connection quietly reaches the wrong database.
+**The default for a `Checks` box in a PR is to delete the line**, not to tick
+it. A ticked box that is not true is worse than no box.
 
 ## Where the reasoning lives
 
@@ -199,10 +111,10 @@ Read these before proposing a change to the areas they cover:
 
 | | |
 |---|---|
-| `SESKit_MVP.md` | The specification. Kept locally by the maintainer and not in the repository; every `§` in the code cites a section of it, and §31 is the build order. Ask if a citation matters for your change |
-| `docs/design/prior-art.md` | What was learned from comparable projects, and the requirements it generated. Also local; the code cites it by name in some thirty docstrings. **AGPL boundary: no code from useSend or Plunk may enter this repository** |
-| `docs/design/system.md` | Tokens, components, and the one rule: do not make it look like an admin template |
+| `SESKit_MVP.md` | The specification. **Kept locally by the maintainer and not in the repository**; every `§` in the code cites a section of it, and §31 is the build order. Ask if a citation matters for your change |
+| `docs/design/prior-art.md` | What was learned from comparable projects and the requirements it generated. **Also local**; the code cites it by name in some thirty docstrings. **AGPL boundary: no code from useSend or Plunk may enter this repository** |
 | `docs/design/security-model.md` | Credentials, signatures, SSRF, and what is not covered yet |
+| `docs/design/system.md` | Tokens, components, and the one rule: do not make it look like an admin template |
 | `docs/commit-conventions.md` | The long version of the commit rules |
 
 Much of the reasoning also lives in docstrings, which are unusually long here
