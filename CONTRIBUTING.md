@@ -4,10 +4,9 @@ Thanks for taking an interest. This document covers everything you need to get a
 change merged: the setup, the checks, the commit convention, and the handful of
 traps that have already cost someone an afternoon.
 
-> **Working with a coding agent?** [`AGENTS.md`](AGENTS.md) is the same ground
-> compressed for one — layout, the two-tier test harness, and the rules that
-> are not negotiable. This document is the fuller version and wins wherever
-> they disagree.
+> **Working with a coding agent?** [`AGENTS.md`](AGENTS.md) is the
+> orientation for one — where things are, the rules that are not negotiable,
+> and the working method. Everything operational is here, once.
 
 ---
 
@@ -18,6 +17,8 @@ traps that have already cost someone an afternoon.
 - [Git hooks](#git-hooks)
 - [Commit messages](#commit-messages)
 - [Tests](#tests)
+- [The documentation site](#the-documentation-site)
+- [Local ports](#local-ports)
 - [Docker traps](#docker-traps)
 - [Architecture rules](#architecture-rules)
 - [Opening a pull request](#opening-a-pull-request)
@@ -56,13 +57,31 @@ All four must pass. CI runs the same ones.
 ```bash
 uv run pytest                  # tests
 uv run ruff check .            # lint
-uv run ruff format .           # format
+uv run ruff format --check .   # format
 uv run mypy .                  # type-check
 ```
 
-Tests need PostgreSQL and Redis running. They use a dedicated database
-(`seskit_test`) and Redis index, created and torn down automatically, so they
-never touch development data.
+The last three are **the static gate**: they run on every commit through the
+hook and need nothing but Python. mypy passes on the whole tree. Pyright
+diagnostics reporting `seskit_core.*` as unresolvable are an editor not using
+the workspace venv, not a problem to chase.
+
+**Tests need PostgreSQL and Redis running.** Most of the suite is DB-backed, so
+`uv run pytest` with nothing up produces a wall of `ConnectionRefusedError`
+that looks like your change broke everything. Either start the dependencies:
+
+```bash
+docker compose up -d db redis
+```
+
+or push a branch and let CI run them — the full suite takes **under two
+minutes** there, which is often faster than starting Docker. The suite uses a
+dedicated database (`seskit_test`) and Redis index, created and torn down
+automatically, so it never touches development data.
+
+A handful of tests read files rather than the database and run anywhere:
+`test_ui_polish.py`, `test_design_system.py`, `test_configuration_docs.py`,
+`test_commit_msg.py`, `test_dockerfiles.py`, `test_entrypoint.py`.
 
 ---
 
@@ -121,8 +140,17 @@ SES and DKIM are fine), no trailing period, 72 characters max. **The body should
 explain why** — the diff already shows what.
 
 Scopes match the repository layout: `api`, `ui`, `worker`, `core`,
-`provider-ses`, `sdk`, `migrations`, `docker`, `ci`, `deps`, `docs`, `release`.
-Omit the scope for repo-wide changes.
+`provider-ses`, `provider-smtp`, `sdk`, `migrations`, `docker`, `ci`, `deps`,
+`docs`, `release`. Omit the scope for repo-wide changes.
+
+Checking a whole series before pushing it:
+
+```bash
+for sha in $(git rev-list origin/main..HEAD); do
+  git log -1 --format=%B "$sha" > /tmp/cm.txt
+  python scripts/check_commit_msg.py /tmp/cm.txt
+done
+```
 
 Blocked by the hook? Your message is kept in `.git/COMMIT_EDITMSG` — reopen it
 with `git commit -eF .git/COMMIT_EDITMSG`.
@@ -153,6 +181,68 @@ providers and provisioners by default, so a test cannot reach an AWS account by
 forgetting to override something. Where a mock is inadequate — moto does not
 implement several SESv2 calls — the gap is recorded in the test module's
 docstring with a canary test that fails when the mock catches up.
+
+The fixtures, and which to reach for:
+
+| Fixture | Gives you | Use when |
+|---|---|---|
+| `client` | The app with a mocked session and Redis | Routing, validation, auth refusals — anything with no persistence |
+| `app_client` | The app against **real** Postgres and Redis | Anything that stores or reads a row |
+| `signed_in_client` | `app_client` holding a real session cookie | Any dashboard page — they are unreachable signed out |
+| `db_session` | A session in a transaction rolled back per test | Setting up or asserting on rows directly |
+| `session_factory` | For code that opens its own session | Worker paths |
+| `redis_client` | Real Redis on a dedicated db index, flushed per test | Rate limits, caches, markers |
+| `queue`, `provider_factory`, `provisioner_factory`, `destination_resolver` | Fakes | Avoiding AWS and outbound HTTP |
+
+Three conventions that keep getting rediscovered the hard way:
+
+- **Docstrings say why the test exists**, not what it does. The line worth
+  writing is the failure it prevents.
+- **The local environment permits private addresses.** A test wanting a refused
+  webhook URL must use a scheme refused everywhere (`ftp://`), not
+  `http://127.0.0.1` — loopback is allowed on purpose so a developer can point
+  a webhook at their own machine.
+- **Jinja autoescapes.** Asserting on a string containing an apostrophe fails,
+  because `'` renders as `&#39;`.
+
+---
+
+## The documentation site
+
+```bash
+uv run --group docs mkdocs serve            # local, :8000
+uv run --group docs mkdocs build --strict   # what CI runs
+```
+
+`--strict` promotes a broken internal link to a build failure. It does **not**
+check heading anchors, so a renamed heading breaks cross-page `#links`
+silently — check those by hand when you rename one.
+
+`mkdocs` and `mkdocs-material` are pinned below their next major on purpose:
+Material's own analysis of the MkDocs 2.0 rewrite says it removes the plugin
+system with no migration path.
+
+The site deploys to GitHub Pages from `main`, with Pages set to **GitHub
+Actions** as the source. Setting it to "Deploy from a branch" makes the deploy
+job 404.
+
+---
+
+## Local ports
+
+Deliberately unusual, and the reason is worth knowing:
+
+| | |
+|---|---|
+| PostgreSQL | **55432** |
+| Redis | **56379** |
+| API | 8000 |
+| Mailpit | 8025 (inbox), 1025 (SMTP) |
+
+Machines with PostgreSQL installed often already have clusters on 5432 *and*
+5433. Those bind before Docker does, and the container then looks healthy while
+every connection quietly reaches the wrong database. Inside Compose the
+services still use the standard ports; only the host side is moved.
 
 ---
 
@@ -191,8 +281,19 @@ A few boundaries the codebase holds to. Breaking one will come up in review.
 - **Business logic lives in `services`, not in route handlers**, so it can be
   tested without HTTP and reused from a CLI later.
 - **Never log message bodies, recipients, or subjects.** Ids and statuses only.
-- **AWS credentials are never stored, never accepted in a form, and never
-  named in settings.** boto3 resolves them from the environment.
+- **AWS credentials belong to a project, not to the instance.** An access
+  key is pasted into the dashboard, checked against AWS before it is stored,
+  and kept encrypted under a key derived from `SECRET_KEY`. There is
+  deliberately no instance-wide setting for one, and the secret is never
+  rendered back out — see `docs/design/security-model.md`.
+- **No Node.js.** No npm, no `node_modules`, no JavaScript build step, no
+  separate frontend service. A self-hoster runs one Python service, and
+  anything requiring a Node toolchain — documentation generators, CSS
+  frameworks, component libraries — is out by definition.
+- **Do not restyle per page.** The dashboard has a component layer in
+  `apps/api/src/seskit_api/templates/components/ui.html` and tokens in
+  `static/css/app.css`; a test holds the stylesheet to them. Read
+  `docs/design/system.md` before touching any page.
 
 ---
 
