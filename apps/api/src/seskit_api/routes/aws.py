@@ -496,7 +496,10 @@ async def production_access(
             secret_key=settings.SECRET_KEY,
         )
     except APIError as error:
-        await db.rollback()
+        # No rollback, as on the Emails page. Every refusal - a gate unmet, a
+        # bad URL, AWS saying no - happens before the service writes anything,
+        # and a rollback expires every loaded object so the template would then
+        # lazy-load the project from inside sync Jinja and fail.
         return await _page(
             request,
             db,
