@@ -1048,6 +1048,24 @@ svg {
 .table__num { font-variant-numeric: tabular-nums; text-align: right; }
 .table__mono { font-family: var(--font-mono); font-size: var(--text-sm); color: var(--text-muted); }
 
+/* A value with its own Copy. The button is there on hover and on focus,
+   and always on a touch screen where there is no hover to find it with. */
+.copy {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  max-width: 100%;
+}
+
+.copy__value { word-break: break-all; }
+
+.copy__btn { flex-shrink: 0; opacity: 0; transition: opacity 0.12s ease; }
+
+.copy:hover .copy__btn,
+.copy__btn:focus-visible { opacity: 1; }
+
+@media (hover: none) { .copy__btn { opacity: 1; } }
+
 /* Empty state ------------------------------------------------------------- */
 
 /* Given real design attention: for a new install this is the first thing a
