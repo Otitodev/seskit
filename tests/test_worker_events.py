@@ -100,12 +100,13 @@ async def _count(session: AsyncSession, event_type: EventType | None = None) -> 
 async def test_a_delivery_is_recorded_and_acknowledged(
     db_session: AsyncSession, session_factory: async_sessionmaker[AsyncSession]
 ) -> None:
-    await _sent_email(db_session)
+    email = await _sent_email(db_session)
     queue = FakeNotificationQueue(_envelope(ses_events.delivery()))
 
     recorded = await drain(
         queue,
         session_factory=session_factory,
+        project_ids={email.project_id},
         max_batches=5,
         wait_seconds=0,
         visibility_timeout=30,
@@ -126,7 +127,7 @@ async def test_the_envelope_id_is_what_deduplicates(
     across redeliveries, which is why it is the one that is used - and why raw
     message delivery, which strips the envelope, stays off.
     """
-    await _sent_email(db_session)
+    email = await _sent_email(db_session)
     body = _envelope(ses_events.bounce(), message_id="sns-same")
     # Two SQS deliveries of one notification: different receipts, same envelope.
     queue = FakeNotificationQueue(body, body)
@@ -134,6 +135,7 @@ async def test_the_envelope_id_is_what_deduplicates(
     await drain(
         queue,
         session_factory=session_factory,
+        project_ids={email.project_id},
         max_batches=5,
         wait_seconds=0,
         visibility_timeout=30,
@@ -147,7 +149,7 @@ async def test_the_envelope_id_is_what_deduplicates(
 async def test_several_events_in_one_batch_all_land(
     db_session: AsyncSession, session_factory: async_sessionmaker[AsyncSession]
 ) -> None:
-    await _sent_email(db_session)
+    email = await _sent_email(db_session)
     queue = FakeNotificationQueue(
         _envelope(ses_events.opened(), message_id="sns-a"),
         _envelope(ses_events.clicked(), message_id="sns-b"),
@@ -156,6 +158,7 @@ async def test_several_events_in_one_batch_all_land(
     recorded = await drain(
         queue,
         session_factory=session_factory,
+        project_ids={email.project_id},
         max_batches=5,
         wait_seconds=0,
         visibility_timeout=30,
@@ -168,7 +171,7 @@ async def test_several_events_in_one_batch_all_land(
 async def test_batches_are_drained_until_the_queue_is_empty(
     db_session: AsyncSession, session_factory: async_sessionmaker[AsyncSession]
 ) -> None:
-    await _sent_email(db_session)
+    email = await _sent_email(db_session)
     queue = FakeNotificationQueue(
         _envelope(ses_events.delivery(), message_id="sns-a"),
         _envelope(ses_events.opened(), message_id="sns-b"),
@@ -179,6 +182,7 @@ async def test_batches_are_drained_until_the_queue_is_empty(
     recorded = await drain(
         queue,
         session_factory=session_factory,
+        project_ids={email.project_id},
         max_batches=10,
         wait_seconds=0,
         visibility_timeout=30,
@@ -195,7 +199,7 @@ async def test_a_pass_is_bounded(
     """A backlog must not monopolise the worker. The job queued behind this one
     is a send, and a user notices a late email long before a late receipt.
     """
-    await _sent_email(db_session)
+    email = await _sent_email(db_session)
     queue = FakeNotificationQueue(
         *[_envelope(ses_events.delivery(), message_id=f"sns-{i}") for i in range(6)],
         batch_size=1,
@@ -204,6 +208,7 @@ async def test_a_pass_is_bounded(
     recorded = await drain(
         queue,
         session_factory=session_factory,
+        project_ids={email.project_id},
         max_batches=2,
         wait_seconds=0,
         visibility_timeout=30,
@@ -226,6 +231,7 @@ async def test_an_empty_queue_is_asked_once(
         await drain(
             queue,
             session_factory=session_factory,
+            project_ids={"proj_x"},
             max_batches=10,
             wait_seconds=0,
             visibility_timeout=30,
@@ -247,6 +253,7 @@ async def test_an_unreadable_body_is_acknowledged_not_retried(
     recorded = await drain(
         queue,
         session_factory=session_factory,
+        project_ids={"proj_x"},
         max_batches=2,
         wait_seconds=0,
         visibility_timeout=30,
@@ -269,6 +276,7 @@ async def test_a_subscription_confirmation_is_acknowledged(
     await drain(
         queue,
         session_factory=session_factory,
+        project_ids={"proj_x"},
         max_batches=2,
         wait_seconds=0,
         visibility_timeout=30,
@@ -288,6 +296,7 @@ async def test_an_event_for_an_unknown_message_is_acknowledged(
     recorded = await drain(
         queue,
         session_factory=session_factory,
+        project_ids={"proj_x"},
         max_batches=2,
         wait_seconds=0,
         visibility_timeout=30,
@@ -302,7 +311,7 @@ async def test_an_unknown_event_type_is_acknowledged(
     db_session: AsyncSession, session_factory: async_sessionmaker[AsyncSession]
 ) -> None:
     """AWS adds event types. A new one must not wedge the queue."""
-    await _sent_email(db_session)
+    email = await _sent_email(db_session)
     queue = FakeNotificationQueue(
         _envelope({"eventType": "SomethingNew", "mail": {"messageId": ses_events.MESSAGE_ID}})
     )
@@ -310,6 +319,7 @@ async def test_an_unknown_event_type_is_acknowledged(
     await drain(
         queue,
         session_factory=session_factory,
+        project_ids={email.project_id},
         max_batches=2,
         wait_seconds=0,
         visibility_timeout=30,
@@ -330,7 +340,7 @@ async def test_a_failure_leaves_the_message_on_the_queue(
     events disappear without trace - which is the failure docs/design/prior-art.md
     records, where a transient bug answered success and dropped the event.
     """
-    await _sent_email(db_session)
+    email = await _sent_email(db_session)
     queue = FakeNotificationQueue(_envelope(ses_events.delivery()))
 
     async def explode(*args: object, **kwargs: object) -> None:
@@ -339,7 +349,12 @@ async def test_a_failure_leaves_the_message_on_the_queue(
     monkeypatch.setattr(worker_events, "ingest_event", explode)
 
     with pytest.raises(RuntimeError):
-        await handle(queue, queue.pending[0], session_factory=session_factory)
+        await handle(
+            queue,
+            queue.pending[0],
+            session_factory=session_factory,
+            project_ids={email.project_id},
+        )
 
     # Left on the queue, so the visibility timeout brings it back.
     assert queue.deleted == []
@@ -358,6 +373,7 @@ async def test_the_email_learns_it_was_delivered(
     await drain(
         queue,
         session_factory=session_factory,
+        project_ids={email.project_id},
         max_batches=2,
         wait_seconds=0,
         visibility_timeout=30,
@@ -376,6 +392,7 @@ async def test_a_bounce_is_recorded_without_rewriting_the_send(
     await drain(
         queue,
         session_factory=session_factory,
+        project_ids={email.project_id},
         max_batches=2,
         wait_seconds=0,
         visibility_timeout=30,

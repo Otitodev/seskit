@@ -35,7 +35,14 @@ from arq.connections import ArqRedis
 from fastapi import APIRouter, Depends, Request, Response, status
 from seskit_core.config import EVENT_HTTPS_PATH, Settings
 from seskit_core.db import get_session
-from seskit_core.events import MalformedEnvelope, Outcome, ingest_event, unwrap
+from seskit_core.events import (
+    MalformedEnvelope,
+    Outcome,
+    connections_for_origin,
+    ingest_event,
+    parse_topic_arn,
+    unwrap,
+)
 from seskit_core.logging import get_logger
 from seskit_core.services import pending_delivery_ids
 from seskit_provider_aws_ses import SignatureError, confirm_subscription, verify
@@ -115,12 +122,22 @@ async def receive_ses_event(
         logger.warning("sns_payload_empty", sns_message_id=envelope.message_id)
         return Response(status_code=status.HTTP_204_NO_CONTENT)
 
+    # Who the topic speaks for. The signature proved SNS sent this; the topic
+    # ARN's region and account say which of our connections - if any - it
+    # belongs to, and the event may only attach to a message one of those
+    # projects sent. An unrecognised origin yields no projects, so the lookup
+    # finds nothing and the event is settled as unknown rather than recorded
+    # against whichever message happened to share the id.
+    origin = parse_topic_arn(envelope.topic_arn)
+    owners = await connections_for_origin(db, origin) if origin else []
+
     outcome, event = await ingest_event(
         db,
         envelope.event,
         # The envelope's id: the event body is identical across redeliveries,
         # so nothing inside it could tell one from another.
         provider_event_id=envelope.message_id or None,
+        project_ids={connection.project_id for connection in owners},
     )
     # Read before the commit, so the ids are available afterwards.
     delivery_ids = await pending_delivery_ids(db, event.id) if event is not None else []

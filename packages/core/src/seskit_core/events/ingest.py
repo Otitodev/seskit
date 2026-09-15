@@ -19,6 +19,7 @@ record is how events disappear without trace.
 
 from __future__ import annotations
 
+from collections.abc import Collection
 from enum import StrEnum
 from typing import Any
 
@@ -26,6 +27,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from seskit_core.email.message import bare_address
 from seskit_core.events.emit import record_suppression_event
 from seskit_core.events.normalise import (
     UnknownEventType,
@@ -72,12 +74,26 @@ async def ingest_event(
     payload: dict[str, Any],
     *,
     provider_event_id: str | None,
+    project_ids: Collection[str],
 ) -> tuple[Outcome, EmailEvent | None]:
-    """Record one SES event, exactly once.
+    """Record one SES event, exactly once, for a message one of these projects sent.
 
     ``provider_event_id`` is the SNS MessageId. It is what makes redelivery
     harmless, and it comes from the envelope rather than the event body -
     the body is identical across redeliveries, so it cannot distinguish them.
+
+    ``project_ids`` is who could legitimately have sent the message this event
+    is about: the projects whose connection owns the queue it was read from, or
+    the topic that posted it. A collection rather than one id because several
+    projects in one AWS account share one queue and topic on purpose.
+
+    It exists because the SES message id is not a secret. SES writes it into
+    the ``Message-ID`` header of every message it delivers, so every recipient
+    holds the key this function correlates on. Without the scope, an event
+    naming that id from *anywhere* - another tenant's queue on a shared
+    instance, or any AWS account at all on the HTTPS receiver - attached to
+    the message and suppressed whatever addresses it cared to list. An empty
+    collection matches nothing, which is the safe reading of "nobody".
     """
     try:
         event_type = parse_event_type(payload)
@@ -93,11 +109,18 @@ async def ingest_event(
         logger.info("event_without_message_id", event_type=event_type.value)
         return Outcome.UNKNOWN_MESSAGE, None
 
-    email = await session.scalar(select(Email).where(Email.provider_message_id == message_id))
+    email = await session.scalar(
+        select(Email).where(
+            Email.provider_message_id == message_id,
+            Email.project_id.in_(list(project_ids)),
+        )
+    )
     if email is None:
         # Usually a message sent before this instance existed, or from another
         # tool sharing the account. Nothing to attach it to, and no amount of
-        # retrying will conjure the row.
+        # retrying will conjure the row. Also, now, a message that exists but
+        # belongs to a project this event's source could not speak for - same
+        # answer, deliberately: a probe learns nothing from the difference.
         logger.info("event_for_unknown_message", event_type=event_type.value)
         return Outcome.UNKNOWN_MESSAGE, None
 
@@ -178,6 +201,13 @@ async def _apply_suppression(
     destination list because one address is dead would take out colleagues who
     received it perfectly well.
 
+    And only those the message actually went to. An event is trusted to say
+    *which* of the message's recipients bounced; it is not trusted to introduce
+    recipients the message never had. The scoping in `ingest_event` is what
+    keeps a forged event away from the row in the first place - this bounds
+    what one could do if that scope were ever wrong again, which is the kind of
+    second lock worth having on a list that refuses future sends.
+
     Scoped to the message's own project. That is the point of SESKit holding
     this list rather than SES, whose equivalent is account-wide.
     """
@@ -186,7 +216,15 @@ async def _apply_suppression(
     if reason is None:
         return
 
-    named = recipients(payload, event_type)
+    sent_to = {
+        bare_address(address)
+        for address in (*email.to_addresses, *email.cc_addresses, *email.bcc_addresses)
+    }
+    named = [
+        address for address in recipients(payload, event_type) if bare_address(address) in sent_to
+    ]
+    if not named:
+        return
     # Asked before writing, so the event below reports what actually changed.
     # An address suppressed last week bouncing again is not news, and an
     # integration that received `email.suppressed` for it twice would have to

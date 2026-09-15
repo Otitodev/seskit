@@ -32,6 +32,7 @@ from seskit_core.services.aws import (
 )
 from seskit_core.services.credentials import stored_credentials
 from seskit_core.services.events import (
+    PolledQueue,
     ProvisionerFactory,
     count_other_users,
     distinct_event_queues,
@@ -116,6 +117,7 @@ __all__ = [
     "IssuedKey",
     "Metrics",
     "Outgoing",
+    "PolledQueue",
     "ProviderFactory",
     "ProvisionerFactory",
     "SetupStep",

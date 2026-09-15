@@ -23,7 +23,7 @@ send, and a user notices a late email long before a late bounce receipt.
 
 from __future__ import annotations
 
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Collection
 from typing import Any
 
 from seskit_core.config import get_settings
@@ -86,12 +86,13 @@ async def poll_events(
     async with factory() as session:
         queues = await distinct_event_queues(session, secret_key=settings.SECRET_KEY)
 
-    for region, queue_url, credentials in queues:
+    for polled in queues:
         try:
             recorded += await drain(
-                build(region, queue_url, credentials),
+                build(polled.region, polled.queue_url, polled.credentials),
                 session_factory=factory,
                 enqueue=enqueue,
+                project_ids=polled.project_ids,
                 max_batches=settings.EVENT_POLL_MAX_BATCHES,
                 wait_seconds=settings.EVENT_POLL_WAIT_SECONDS,
                 visibility_timeout=settings.EVENT_VISIBILITY_TIMEOUT_SECONDS,
@@ -99,7 +100,7 @@ async def poll_events(
         except Exception:
             # One unreachable queue must not abandon the others - the same
             # shape as the per-identity guard in the recheck pass.
-            logger.exception("event_poll_failed", region=region, job_id=ctx.get("job_id"))
+            logger.exception("event_poll_failed", region=polled.region, job_id=ctx.get("job_id"))
 
     if recorded:
         logger.info("event_poll_pass", recorded=recorded, queues=len(queues))
@@ -110,12 +111,19 @@ async def drain(
     queue: NotificationQueue,
     *,
     session_factory: SessionFactory,
+    project_ids: Collection[str],
     enqueue: Enqueue | None = None,
     max_batches: int,
     wait_seconds: int,
     visibility_timeout: int,
 ) -> int:
-    """Read batches until the queue is empty or the budget runs out."""
+    """Read batches until the queue is empty or the budget runs out.
+
+    ``project_ids`` is who this queue speaks for, and every notification read
+    from it is ingested under that scope. A message from another account's
+    queue cannot reach this call, because each queue is drained with its own
+    projects - which is the property the scope exists to hold.
+    """
     recorded = 0
 
     for _ in range(max(1, max_batches)):
@@ -128,7 +136,13 @@ async def drain(
             break
 
         for notification in batch:
-            if await handle(queue, notification, session_factory=session_factory, enqueue=enqueue):
+            if await handle(
+                queue,
+                notification,
+                session_factory=session_factory,
+                project_ids=project_ids,
+                enqueue=enqueue,
+            ):
                 recorded += 1
 
     return recorded
@@ -139,6 +153,7 @@ async def handle(
     notification: QueuedNotification,
     *,
     session_factory: SessionFactory,
+    project_ids: Collection[str],
     enqueue: Enqueue | None = None,
 ) -> bool:
     """Process one message. Returns whether an event was recorded.
@@ -181,6 +196,7 @@ async def handle(
             # The envelope's id, not the queue's: SQS issues a new message id
             # per delivery, so keying on that would deduplicate nothing.
             provider_event_id=envelope.message_id or None,
+            project_ids=project_ids,
         )
         # Read before the commit closes the session, so the ids survive.
         delivery_ids = (

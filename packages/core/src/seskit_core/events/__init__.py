@@ -26,6 +26,7 @@ from seskit_core.events.normalise import (
     suppression_reason,
     to_public,
 )
+from seskit_core.events.origin import TopicOrigin, connections_for_origin, parse_topic_arn
 
 __all__ = [
     "NOTIFICATION",
@@ -34,12 +35,15 @@ __all__ = [
     "MalformedEnvelope",
     "Outcome",
     "SNSEnvelope",
+    "TopicOrigin",
     "UnknownEventType",
     "apply_to_email",
+    "connections_for_origin",
     "event_name",
     "ingest_event",
     "occurred_at",
     "parse_event_type",
+    "parse_topic_arn",
     "provider_message_id",
     "recipients",
     "record_suppression_event",
