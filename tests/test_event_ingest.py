@@ -68,7 +68,7 @@ async def test_a_delivery_is_recorded_against_its_email(db_session: AsyncSession
     email = await _sent_email(db_session)
 
     outcome, event = await ingest_event(
-        db_session, ses_events.delivery(), provider_event_id="sns-1"
+        db_session, ses_events.delivery(), provider_event_id="sns-1", project_ids={email.project_id}
     )
 
     assert outcome is Outcome.RECORDED
@@ -81,7 +81,9 @@ async def test_a_delivery_sets_delivered_at(db_session: AsyncSession) -> None:
     """The dashboard has shown a dash there since Phase 6."""
     email = await _sent_email(db_session)
 
-    await ingest_event(db_session, ses_events.delivery(), provider_event_id="sns-1")
+    await ingest_event(
+        db_session, ses_events.delivery(), provider_event_id="sns-1", project_ids={email.project_id}
+    )
 
     assert email.delivered_at == datetime(2026, 8, 30, 9, 0, 3, tzinfo=UTC)
 
@@ -93,7 +95,9 @@ async def test_a_bounce_does_not_rewrite_the_send_status(db_session: AsyncSessio
     """
     email = await _sent_email(db_session)
 
-    await ingest_event(db_session, ses_events.bounce(), provider_event_id="sns-2")
+    await ingest_event(
+        db_session, ses_events.bounce(), provider_event_id="sns-2", project_ids={email.project_id}
+    )
 
     assert email.status == EmailStatus.SENT.value
     assert email.delivered_at is None
@@ -101,9 +105,11 @@ async def test_a_bounce_does_not_rewrite_the_send_status(db_session: AsyncSessio
 
 async def test_the_stored_payload_is_the_normalised_one(db_session: AsyncSession) -> None:
     """§15: provider payloads must not leak. Phase 8 sends this to customers."""
-    await _sent_email(db_session)
+    email = await _sent_email(db_session)
 
-    _, event = await ingest_event(db_session, ses_events.bounce(), provider_event_id="sns-3")
+    _, event = await ingest_event(
+        db_session, ses_events.bounce(), provider_event_id="sns-3", project_ids={email.project_id}
+    )
 
     assert event is not None
     assert event.payload["type"] == "email.bounced"
@@ -122,13 +128,19 @@ async def test_the_same_notification_twice_records_one_event(
     bounces, and the bounce rate a user sees is wrong in the direction that
     makes them panic.
     """
-    await _sent_email(db_session)
+    email = await _sent_email(db_session)
 
     first, event_one = await ingest_event(
-        db_session, ses_events.bounce(), provider_event_id="sns-same"
+        db_session,
+        ses_events.bounce(),
+        provider_event_id="sns-same",
+        project_ids={email.project_id},
     )
     second, event_two = await ingest_event(
-        db_session, ses_events.bounce(), provider_event_id="sns-same"
+        db_session,
+        ses_events.bounce(),
+        provider_event_id="sns-same",
+        project_ids={email.project_id},
     )
 
     assert first is Outcome.RECORDED
@@ -146,10 +158,14 @@ async def test_different_notifications_both_record(db_session: AsyncSession) -> 
     """Deduplication must not swallow genuinely distinct events - an open and a
     click for one message are two things that happened.
     """
-    await _sent_email(db_session)
+    email = await _sent_email(db_session)
 
-    await ingest_event(db_session, ses_events.opened(), provider_event_id="sns-a")
-    await ingest_event(db_session, ses_events.clicked(), provider_event_id="sns-b")
+    await ingest_event(
+        db_session, ses_events.opened(), provider_event_id="sns-a", project_ids={email.project_id}
+    )
+    await ingest_event(
+        db_session, ses_events.clicked(), provider_event_id="sns-b", project_ids={email.project_id}
+    )
 
     assert await _count(db_session) == 2
 
@@ -160,10 +176,14 @@ async def test_events_without_a_provider_id_are_not_deduplicated(
     """NULLs do not collide in a unique index. A provider offering no event id
     should still be recordable; it simply gets no protection.
     """
-    await _sent_email(db_session)
+    email = await _sent_email(db_session)
 
-    await ingest_event(db_session, ses_events.opened(), provider_event_id=None)
-    await ingest_event(db_session, ses_events.opened(), provider_event_id=None)
+    await ingest_event(
+        db_session, ses_events.opened(), provider_event_id=None, project_ids={email.project_id}
+    )
+    await ingest_event(
+        db_session, ses_events.opened(), provider_event_id=None, project_ids={email.project_id}
+    )
 
     assert await _count(db_session) == 2
 
@@ -179,7 +199,7 @@ async def test_an_event_for_an_unknown_message_is_settled_not_retried(
     that keeps trying stops making progress on everything behind it.
     """
     outcome, event = await ingest_event(
-        db_session, ses_events.delivery(), provider_event_id="sns-orphan"
+        db_session, ses_events.delivery(), provider_event_id="sns-orphan", project_ids={"proj_x"}
     )
 
     assert outcome is Outcome.UNKNOWN_MESSAGE
@@ -190,12 +210,13 @@ async def test_an_event_for_an_unknown_message_is_settled_not_retried(
 
 async def test_an_unrecognised_type_is_ignored_not_fatal(db_session: AsyncSession) -> None:
     """AWS adds event types. A new one must not wedge the queue."""
-    await _sent_email(db_session)
+    email = await _sent_email(db_session)
 
     outcome, event = await ingest_event(
         db_session,
         {"eventType": "SomethingNew", "mail": {"messageId": ses_events.MESSAGE_ID}},
         provider_event_id="sns-new",
+        project_ids={email.project_id},
     )
 
     assert outcome is Outcome.IGNORED
@@ -205,7 +226,7 @@ async def test_an_unrecognised_type_is_ignored_not_fatal(db_session: AsyncSessio
 
 async def test_a_payload_with_no_message_id_is_settled(db_session: AsyncSession) -> None:
     outcome, _ = await ingest_event(
-        db_session, {"eventType": "Delivery"}, provider_event_id="sns-x"
+        db_session, {"eventType": "Delivery"}, provider_event_id="sns-x", project_ids={"proj_x"}
     )
 
     assert outcome is Outcome.UNKNOWN_MESSAGE
@@ -239,15 +260,66 @@ async def test_an_event_lands_only_on_its_own_message(db_session: AsyncSession) 
     db_session.add(other)
     await db_session.flush()
 
-    _, event = await ingest_event(db_session, ses_events.delivery(), provider_event_id="sns-1")
+    _, event = await ingest_event(
+        db_session, ses_events.delivery(), provider_event_id="sns-1", project_ids={mine.project_id}
+    )
 
     assert event is not None
     assert event.email_id == mine.id
 
 
+async def test_an_event_from_the_wrong_source_does_not_find_the_message(
+    db_session: AsyncSession,
+) -> None:
+    """The one that matters.
+
+    The SES message id is not a secret - SES writes it into the Message-ID
+    header of every message it delivers, so every recipient holds it. Before
+    this, an event naming that id attached to the message wherever it came
+    from: another tenant's queue on a shared instance, or any AWS account at
+    all on the HTTPS receiver. The lookup now has to agree with who could have
+    sent the message, and an event whose source cannot speak for the project
+    finds nothing.
+
+    UNKNOWN_MESSAGE rather than a distinct refusal, deliberately: a probe
+    should not be able to tell "no such message" from "not yours".
+    """
+    mine = await _sent_email(db_session)
+
+    stranger = await register_user(
+        db_session, email="them@example.com", password=PASSWORD, allow_signup=True
+    )
+    their_project = await create_project(db_session, user_id=stranger.id, name="Theirs")
+
+    outcome, event = await ingest_event(
+        db_session,
+        ses_events.delivery(),  # names mine.provider_message_id
+        provider_event_id="sns-forged",
+        project_ids={their_project.id},
+    )
+
+    assert outcome is Outcome.UNKNOWN_MESSAGE
+    assert event is None
+    assert await _count(db_session) == 0
+    assert mine.delivered_at is None
+
+
+async def test_no_source_at_all_finds_nothing(db_session: AsyncSession) -> None:
+    """An empty collection is "nobody", not "anybody". The safe reading."""
+    await _sent_email(db_session)
+
+    outcome, _ = await ingest_event(
+        db_session, ses_events.delivery(), provider_event_id="sns-1", project_ids=set()
+    )
+
+    assert outcome is Outcome.UNKNOWN_MESSAGE
+
+
 async def test_deleting_an_email_deletes_its_events(db_session: AsyncSession) -> None:
     email = await _sent_email(db_session)
-    await ingest_event(db_session, ses_events.delivery(), provider_event_id="sns-1")
+    await ingest_event(
+        db_session, ses_events.delivery(), provider_event_id="sns-1", project_ids={email.project_id}
+    )
 
     await db_session.delete(email)
     await db_session.flush()

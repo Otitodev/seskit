@@ -16,7 +16,7 @@ from fakes import ses_events
 from seskit_core.events import ingest_event
 from seskit_core.models import Email, EmailEvent, EmailStatus, SuppressedAddress
 from seskit_core.services import create_project, find_suppression, list_suppressions, register_user
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 PASSWORD = "correct-horse-battery"
@@ -25,12 +25,21 @@ COMPLAINED = "complaint@simulator.amazonses.com"
 
 
 async def _sent_email(session: AsyncSession, *, email: str = "owner@example.com") -> Email:
+    """A message that went to every address the fixtures might bounce or complain.
+
+    A real SES bounce names addresses the message was sent to; the fixture's
+    `bouncedRecipients` names the simulator address while `mail.destination`
+    says `user@example.com`, which no real event does. Suppression now refuses
+    to act on an address the message never went to - so the message goes to
+    all three, and every test that asserts "only BOUNCED was suppressed" is
+    proving selectivity among real recipients rather than passing by accident.
+    """
     user = await register_user(session, email=email, password=PASSWORD, allow_signup=True)
     project = await create_project(session, user_id=user.id, name="Sending")
     row = Email(
         project_id=project.id,
         from_address=ses_events.SENDER,
-        to_addresses=[ses_events.RECIPIENT],
+        to_addresses=[ses_events.RECIPIENT, BOUNCED, COMPLAINED],
         cc_addresses=[],
         bcc_addresses=[],
         reply_to=[],
@@ -48,10 +57,56 @@ async def _sent_email(session: AsyncSession, *, email: str = "owner@example.com"
 # --------------------------------------------------------------- bounces ---
 
 
+async def test_a_bounce_cannot_suppress_an_address_the_message_never_went_to(
+    db_session: AsyncSession,
+) -> None:
+    """An event is trusted to say which of the message's recipients bounced.
+    It is not trusted to introduce recipients the message never had.
+
+    The project scope in `ingest_event` is what keeps a forged event away from
+    the row at all; this is the second lock. If that scope were ever wrong
+    again, the worst an event could do is suppress addresses the message
+    actually went to - not a list of hundreds it invented.
+    """
+    email = await _sent_email(db_session)
+    payload = ses_events.bounce(permanent=True)
+    payload["bounce"]["bouncedRecipients"] = [
+        {"emailAddress": ses_events.RECIPIENT},  # real
+        {"emailAddress": "ceo@customer.example"},  # invented
+        {"emailAddress": "everyone@customer.example"},  # invented
+    ]
+
+    await ingest_event(
+        db_session, payload, provider_event_id="sns-1", project_ids={email.project_id}
+    )
+
+    rows = list(await db_session.scalars(select(SuppressedAddress)))
+    assert [row.address for row in rows] == [ses_events.RECIPIENT]
+
+
+async def test_a_bounce_naming_only_strangers_suppresses_nothing(
+    db_session: AsyncSession,
+) -> None:
+    email = await _sent_email(db_session)
+    payload = ses_events.bounce(permanent=True)
+    payload["bounce"]["bouncedRecipients"] = [{"emailAddress": "nobody@customer.example"}]
+
+    await ingest_event(
+        db_session, payload, provider_event_id="sns-1", project_ids={email.project_id}
+    )
+
+    assert await db_session.scalar(select(func.count()).select_from(SuppressedAddress)) == 0
+
+
 async def test_a_permanent_bounce_suppresses_the_address(db_session: AsyncSession) -> None:
     email = await _sent_email(db_session)
 
-    await ingest_event(db_session, ses_events.bounce(permanent=True), provider_event_id="sns-1")
+    await ingest_event(
+        db_session,
+        ses_events.bounce(permanent=True),
+        provider_event_id="sns-1",
+        project_ids={email.project_id},
+    )
 
     found = await find_suppression(db_session, project_id=email.project_id, address=BOUNCED)
     assert found is not None
@@ -66,7 +121,12 @@ async def test_a_transient_bounce_does_not_suppress(db_session: AsyncSession) ->
     """
     email = await _sent_email(db_session)
 
-    await ingest_event(db_session, ses_events.bounce(permanent=False), provider_event_id="sns-1")
+    await ingest_event(
+        db_session,
+        ses_events.bounce(permanent=False),
+        provider_event_id="sns-1",
+        project_ids={email.project_id},
+    )
 
     assert await find_suppression(db_session, project_id=email.project_id, address=BOUNCED) is None
 
@@ -79,7 +139,9 @@ async def test_an_undetermined_bounce_does_not_suppress(db_session: AsyncSession
     payload = ses_events.bounce()
     payload["bounce"]["bounceType"] = "Undetermined"
 
-    await ingest_event(db_session, payload, provider_event_id="sns-1")
+    await ingest_event(
+        db_session, payload, provider_event_id="sns-1", project_ids={email.project_id}
+    )
 
     assert await find_suppression(db_session, project_id=email.project_id, address=BOUNCED) is None
 
@@ -93,7 +155,12 @@ async def test_a_complaint_suppresses_the_address(db_session: AsyncSession) -> N
     """
     email = await _sent_email(db_session)
 
-    await ingest_event(db_session, ses_events.complaint(), provider_event_id="sns-1")
+    await ingest_event(
+        db_session,
+        ses_events.complaint(),
+        provider_event_id="sns-1",
+        project_ids={email.project_id},
+    )
 
     found = await find_suppression(db_session, project_id=email.project_id, address=COMPLAINED)
     assert found is not None
@@ -110,7 +177,9 @@ async def test_only_the_addresses_that_bounced_are_suppressed(db_session: AsyncS
     """
     email = await _sent_email(db_session)
 
-    await ingest_event(db_session, ses_events.bounce(), provider_event_id="sns-1")
+    await ingest_event(
+        db_session, ses_events.bounce(), provider_event_id="sns-1", project_ids={email.project_id}
+    )
 
     suppressed = await list_suppressions(db_session, project_id=email.project_id)
     assert [row.address for row in suppressed] == [BOUNCED]
@@ -125,7 +194,9 @@ async def test_the_suppression_points_at_the_event_that_caused_it(
     """
     email = await _sent_email(db_session)
 
-    _, event = await ingest_event(db_session, ses_events.bounce(), provider_event_id="sns-1")
+    _, event = await ingest_event(
+        db_session, ses_events.bounce(), provider_event_id="sns-1", project_ids={email.project_id}
+    )
 
     found = await find_suppression(db_session, project_id=email.project_id, address=BOUNCED)
     assert event is not None
@@ -139,7 +210,9 @@ async def test_the_suppression_points_at_the_event_that_caused_it(
 async def test_a_delivery_suppresses_nothing(db_session: AsyncSession) -> None:
     email = await _sent_email(db_session)
 
-    await ingest_event(db_session, ses_events.delivery(), provider_event_id="sns-1")
+    await ingest_event(
+        db_session, ses_events.delivery(), provider_event_id="sns-1", project_ids={email.project_id}
+    )
 
     assert await list_suppressions(db_session, project_id=email.project_id) == []
 
@@ -151,7 +224,9 @@ async def test_an_open_suppresses_nothing(db_session: AsyncSession) -> None:
     """
     email = await _sent_email(db_session)
 
-    await ingest_event(db_session, ses_events.opened(), provider_event_id="sns-1")
+    await ingest_event(
+        db_session, ses_events.opened(), provider_event_id="sns-1", project_ids={email.project_id}
+    )
 
     assert await list_suppressions(db_session, project_id=email.project_id) == []
 
@@ -162,8 +237,12 @@ async def test_a_redelivered_bounce_does_not_suppress_twice(db_session: AsyncSes
     """
     email = await _sent_email(db_session)
 
-    await ingest_event(db_session, ses_events.bounce(), provider_event_id="sns-1")
-    await ingest_event(db_session, ses_events.bounce(), provider_event_id="sns-1")
+    await ingest_event(
+        db_session, ses_events.bounce(), provider_event_id="sns-1", project_ids={email.project_id}
+    )
+    await ingest_event(
+        db_session, ses_events.bounce(), provider_event_id="sns-1", project_ids={email.project_id}
+    )
 
     rows = list(
         await db_session.scalars(
@@ -197,7 +276,9 @@ async def test_a_suppression_produces_its_own_event(db_session: AsyncSession) ->
     """
     email = await _sent_email(db_session)
 
-    await ingest_event(db_session, ses_events.bounce(), provider_event_id="sns-1")
+    await ingest_event(
+        db_session, ses_events.bounce(), provider_event_id="sns-1", project_ids={email.project_id}
+    )
 
     events = await _events(db_session, email.id, "suppressed")
     assert len(events) == 1
@@ -211,7 +292,9 @@ async def test_the_suppression_event_names_the_event_that_caused_it(
 ) -> None:
     email = await _sent_email(db_session)
 
-    _, cause = await ingest_event(db_session, ses_events.bounce(), provider_event_id="sns-1")
+    _, cause = await ingest_event(
+        db_session, ses_events.bounce(), provider_event_id="sns-1", project_ids={email.project_id}
+    )
 
     events = await _events(db_session, email.id, "suppressed")
     assert cause is not None
@@ -223,7 +306,12 @@ async def test_a_transient_bounce_produces_no_suppression_event(
 ) -> None:
     email = await _sent_email(db_session)
 
-    await ingest_event(db_session, ses_events.bounce(permanent=False), provider_event_id="sns-1")
+    await ingest_event(
+        db_session,
+        ses_events.bounce(permanent=False),
+        provider_event_id="sns-1",
+        project_ids={email.project_id},
+    )
 
     assert await _events(db_session, email.id, "suppressed") == []
 
@@ -233,9 +321,13 @@ async def test_re_suppressing_an_address_says_nothing(db_session: AsyncSession) 
     every time would make an integration deduplicate what SESKit already knows.
     """
     email = await _sent_email(db_session)
-    await ingest_event(db_session, ses_events.bounce(), provider_event_id="sns-1")
+    await ingest_event(
+        db_session, ses_events.bounce(), provider_event_id="sns-1", project_ids={email.project_id}
+    )
 
-    await ingest_event(db_session, ses_events.bounce(), provider_event_id="sns-2")
+    await ingest_event(
+        db_session, ses_events.bounce(), provider_event_id="sns-2", project_ids={email.project_id}
+    )
 
     assert len(await _events(db_session, email.id, "suppressed")) == 1
 
@@ -259,7 +351,9 @@ async def test_the_suppression_event_is_delivered_to_webhooks(
     )
     await db_session.flush()
 
-    await ingest_event(db_session, ses_events.bounce(), provider_event_id="sns-1")
+    await ingest_event(
+        db_session, ses_events.bounce(), provider_event_id="sns-1", project_ids={email.project_id}
+    )
 
     suppressed = (await _events(db_session, email.id, "suppressed"))[0]
     deliveries = await db_session.scalars(

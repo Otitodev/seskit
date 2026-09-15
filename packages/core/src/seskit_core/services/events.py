@@ -22,6 +22,7 @@ project's resource is shared.
 from __future__ import annotations
 
 from collections.abc import Callable
+from dataclasses import dataclass
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -74,18 +75,33 @@ async def count_other_users(session: AsyncSession, connection: AWSConnection) ->
     return int(total or 0)
 
 
-async def distinct_event_queues(
-    session: AsyncSession, *, secret_key: str
-) -> list[tuple[str, str, AWSCredentials]]:
-    """Every queue that needs polling, with the key that opens it.
+@dataclass(frozen=True, slots=True)
+class PolledQueue:
+    """One SQS queue the worker reads, and who it reads it for."""
+
+    region: str
+    queue_url: str
+    credentials: AWSCredentials
+    #: The projects whose connection points at this queue. An event read here
+    #: may only attach to a message one of them sent.
+    project_ids: frozenset[str]
+
+
+async def distinct_event_queues(session: AsyncSession, *, secret_key: str) -> list[PolledQueue]:
+    """Every queue that needs polling, with the key that opens it and the
+    projects it speaks for.
 
     Distinct by queue, because projects sharing a region and an account share a
     queue - the same reasoning the teardown refcount rests on. Polling once per
     project would mean several consumers racing for the same messages, each one
     stealing events from the others' batches and doing the same work twice.
 
-    Correlation is by SES message id, so a single consumer serves every project
-    on that queue without needing to know whose message it is holding.
+    Correlation is by SES message id, and that id is not a secret - SES writes
+    it into every delivered message's headers. So a single consumer serves
+    every project on the queue, but it has to know *which* projects those are:
+    an event read from account A's queue must not be allowed to attach to a
+    message account B sent, however the id came to match. That is what
+    `project_ids` is for, and `ingest_event` requires it.
 
     **Any connection on a queue can open it.** A queue URL embeds the account
     that owns it, so two connections reporting the same URL are in the same
@@ -104,13 +120,19 @@ async def distinct_event_queues(
         .order_by(AWSConnection.status, AWSConnection.id)
     )
 
-    queues: dict[tuple[str, str], AWSCredentials] = {}
+    credentials: dict[tuple[str, str], AWSCredentials] = {}
+    projects: dict[tuple[str, str], set[str]] = {}
     for connection in rows:
         key = (connection.region, connection.event_queue_url or "")
-        if not key[1] or key in queues:
+        if not key[1]:
+            continue
+        # Every connection on the queue is a project it speaks for, whether or
+        # not this is the row whose key opens it.
+        projects.setdefault(key, set()).add(connection.project_id)
+        if key in credentials:
             continue
         try:
-            queues[key] = stored_credentials(connection, secret_key=secret_key)
+            credentials[key] = stored_credentials(connection, secret_key=secret_key)
         except APIError:
             logger.info(
                 "event_queue_credentials_unusable",
@@ -118,7 +140,15 @@ async def distinct_event_queues(
                 region=connection.region,
             )
 
-    return [(region, url, credentials) for (region, url), credentials in queues.items()]
+    return [
+        PolledQueue(
+            region=region,
+            queue_url=url,
+            credentials=creds,
+            project_ids=frozenset(projects[(region, url)]),
+        )
+        for (region, url), creds in credentials.items()
+    ]
 
 
 async def list_events(session: AsyncSession, email_id: str) -> list[EmailEvent]:

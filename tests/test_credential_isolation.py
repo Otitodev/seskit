@@ -208,7 +208,10 @@ async def test_each_queue_comes_back_with_the_key_that_opens_it(
 
     queues = await distinct_event_queues(db_session, secret_key=SECRET_KEY)
 
-    assert queues == [(REGION, "https://sqs/1/seskit-events", ONE)]
+    assert [(q.region, q.queue_url, q.credentials) for q in queues] == [
+        (REGION, "https://sqs/1/seskit-events", ONE)
+    ]
+    assert queues[0].project_ids == {one}
 
 
 async def test_a_shared_queue_is_polled_once(db_session: AsyncSession) -> None:
@@ -225,6 +228,9 @@ async def test_a_shared_queue_is_polled_once(db_session: AsyncSession) -> None:
     queues = await distinct_event_queues(db_session, secret_key=SECRET_KEY)
 
     assert len(queues) == 1
+    # Polled once, but it speaks for both. An event read from it may attach to
+    # either project's message - and to nobody else's.
+    assert queues[0].project_ids == {one, two}
 
 
 async def test_a_working_key_is_preferred_for_a_shared_queue(
@@ -241,7 +247,10 @@ async def test_a_working_key_is_preferred_for_a_shared_queue(
 
     queues = await distinct_event_queues(db_session, secret_key=SECRET_KEY)
 
-    assert [credentials for _, _, credentials in queues] == [ONE]
+    assert [q.credentials for q in queues] == [ONE]
+    # The broken row still names a project the queue speaks for. Its key is
+    # unusable; its messages are not somebody else's.
+    assert queues[0].project_ids == {broken, working}
 
 
 async def test_one_unreadable_key_does_not_stop_the_other_queues(
@@ -263,7 +272,7 @@ async def test_one_unreadable_key_does_not_stop_the_other_queues(
 
     queues = await distinct_event_queues(db_session, secret_key=SECRET_KEY)
 
-    assert [url for _, url, _ in queues] == ["https://sqs/2/working"]
+    assert [q.queue_url for q in queues] == ["https://sqs/2/working"]
 
 
 async def test_a_project_with_no_queue_is_not_polled(db_session: AsyncSession) -> None:

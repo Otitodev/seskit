@@ -15,7 +15,7 @@ import binascii
 from datetime import datetime
 from typing import Annotated, Any
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator
 
 #: A single recipient or a list of them. §11 documents a list, and Resend - which
 #: §27 asks us to stay conceptually compatible with - accepts either. Taking
@@ -27,6 +27,12 @@ def _as_list(value: list[str] | str | None) -> list[str]:
     if value is None:
         return []
     return [value] if isinstance(value, str) else list(value)
+
+
+#: A header name as RFC 5322 defines one. The same rule `build_message` applies
+#: at the choke point, repeated here so a bad name is a 422 naming the field
+#: rather than a 400 from deeper in - belt and braces, not the check itself.
+HeaderName = Annotated[str, StringConstraints(pattern=r"^[!-9;-~]+$", max_length=76)]
 
 
 class AttachmentRequest(BaseModel):
@@ -110,9 +116,12 @@ class SendEmailRequest(BaseModel):
         default=None,
         description="Where replies go, if not to `from`. Needs no SES verification.",
     )
-    headers: dict[str, str] = Field(
+    headers: dict[HeaderName, str] = Field(
         default_factory=dict,
-        description="Custom headers to add to the message.",
+        description=(
+            "Custom headers to add to the message. Names are RFC 5322 field-names: "
+            "printable ASCII with no colon, spaces or line breaks."
+        ),
         examples=[{"X-Entity-Ref-Id": "order-1234"}],
     )
     attachments: list[AttachmentRequest] = Field(

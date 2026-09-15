@@ -35,7 +35,14 @@ from arq.connections import ArqRedis
 from fastapi import APIRouter, Depends, Request, Response, status
 from seskit_core.config import EVENT_HTTPS_PATH, Settings
 from seskit_core.db import get_session
-from seskit_core.events import MalformedEnvelope, Outcome, ingest_event, unwrap
+from seskit_core.events import (
+    MalformedEnvelope,
+    Outcome,
+    connections_for_origin,
+    ingest_event,
+    parse_topic_arn,
+    unwrap,
+)
 from seskit_core.logging import get_logger
 from seskit_core.services import pending_delivery_ids
 from seskit_provider_aws_ses import SignatureError, confirm_subscription, verify
@@ -102,6 +109,31 @@ async def receive_ses_event(
         logger.warning("sns_signature_rejected", message_type=envelope.message_type)
         return Response(status_code=status.HTTP_403_FORBIDDEN)
 
+    # Whose topic. The signature just proved SNS emitted this; it did not
+    # prove it was our topic, and it cannot - SNS signing keys are per-region
+    # and shared by every customer, so anyone with an AWS account can have SNS
+    # sign a message by publishing it to a topic of their own. What binds a
+    # message to this instance is the region and account in its TopicArn
+    # matching a connection somebody made here.
+    #
+    # Before the confirmation branch, deliberately. This is also what stops a
+    # stranger subscribing this URL to their topic: SNS would send a genuine,
+    # signed confirmation, and without this the receiver would answer it and
+    # open a push channel from their account into this one.
+    #
+    # 403, same as a bad signature. The two are distinguishable in the log and
+    # deliberately not on the wire.
+    origin = parse_topic_arn(envelope.topic_arn)
+    owners = await connections_for_origin(db, origin) if origin else []
+    if not owners:
+        logger.warning(
+            "sns_topic_not_ours",
+            message_type=envelope.message_type,
+            region=origin.region if origin else None,
+            account_id=origin.account_id if origin else None,
+        )
+        return Response(status_code=status.HTTP_403_FORBIDDEN)
+
     if envelope.is_subscription_confirmation:
         return await _confirm(envelope.subscribe_url)
 
@@ -121,6 +153,7 @@ async def receive_ses_event(
         # The envelope's id: the event body is identical across redeliveries,
         # so nothing inside it could tell one from another.
         provider_event_id=envelope.message_id or None,
+        project_ids={connection.project_id for connection in owners},
     )
     # Read before the commit, so the ids are available afterwards.
     delivery_ids = await pending_delivery_ids(db, event.id) if event is not None else []

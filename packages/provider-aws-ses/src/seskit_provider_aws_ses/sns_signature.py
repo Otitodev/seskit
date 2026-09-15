@@ -1,14 +1,24 @@
 """Proving an SNS notification really came from SNS (§15).
 
 The HTTPS receiver is reachable by anyone who learns its URL, and SNS cannot
-present a credential - so the signature is the only thing standing between a
-stranger and a fabricated bounce. `docs/design/prior-art.md` records a comparable
-project that checks only that ``TopicArn`` matches a configured value; but
-``TopicArn`` is a field *in the request body*, and topic ARNs are not secrets.
-Anyone who learns one can invent complaints against any address they like, and
-a complaint rate is the number AWS suspends accounts over.
+present a credential - so the signature is what proves the bytes came from
+Amazon SNS. `docs/design/prior-art.md` records a comparable project that checks
+only that ``TopicArn`` matches a configured value; ``TopicArn`` is a field *in
+the request body* and topic ARNs are not secrets, so that check alone lets
+anyone who learns the ARN invent complaints against any address they like.
 
-Two independent checks, and the order matters:
+**The signature alone is not enough either, and for a while this module read
+as though it were.** SNS signing keys are per-region keys shared by every AWS
+customer. Anyone with an account can have SNS sign a message by publishing it
+to a topic of their own, and the signed fields say nothing about which
+endpoint the message was delivered to. So a valid signature proves "SNS
+emitted this" and not "our topic emitted this". The receiver checks the topic
+*as well as* the signature - not instead of it - by matching the region and
+account in the signed ``TopicArn`` against a connection somebody made. That
+half lives in ``seskit_core.events.origin``; this module answers only whether
+the bytes are genuine.
+
+Two independent checks here, and the order matters:
 
 1. **The certificate URL must be AWS's**, verified *before* anything is
    fetched. ``SigningCertURL`` is attacker-supplied, so fetching it first and

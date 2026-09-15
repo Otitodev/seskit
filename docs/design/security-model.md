@@ -74,10 +74,27 @@ present. So every request is verified against the RSA signature SNS signed it
 with, using a certificate fetched only from `sns.<region>.amazonaws.com` and
 only after that host is validated against a pattern anchored at both ends.
 
-**Checking the topic ARN instead would not work.** It is a field in the request
-body and topic ARNs are not secrets, so anyone who learns one could fabricate
-bounce and complaint events — corrupting your metrics, and once suppression
-exists, silently suppressing recipients they choose.
+**Checking the topic ARN *instead* would not work.** It is a field in the
+request body and topic ARNs are not secrets, so anyone who learns one could
+fabricate bounce and complaint events.
+
+**Checking the signature alone does not work either**, and this page said it
+did until a review found otherwise. SNS signing keys are per-region and shared
+by every AWS customer: anyone with an account can have SNS sign whatever they
+publish to a topic of their own, and the signed fields do not include the
+endpoint the message went to. A valid signature proves Amazon SNS emitted the
+message, not that *your* topic did. So the receiver checks both. The signature
+says the bytes are genuine; the region and account in the signed `TopicArn`
+must then match an AWS account a project on this instance has connected, or
+the message is refused with a 403 — before a subscription confirmation is
+answered, so a stranger cannot subscribe your endpoint to their topic, and
+before any event is recorded.
+
+An event that passes both is still only allowed to attach to a message sent by
+a project on that account, and a bounce may only suppress addresses the
+message actually went to. The SES message id is written into the headers of
+every delivered mail, so every recipient holds it; those two limits are what
+keep it from being a key.
 
 Notifications are deduplicated on the SNS message id with a unique constraint,
 because SNS and SQS are both explicitly at-least-once and a double-counted
@@ -202,6 +219,13 @@ Stated plainly rather than left to be discovered:
 - **Migrations are not audited for backward compatibility**, so rolling
   upgrades are not a supported story. See
   [upgrading](../operating/upgrading.md).
+- **SNS message timestamps are not checked for freshness.** A genuine
+  notification from your own topic could be replayed later; it deduplicates
+  on the SNS message id, so a replay records nothing new. Harmless today,
+  and noted so nobody assumes the check exists.
+- **The HTTPS receiver has no shared secret in its URL and no per-IP limit.**
+  A stranger who finds it can make it do signature checks. The topic check
+  above means that is all they can make it do.
 
 Security issues should go to
 [SECURITY.md](https://github.com/Otitodev/seskit/blob/main/SECURITY.md) rather
