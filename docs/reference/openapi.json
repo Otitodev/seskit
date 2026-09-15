@@ -663,15 +663,20 @@
             "type": "string"
           },
           "headers": {
-            "additionalProperties": {
-              "type": "string"
-            },
-            "description": "Custom headers to add to the message.",
+            "description": "Custom headers to add to the message. Names are RFC 5322 field-names: printable ASCII with no colon, spaces or line breaks.",
             "examples": [
               {
                 "X-Entity-Ref-Id": "order-1234"
               }
             ],
+            "patternProperties": {
+              "^[!-9;-~]+$": {
+                "type": "string"
+              }
+            },
+            "propertyNames": {
+              "maxLength": 76
+            },
             "title": "Headers",
             "type": "object"
           },

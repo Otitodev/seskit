@@ -125,7 +125,7 @@ Accept a message for sending.
 | `cc` | string[] or string | optional | Visible to every recipient. |
 | `bcc` | string[] or string | optional | Hidden from every recipient. Recorded, but never returned by the API — a blind copy readable from a `GET` is not blind. |
 | `reply_to` | string[] or string | optional | Where replies go, if not to `from`. Needs no SES verification. |
-| `headers` | object | optional | Custom headers to add to the message. |
+| `headers` | object | optional | Custom headers to add to the message. Names are RFC 5322 field-names: printable ASCII with no colon, spaces or line breaks. |
 | `attachments` | AttachmentRequest[] | optional | The size limit applies to the assembled message, not to each file: base64 inflates content by about a third, and it is the assembled size SES rejects. See `EMAIL_MAX_MESSAGE_BYTES` (10 MiB by default). |
 
 **Responses**
