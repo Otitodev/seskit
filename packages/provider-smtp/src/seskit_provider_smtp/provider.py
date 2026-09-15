@@ -30,6 +30,7 @@ from seskit_core.providers.types import (
     IdentityStatus,
     IdentityType,
     OutboundEmail,
+    ProductionAccessRequest,
     SendingQuota,
     SentMessage,
     VerificationStatus,
@@ -88,6 +89,16 @@ class SMTPProvider:
 
     async def get_sending_quota(self) -> SendingQuota:
         return (await self.verify_account()).quota
+
+    async def request_production_access(self, request: ProductionAccessRequest) -> None:
+        """There is no sandbox to leave. ``verify_account`` says so, and the
+        dashboard never offers the button - this is for a caller that asks
+        anyway.
+        """
+        raise APIError(
+            ErrorType.INVALID_REQUEST,
+            "This provider has no sandbox, so there is no production access to request.",
+        )
 
     # ------------------------------------------------------------ identities ---
 

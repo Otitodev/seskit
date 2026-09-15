@@ -26,6 +26,7 @@ from seskit_core.providers.types import (
     IdentityStatus,
     IdentityType,
     OutboundEmail,
+    ProductionAccessRequest,
     QueuedNotification,
     SendingQuota,
     SentMessage,
@@ -58,6 +59,16 @@ class EmailProvider(Protocol):
 
     async def get_sending_quota(self) -> SendingQuota:
         """The current sending allowance."""
+        ...
+
+    async def request_production_access(self, request: ProductionAccessRequest) -> None:
+        """Ask the provider to lift its new-account restrictions.
+
+        Submits the request and returns; the answer arrives later, and
+        ``verify_account`` reports it as ``review_status``. A provider with no
+        such restriction raises ``APIError`` rather than pretending to file
+        one.
+        """
         ...
 
     async def create_identity(self, value: str, identity_type: IdentityType) -> IdentityStatus:
