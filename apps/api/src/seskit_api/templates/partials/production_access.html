@@ -96,7 +96,7 @@
                attrs='maxlength="255" autocomplete="url"') }}
 
       {{ field("contact_addresses", "Contact addresses", type="text",
-               value=current.user.email, required=True,
+               value=current_user.email, required=True,
                hint="Where AWS writes about the review. Up to four, separated by
                      commas.",
                attrs='maxlength="400" autocomplete="off"') }}
