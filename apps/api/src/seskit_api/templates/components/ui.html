@@ -131,6 +131,16 @@
   </div>
 {%- endmacro %}
 
+{# A single value with its own Copy. For a table of things that each go
+   into a different field somewhere else - DNS records, mostly - where one
+   Copy for the whole block still leaves the user picking the lines apart. #}
+{% macro copy_value(value) -%}
+  <span class="copy">
+    <span class="copy__value">{{ value }}</span>
+    <button class="btn btn--ghost btn--sm copy__btn" type="button" data-copy="{{ value }}" aria-label="Copy {{ value }}">Copy</button>
+  </span>
+{%- endmacro %}
+
 {# ----------------------------------------------------------------- code #}
 {% macro code_block(content, language=None, copyable=True) -%}
   <div class="code">

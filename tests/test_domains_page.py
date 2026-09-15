@@ -7,6 +7,8 @@ person can actually do, and what they are told when it will not work.
 
 from __future__ import annotations
 
+import re
+
 from fakes.ses import FAKE_CREDENTIALS, TEST_SECRET_KEY, FakeProviderFactory
 from httpx import AsyncClient
 from redis.asyncio import Redis
@@ -93,6 +95,25 @@ async def test_adding_a_domain_shows_its_dns_records(app_client: AsyncClient) ->
     assert page.status_code == 200
     assert "_domainkey" in page.text
     assert "dkim.amazonses.com" in page.text
+
+
+async def test_each_dns_record_copies_on_its_own(app_client: AsyncClient) -> None:
+    """Three records into three DNS forms is six values, and one Copy for the
+    whole block leaves the user picking them apart by hand. Each name and each
+    value carries its own, and the block copy is still there for a provider
+    that takes a bulk import.
+    """
+    token = await _connect(app_client)
+
+    page = await app_client.post("/domains", data={"csrf_token": token, "value": DOMAIN})
+
+    per_value = re.findall(r'data-copy="([^"\n]+)"', page.text)
+    names = [v for v in per_value if v.endswith("_domainkey." + DOMAIN)]
+    values = [v for v in per_value if v.endswith(".dkim.amazonses.com")]
+    assert len(names) == 3
+    assert len(values) == 3
+    block = [v for v in re.findall(r'data-copy="([^"]+)"', page.text) if "\n" in v]
+    assert len(block) == 1
 
 
 async def test_adding_an_address_asks_them_to_check_their_inbox(
