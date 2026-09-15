@@ -109,6 +109,31 @@ async def receive_ses_event(
         logger.warning("sns_signature_rejected", message_type=envelope.message_type)
         return Response(status_code=status.HTTP_403_FORBIDDEN)
 
+    # Whose topic. The signature just proved SNS emitted this; it did not
+    # prove it was our topic, and it cannot - SNS signing keys are per-region
+    # and shared by every customer, so anyone with an AWS account can have SNS
+    # sign a message by publishing it to a topic of their own. What binds a
+    # message to this instance is the region and account in its TopicArn
+    # matching a connection somebody made here.
+    #
+    # Before the confirmation branch, deliberately. This is also what stops a
+    # stranger subscribing this URL to their topic: SNS would send a genuine,
+    # signed confirmation, and without this the receiver would answer it and
+    # open a push channel from their account into this one.
+    #
+    # 403, same as a bad signature. The two are distinguishable in the log and
+    # deliberately not on the wire.
+    origin = parse_topic_arn(envelope.topic_arn)
+    owners = await connections_for_origin(db, origin) if origin else []
+    if not owners:
+        logger.warning(
+            "sns_topic_not_ours",
+            message_type=envelope.message_type,
+            region=origin.region if origin else None,
+            account_id=origin.account_id if origin else None,
+        )
+        return Response(status_code=status.HTTP_403_FORBIDDEN)
+
     if envelope.is_subscription_confirmation:
         return await _confirm(envelope.subscribe_url)
 
@@ -121,15 +146,6 @@ async def receive_ses_event(
     if not envelope.event:
         logger.warning("sns_payload_empty", sns_message_id=envelope.message_id)
         return Response(status_code=status.HTTP_204_NO_CONTENT)
-
-    # Who the topic speaks for. The signature proved SNS sent this; the topic
-    # ARN's region and account say which of our connections - if any - it
-    # belongs to, and the event may only attach to a message one of those
-    # projects sent. An unrecognised origin yields no projects, so the lookup
-    # finds nothing and the event is settled as unknown rather than recorded
-    # against whichever message happened to share the id.
-    origin = parse_topic_arn(envelope.topic_arn)
-    owners = await connections_for_origin(db, origin) if origin else []
 
     outcome, event = await ingest_event(
         db,

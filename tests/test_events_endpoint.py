@@ -31,7 +31,14 @@ from seskit_api.main import create_app
 from seskit_api.queue import get_queue
 from seskit_core.config import EventIngestion, Settings
 from seskit_core.db import get_session
-from seskit_core.models import Email, EmailEvent, EmailStatus, EventType
+from seskit_core.models import (
+    AWSConnection,
+    ConnectionStatus,
+    Email,
+    EmailEvent,
+    EmailStatus,
+    EventType,
+)
 from seskit_core.redis import get_redis
 from seskit_core.services import create_project, register_user
 from seskit_provider_aws_ses import sns_signature
@@ -123,13 +130,44 @@ async def receiver(
     return AsyncClient(transport=ASGITransport(app=application), base_url="http://test")
 
 
-async def _sent_email(session: AsyncSession) -> Email:
-    user = await register_user(
-        session, email="owner@example.com", password=PASSWORD, allow_signup=True
-    )
+async def _connected_project(
+    session: AsyncSession,
+    *,
+    owner: str = "owner@example.com",
+    account_id: str = "123456789012",
+    region: str = "us-east-1",
+    topic_arn: str | None = TOPIC,
+) -> str:
+    """A project connected to an AWS account, which is what makes a topic in
+    that account one this instance will listen to.
+
+    `topic_arn=None` models the moment SNS's confirmation arrives: the
+    subscribe call has fired it, and provisioning has not yet stored the ARN.
+    """
+    user = await register_user(session, email=owner, password=PASSWORD, allow_signup=True)
     project = await create_project(session, user_id=user.id, name="Sending")
+    session.add(
+        AWSConnection(
+            project_id=project.id,
+            region=region,
+            aws_account_id=account_id,
+            status=ConnectionStatus.CONNECTED.value,
+            aws_access_key_id="AKIAEXAMPLE",
+            event_topic_arn=topic_arn,
+        )
+    )
+    await session.flush()
+    return str(project.id)
+
+
+async def _sent_email(session: AsyncSession, *, project_id: str | None = None) -> Email:
+    """A sent message. The project is connected to the account the test
+    topic lives in, since nothing here would be accepted otherwise.
+    """
+    if project_id is None:
+        project_id = await _connected_project(session)
     email = Email(
-        project_id=project.id,
+        project_id=project_id,
         from_address=ses_events.SENDER,
         to_addresses=[ses_events.RECIPIENT],
         cc_addresses=[],
@@ -202,7 +240,11 @@ async def test_an_event_for_an_unknown_message_is_settled(
 ) -> None:
     """2xx on purpose. There is no Email to attach it to and there never will
     be, so asking SNS to keep trying helps nobody.
+
+    From our own topic - the account is connected - or the receiver would
+    refuse it at the door with a 403 and this would be testing something else.
     """
+    await _connected_project(db_session)
     body = _sign(signing_key, _notification(ses_events.delivery()))
 
     response = await receiver.post(ENDPOINT, json=body)
@@ -316,6 +358,178 @@ async def test_a_confirmation_pointing_off_aws_is_refused(
     response = await receiver.post(ENDPOINT, json=body)
 
     assert response.status_code == 403
+
+
+# ------------------------------------------------------------ whose topic ---
+
+# The signature proves Amazon SNS emitted a message. It does not prove whose
+# topic it was, and it cannot: SNS signing keys are per-region and shared by
+# every customer, so anyone with an AWS account can have SNS sign whatever they
+# publish to a topic of their own. Before these tests, that was enough. A
+# correctly signed notification from a stranger's topic naming a message id
+# read out of a delivered email's headers attached to that message, suppressed
+# whatever addresses it listed, and had SESKit sign webhooks for it.
+
+STRANGERS_TOPIC = "arn:aws:sns:us-east-1:999999999999:their-topic"
+
+
+async def test_a_signed_notification_from_a_strangers_topic_is_refused(
+    receiver: AsyncClient,
+    db_session: AsyncSession,
+    signing_key: rsa.RSAPrivateKey,
+) -> None:
+    """The finding. Genuinely signed, names a real message, and the account in
+    the topic ARN is not one anybody here connected.
+
+    Distinct from `test_a_tampered_notification_is_refused`: that message was
+    altered after signing and fails the signature. This one passes it, which
+    is exactly why the signature alone was never enough.
+    """
+    email = await _sent_email(db_session)
+    body = _sign(signing_key, {**_notification(ses_events.bounce()), "TopicArn": STRANGERS_TOPIC})
+
+    response = await receiver.post(ENDPOINT, json=body)
+
+    assert response.status_code == 403
+    assert await _count(db_session) == 0
+    assert email.delivered_at is None
+
+
+async def test_a_strangers_subscription_is_never_confirmed(
+    receiver: AsyncClient,
+    db_session: AsyncSession,
+    signing_key: rsa.RSAPrivateKey,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The easiest version of the attack. `sns:Subscribe` on the attacker's
+    own topic, endpoint set to this URL, and SNS sends a genuine signed
+    confirmation. Answering it opens a push channel from their account into
+    this instance. The refusal has to come before the confirmation branch.
+    """
+    from seskit_api.routes.v1 import events as receiver_module
+
+    await _connected_project(db_session)
+    fetched: list[str] = []
+
+    async def record(url: str) -> None:
+        fetched.append(url)
+
+    monkeypatch.setattr(receiver_module, "confirm_subscription", record)
+    body = _sign(
+        signing_key,
+        {
+            "Type": "SubscriptionConfirmation",
+            "MessageId": "sns-confirm",
+            "TopicArn": STRANGERS_TOPIC,
+            "Message": "You have chosen to subscribe",
+            "SubscribeURL": "https://sns.us-east-1.amazonaws.com/?Action=ConfirmSubscription",
+            "Token": "abc",
+            "Timestamp": "2026-08-30T09:00:04.000Z",
+        },
+    )
+
+    response = await receiver.post(ENDPOINT, json=body)
+
+    assert response.status_code == 403
+    assert fetched == []
+
+
+async def test_our_own_confirmation_is_answered_before_the_arn_is_stored(
+    receiver: AsyncClient,
+    db_session: AsyncSession,
+    signing_key: rsa.RSAPrivateKey,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The race the binding has to survive.
+
+    Provisioning subscribes the HTTPS endpoint before it returns, so SNS's
+    confirmation arrives while `event_topic_arn` is still NULL. A check on the
+    stored ARN would refuse it and break HTTPS setup outright. The account id
+    is stored at connect time and is what the check reads, so this is
+    answered - and the subscription confirmed - with no ARN in the row.
+    """
+    from seskit_api.routes.v1 import events as receiver_module
+
+    await _connected_project(db_session, topic_arn=None)
+    fetched: list[str] = []
+
+    async def record(url: str) -> None:
+        fetched.append(url)
+
+    monkeypatch.setattr(receiver_module, "confirm_subscription", record)
+    body = _sign(
+        signing_key,
+        {
+            "Type": "SubscriptionConfirmation",
+            "MessageId": "sns-confirm",
+            "TopicArn": TOPIC,
+            "Message": "You have chosen to subscribe",
+            "SubscribeURL": "https://sns.us-east-1.amazonaws.com/?Action=ConfirmSubscription",
+            "Token": "abc",
+            "Timestamp": "2026-08-30T09:00:04.000Z",
+        },
+    )
+
+    response = await receiver.post(ENDPOINT, json=body)
+
+    assert response.status_code == 204
+    assert len(fetched) == 1
+
+
+async def test_the_same_account_in_another_region_is_not_ours(
+    receiver: AsyncClient,
+    db_session: AsyncSession,
+    signing_key: rsa.RSAPrivateKey,
+) -> None:
+    """Topics are regional. A connection in us-east-1 does not vouch for a
+    topic in eu-west-2, even in the same account.
+    """
+    await _sent_email(db_session)
+    elsewhere = "arn:aws:sns:eu-west-2:123456789012:seskit-events"
+    body = _sign(signing_key, {**_notification(ses_events.delivery()), "TopicArn": elsewhere})
+
+    response = await receiver.post(ENDPOINT, json=body)
+
+    assert response.status_code == 403
+    assert await _count(db_session) == 0
+
+
+async def test_a_topic_arn_that_is_not_one_is_refused(
+    receiver: AsyncClient,
+    db_session: AsyncSession,
+    signing_key: rsa.RSAPrivateKey,
+) -> None:
+    await _sent_email(db_session)
+    body = _sign(signing_key, {**_notification(ses_events.delivery()), "TopicArn": "nonsense"})
+
+    response = await receiver.post(ENDPOINT, json=body)
+
+    assert response.status_code == 403
+
+
+async def test_an_event_names_a_message_from_a_project_on_another_account(
+    receiver: AsyncClient,
+    db_session: AsyncSession,
+    signing_key: rsa.RSAPrivateKey,
+) -> None:
+    """Two projects on one instance, two AWS accounts. A genuine event from
+    account A's topic naming a message account B's project sent is not
+    refused at the door - account A is connected - but it must not find B's
+    message. Settled as unknown, and nothing recorded.
+    """
+    b_project = await _connected_project(
+        db_session, owner="b@example.com", account_id="222222222222"
+    )
+    email = await _sent_email(db_session, project_id=b_project)
+    await _connected_project(db_session, owner="a@example.com", account_id="123456789012")
+
+    body = _sign(signing_key, _notification(ses_events.delivery()))  # topic in A's account
+
+    response = await receiver.post(ENDPOINT, json=body)
+
+    assert response.status_code == 204
+    assert await _count(db_session) == 0
+    assert email.delivered_at is None
 
 
 # --------------------------------------------------------------- disabled ---
