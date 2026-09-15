@@ -18,21 +18,40 @@ this is almost always why.**
 
 ## Getting out
 
-[Request production access](https://docs.aws.amazon.com/ses/latest/dg/request-production-access.html)
-from the SES console. It is a support review, usually answered within 24 hours.
+Request it from the **AWS** page in SESKit. It is a support review, usually
+answered within 24 hours, by email.
 
-AWS will ask how you handle bounces and complaints. Answer concretely — that
-you receive [delivery events](delivery-events.md), that bounce and complaint
-rates are visible to you, and what you do when an address hard-bounces. A
-specific answer is approved faster than a reassuring one.
+AWS asks you to confirm that you only mail people who asked for it and that
+you have a process for bounces and complaints, and its own docs say a
+verified *domain* is what gets a request approved quickly. SESKit checks
+those before it lets you ask, so the request it files is one AWS can grant:
 
-!!! tip "You have a concrete answer to give"
-    SESKit maintains a [suppression list](suppression.md): a hard bounce or a
-    complaint puts the address on it, and later sends to that address are
-    refused before they reach SES. Messages also carry a
-    [one-click unsubscribe](suppression.md#one-click-unsubscribe) header. Both
-    are worth saying in the request — AWS reviews accounts above **5% bounce**
-    and **0.1% complaint**, and asks what you do about them.
+| Before requesting | How SESKit knows |
+|---|---|
+| A verified domain in this region | The Domains page - an address alone is not enough |
+| Delivery event reporting set up | The AWS page - this *is* the bounce and complaint process |
+| One message sent and delivered | A test send to a verified address, with its delivery event back |
+
+Each shows as a step on the card, ticked when done, and the button is live
+once all three are. Then: the kind of mail you send, your website, up to four
+contact addresses for AWS's reply, and AWS's acknowledgement to tick. SESKit
+fills in the use case for the reviewer from what it knows - that bounces and
+complaints come back over SNS and the addresses are
+[suppressed](suppression.md), and that every message carries a
+[one-click unsubscribe](suppression.md#one-click-unsubscribe) header.
+
+The card then shows the wait, and the outcome when you refresh. If AWS asks a
+follow-up question it comes by email and in the AWS Support Center; answer it
+there. A declined request says so on the card, with the case to look at, and
+you can ask again once you have addressed what AWS wanted.
+
+The access key needs `ses:PutAccountDetails` for this, which the
+[documented policy](iam-policies.md) now includes. A key made without it is
+told the line to add when the button is pressed.
+
+!!! note "Requested in the console instead?"
+    SESKit reads the review state from SES, so a request made in the AWS
+    console shows on the card the same way. There is no need to do both.
 
 ## Working inside the sandbox
 
