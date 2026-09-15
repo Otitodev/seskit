@@ -27,7 +27,6 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from seskit_core.email.message import bare_address
 from seskit_core.events.emit import record_suppression_event
 from seskit_core.events.normalise import (
     UnknownEventType,
@@ -211,10 +210,6 @@ async def _apply_suppression(
     if reason is None:
         return
 
-    sent_to = {
-        bare_address(address)
-        for address in (*email.to_addresses, *email.cc_addresses, *email.bcc_addresses)
-    }
     named = recipients(payload, event_type)
     # Asked before writing, so the event below reports what actually changed.
     # An address suppressed last week bouncing again is not news, and an
