@@ -13,24 +13,12 @@
   {% if connection and connection.is_connected %}
 
     {% if connection.sandbox %}
-      {# §8: the sandbox check is required, not optional, and the warning stays
-         up until the account graduates. A new account is limited to verified
+      {# §8: the sandbox check is required, not optional, and it stays up until
+         the account graduates. A new account is limited to verified
          recipients, and a user who is never told reads their first failed send
-         as a SESKit bug. #}
-      <div class="alert alert--warning" role="status">
-        <p class="alert__title">This account is in the Amazon SES sandbox</p>
-        <p>
-          Sending is limited to verified recipients, {{ connection.max_24_hour_send|int }}
-          messages per 24 hours, and {{ connection.max_send_rate }} per second.
-          Request production access to lift these limits.
-        </p>
-        <p>
-          <a class="link" href="{{ production_access_url }}"
-             target="_blank" rel="noopener noreferrer">
-            How to request production access
-          </a>
-        </p>
-      </div>
+         as a SESKit bug. Since Phase 16 the notice is also where the request
+         to leave is made, with the prerequisites checked first. #}
+      {% include "partials/production_access.html" %}
     {% endif %}
 
     {{ card_open("Connection") }}

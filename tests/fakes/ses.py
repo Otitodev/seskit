@@ -23,6 +23,8 @@ from seskit_core.providers import (
     IdentityStatus,
     IdentityType,
     OutboundEmail,
+    ProductionAccessRequest,
+    ReviewStatus,
     SendingQuota,
     SentMessage,
     VerificationStatus,
@@ -69,12 +71,23 @@ class FakeProvider:
         sending_enabled: bool = True,
         account_id: str = ACCOUNT_ID,
         error: APIError | None = None,
+        review_status: ReviewStatus | None = None,
     ) -> None:
         self.region = region
         self.sandbox = sandbox
         self.sending_enabled = sending_enabled
         self.account_id = account_id
         self.error = error
+        #: What `verify_account` reports for a production access request. A
+        #: test sets it to model AWS having answered.
+        self.review_status = review_status
+        self.review_case_id: str | None = "case-1" if review_status else None
+        #: Every production access request made, in order. The service must
+        #: not make one unless the prerequisites hold, so a test needs to see
+        #: that the list stayed empty.
+        self.production_access_requests: list[ProductionAccessRequest] = []
+        #: What a request should fail with, if it should.
+        self.request_error: APIError | None = None
         #: How many times AWS was actually asked. The refresh interval is only
         #: meaningful if a test can see that a call did not happen.
         self.calls = 0
@@ -97,10 +110,21 @@ class FakeProvider:
             sending_enabled=self.sending_enabled,
             enforcement_status="HEALTHY",
             quota=SANDBOX_QUOTA if self.sandbox else PRODUCTION_QUOTA,
+            review_status=self.review_status,
+            review_case_id=self.review_case_id,
         )
 
     async def get_sending_quota(self) -> SendingQuota:
         return (await self.verify_account()).quota
+
+    async def request_production_access(self, request: ProductionAccessRequest) -> None:
+        if self.request_error is not None:
+            raise self.request_error
+        self.production_access_requests.append(request)
+        # As SES behaves: the request is now under review, and the account is
+        # still sandboxed until AWS says otherwise.
+        self.review_status = ReviewStatus.PENDING
+        self.review_case_id = "case-1"
 
     # ----------------------------------------------------------- identities ---
     #

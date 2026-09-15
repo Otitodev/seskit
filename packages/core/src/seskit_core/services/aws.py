@@ -235,6 +235,9 @@ def _apply(
     connection.max_24_hour_send = status.quota.max_24_hour_send
     connection.max_send_rate = status.quota.max_send_rate
     connection.sent_last_24_hours = status.quota.sent_last_24_hours
+    # Whether the request was made here or in the console, SES is the record.
+    connection.review_status = status.review_status.value if status.review_status else None
+    connection.review_case_id = status.review_case_id
     connection.last_checked_at = utcnow()
     connection.last_error = None
     return connection

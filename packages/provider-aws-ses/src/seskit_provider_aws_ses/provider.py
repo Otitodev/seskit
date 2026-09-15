@@ -32,6 +32,8 @@ from seskit_core.providers.types import (
     IdentityStatus,
     IdentityType,
     OutboundEmail,
+    ProductionAccessRequest,
+    ReviewStatus,
     SendingQuota,
     SentMessage,
 )
@@ -57,6 +59,11 @@ SES_CREATE_IDENTITY_ACTION = "ses:CreateEmailIdentity"
 SES_GET_IDENTITY_ACTION = "ses:GetEmailIdentity"
 SES_DELETE_IDENTITY_ACTION = "ses:DeleteEmailIdentity"
 SES_SEND_ACTION = "ses:SendEmail"
+SES_ACCOUNT_DETAILS_ACTION = "ses:PutAccountDetails"
+
+#: SES refuses a second request while it is still reviewing the first: "you
+#: can't edit your details until the review is complete", in its own docs.
+_REVIEW_IN_PROGRESS_CODES = frozenset({"ConflictException"})
 
 #: SES says the identity is already there. Not a failure - see create_identity.
 _ALREADY_EXISTS_CODES = frozenset({"AlreadyExistsException"})
@@ -91,6 +98,9 @@ class SESProvider:
         account = await self._get_account()
 
         quota = account.get("SendQuota") or {}
+        # Present only once a production access request has been made, and
+        # typed loosely because the stubs mark every level optional.
+        review: dict[str, Any] = dict((account.get("Details") or {}).get("ReviewDetails") or {})
 
         return AccountStatus(
             account_id=account_id,
@@ -106,7 +116,42 @@ class SESProvider:
                 max_send_rate=float(quota.get("MaxSendRate", 0.0)),
                 sent_last_24_hours=float(quota.get("SentLast24Hours", 0.0)),
             ),
+            review_status=_review_status(review.get("Status")),
+            review_case_id=str(review["CaseId"]) if review.get("CaseId") else None,
         )
+
+    async def request_production_access(self, request: ProductionAccessRequest) -> None:
+        """Ask SES to take the account out of the sandbox.
+
+        The same call the console's form and ``aws sesv2 put-account-details``
+        make. AWS reviews it by hand and answers within a day, by email to the
+        contact addresses; ``verify_account`` reads the outcome from
+        ``GetAccount`` afterwards. Nothing about the account changes here.
+        """
+        client = self._session.client("sesv2", config=BOTO_CONFIG)
+        details: dict[str, Any] = {
+            "MailType": request.mail_type.value,
+            "WebsiteURL": request.website_url,
+            "ContactLanguage": request.contact_language.value,
+            "ProductionAccessEnabled": True,
+        }
+        if request.use_case_description:
+            details["UseCaseDescription"] = request.use_case_description
+        if request.contact_addresses:
+            details["AdditionalContactEmailAddresses"] = list(request.contact_addresses)
+
+        try:
+            await call(client.put_account_details, **details)
+        except ClientError as exc:
+            if error_code(exc) in _REVIEW_IN_PROGRESS_CODES:
+                raise APIError(
+                    ErrorType.INVALID_REQUEST,
+                    "AWS is still reviewing an earlier production access request "
+                    "for this account. Refresh to see where it has got to.",
+                ) from exc
+            raise normalise_boto_error(exc, action=SES_ACCOUNT_DETAILS_ACTION) from exc
+        except Exception as exc:
+            raise normalise_boto_error(exc, action=SES_ACCOUNT_DETAILS_ACTION) from exc
 
     async def get_sending_quota(self) -> SendingQuota:
         """The current allowance.
@@ -234,6 +279,22 @@ class SESProvider:
         except Exception as exc:
             raise normalise_boto_error(exc, action=SES_ACCOUNT_ACTION) from exc
         return account
+
+
+def _review_status(value: object) -> ReviewStatus | None:
+    """SES's review status, or None for an account that never asked.
+
+    A value SES adds later is also None rather than a crash: the dashboard
+    would then show the sandbox warning without a review line, which is the
+    safe reading, and the value is logged so it can be added.
+    """
+    if not value:
+        return None
+    try:
+        return ReviewStatus(str(value))
+    except ValueError:
+        logger.warning("ses_unknown_review_status", status=str(value))
+        return None
 
 
 def _guess_type(value: str) -> IdentityType:

@@ -72,6 +72,19 @@ class SendingQuota:
         return max(0.0, self.max_24_hour_send - self.sent_last_24_hours)
 
 
+class ReviewStatus(StrEnum):
+    """Where a production access request has got to, in SES's own words.
+
+    ``GetAccount`` reports this once a request has been made. Kept verbatim
+    so a status never has to be translated twice, like ``VerificationStatus``.
+    """
+
+    PENDING = "PENDING"
+    GRANTED = "GRANTED"
+    DENIED = "DENIED"
+    FAILED = "FAILED"
+
+
 @dataclass(frozen=True, slots=True)
 class AccountStatus:
     """The result of asking a provider "can this identity send, and how much?".
@@ -79,6 +92,10 @@ class AccountStatus:
     ``sandbox`` is the field §8 insists must not be silently dropped: a new
     account is limited to verified recipients, and a user who is never told
     that reads their first bounced send as a SESKit bug.
+
+    ``review_status`` is what became of a production access request, if one
+    was ever made. ``None`` means none was - which, for an account still in
+    the sandbox, is the state the request button exists to change.
     """
 
     account_id: str
@@ -87,6 +104,40 @@ class AccountStatus:
     sending_enabled: bool
     enforcement_status: str
     quota: SendingQuota
+    review_status: ReviewStatus | None = None
+    review_case_id: str | None = None
+
+
+class MailType(StrEnum):
+    """What SES asks: the kind of mail the majority of sends will be."""
+
+    TRANSACTIONAL = "TRANSACTIONAL"
+    MARKETING = "MARKETING"
+
+
+class ContactLanguage(StrEnum):
+    """The languages SES offers for its review correspondence. Two, and
+    these two - the enum exists so a typo cannot reach the request.
+    """
+
+    EN = "EN"
+    JA = "JA"
+
+
+@dataclass(frozen=True, slots=True)
+class ProductionAccessRequest:
+    """What the user tells AWS when asking to leave the sandbox.
+
+    The same fields as the console form, and no more: SES accepts a free-text
+    use case too, which the service layer fills from what it knows rather
+    than asking the user to describe their own bounce handling.
+    """
+
+    mail_type: MailType
+    website_url: str
+    contact_addresses: tuple[str, ...]
+    contact_language: ContactLanguage = ContactLanguage.EN
+    use_case_description: str = ""
 
 
 # ------------------------------------------------------------ identities ---

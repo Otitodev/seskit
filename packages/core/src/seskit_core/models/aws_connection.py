@@ -115,6 +115,18 @@ class AWSConnection(Base, TimestampMixin):
     #: into a page, and an AWS exception string can carry an ARN or a principal.
     last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
 
+    # ------------------------------------------------- production access ---
+    #
+    # What became of a request to leave the sandbox. SES reports the first two
+    # once a request exists, whether it was made here or in the console; the
+    # third is SESKit's own record of pressing the button. All NULL until then.
+
+    review_status: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    review_case_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    production_requested_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
     # ---------------------------------------------- event infrastructure ---
     #
     # What SESKit created in the user's AWS account so delivery events can come
@@ -172,6 +184,14 @@ class AWSConnection(Base, TimestampMixin):
     @property
     def is_connected(self) -> bool:
         return self.status == ConnectionStatus.CONNECTED.value
+
+    @property
+    def production_access_pending(self) -> bool:
+        """A request is with AWS and nothing more can be done until they
+        answer. SES refuses a second request meanwhile, so the page shows the
+        wait rather than a button that would fail.
+        """
+        return self.sandbox and self.review_status == "PENDING"
 
     @property
     def events_enabled(self) -> bool:

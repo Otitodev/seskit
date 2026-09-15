@@ -57,6 +57,14 @@ from seskit_core.services.identities import (
     remove_identity,
 )
 from seskit_core.services.onboarding import SetupStep, is_complete, setup_progress
+from seskit_core.services.production_access import (
+    ACKNOWLEDGEMENT,
+    MAX_CONTACTS,
+    Readiness,
+    describe_use_case,
+    production_access_readiness,
+    request_production_access,
+)
 from seskit_core.services.projects import (
     create_project,
     get_default_project,
@@ -112,6 +120,8 @@ from seskit_core.services.webhooks import (
 )
 
 __all__ = [
+    "ACKNOWLEDGEMENT",
+    "MAX_CONTACTS",
     "ActivityPoint",
     "EmailAlreadyRegistered",
     "IssuedKey",
@@ -120,6 +130,7 @@ __all__ = [
     "PolledQueue",
     "ProviderFactory",
     "ProvisionerFactory",
+    "Readiness",
     "SetupStep",
     "SignupClosed",
     "TimeRange",
@@ -145,6 +156,7 @@ __all__ = [
     "create_project",
     "delete_endpoint",
     "deliveries_due",
+    "describe_use_case",
     "disconnect_aws",
     "distinct_event_queues",
     "find_by_idempotency_key",
@@ -172,6 +184,7 @@ __all__ = [
     "payload_bytes",
     "pending_delivery_ids",
     "policy_from",
+    "production_access_readiness",
     "queue_deliveries",
     "queue_name_for",
     "record_delivery_failure",
@@ -184,6 +197,7 @@ __all__ = [
     "register_user",
     "remove_identity",
     "remove_suppression",
+    "request_production_access",
     "revoke_api_key",
     "rotate_secret",
     "sender_is_verified",

@@ -4,7 +4,7 @@ SESKit must never ask for `AdministratorAccess`. There are two policies because
 they grant genuinely different things, and **you should be able to run SESKit
 without the second**.
 
-## Sending — six actions (required)
+## Sending — seven actions (required)
 
 Everything except delivery events. All of it is scoped to SES, and only one
 action can create anything.
@@ -21,7 +21,8 @@ action can create anything.
         "ses:CreateEmailIdentity",
         "ses:GetEmailIdentity",
         "ses:DeleteEmailIdentity",
-        "ses:SendEmail"
+        "ses:SendEmail",
+        "ses:PutAccountDetails"
       ],
       "Resource": "*"
     }
@@ -42,6 +43,12 @@ it to try SESKit — without an AWS connection, sending
 Removing an identity is the only destructive thing here, and it is guarded:
 SESKit deletes the identity in SES only when no other project is still using
 it.
+
+`ses:PutAccountDetails` is what [requesting production
+access](ses-sandbox.md) from the AWS page uses. It changes nothing about the
+account by itself - it files the request AWS reviews - and a key without it
+is told so, by name, when the button is pressed. A key made before this line
+was here still connects and sends; add the action and the request works.
 
 ## Delivery events — nine more (optional)
 
@@ -114,6 +121,7 @@ A reasonable order, if you would rather not grant everything at once:
 | Look around | `sts:GetCallerIdentity`, `ses:GetAccount` | Connect, see your quota and sandbox status |
 | Verify senders | `+ ses:*EmailIdentity` | Add domains and addresses |
 | Send for real | `+ ses:SendEmail` | Deliver through SES |
+| Leave the sandbox | `+ ses:PutAccountDetails` | Request production access from the AWS page |
 | See what happened | the second policy | Delivery events and webhooks |
 
 Each stage is usable on its own, and the dashboard says what is missing rather
