@@ -13,6 +13,7 @@ message, not the request.
 
 from __future__ import annotations
 
+import re
 from email.headerregistry import (
     Address,
     BaseHeader,
@@ -108,6 +109,35 @@ def _policy() -> Policy:
 POLICY = _policy()
 
 
+#: An RFC 5322 field-name: printable ASCII, excluding the colon that ends it.
+#: `!` through `9` and `;` through `~` is exactly that range with `:` cut out.
+_HEADER_NAME = re.compile(r"[!-9;-~]+")
+
+
+def _reject_header_name(name: str) -> None:
+    """A header name that is not one is a header injection attempt.
+
+    The value check below was here first, and it was the only check. A name
+    is written to the wire verbatim - `EmailMessage` validates newlines in
+    values and not in names, and the folder emits `self.name` as given - so
+    a name of ``X-A: 1<CR><LF>Bcc`` produced a second, distinct header. That
+    went past `RESERVED_HEADERS` untouched: the reserved check compares the
+    whole string, and the whole string was not on the list.
+
+    What the reserved list protects is the operator's sender reputation and
+    the promise that only SESKit sets the unsubscribe target. A second
+    `List-Unsubscribe` pointing elsewhere means recipients who press the
+    button never reach the suppression list, the project keeps sending, and
+    the complaints land on the operator's SES account. Reproduced in the
+    bytes, which is where it has to be checked.
+    """
+    if not _HEADER_NAME.fullmatch(name):
+        raise APIError(
+            ErrorType.INVALID_REQUEST,
+            f"{name!r} is not a valid header name.",
+        )
+
+
 def _reject_header_injection(name: str, value: str) -> None:
     """A newline in a header value is a header injection attempt.
 
@@ -192,6 +222,9 @@ def build_message(outbound: OutboundEmail) -> EmailMessage:
     _add_unsubscribe(message, outbound.unsubscribe_url)
 
     for name, value in outbound.headers.items():
+        # The name first. A name carrying a line break is a whole second
+        # header, and the reserved check below cannot see it.
+        _reject_header_name(name)
         if name.lower() in RESERVED_HEADERS:
             raise APIError(
                 ErrorType.INVALID_REQUEST,

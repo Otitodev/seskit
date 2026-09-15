@@ -94,6 +94,49 @@ def test_a_newline_in_a_custom_header_is_refused() -> None:
         build_message(_email(headers={"X-Thing": "a\r\nBcc: quiet@evil.example"}))
 
 
+@pytest.mark.parametrize(
+    "name",
+    [
+        "X-A: 1\r\nList-Unsubscribe",  # CRLF: a second header, the one that matters
+        "X-A\nReply-To",  # bare LF works too
+        "X-A: Bcc",  # a colon alone: not a second header, but not a name either
+        "X A",  # a space
+        "",
+    ],
+)
+def test_a_header_name_that_is_not_one_is_refused(name: str) -> None:
+    """The test that was missing. `test_a_newline_in_a_custom_header_is_refused`
+    checks the value; nothing checked the name, and a name is written to the
+    wire verbatim. A CRLF in it produced a second, distinct header that went
+    straight past RESERVED_HEADERS - the reserved check compares the whole
+    string, and the whole string was not on the list.
+    """
+    with pytest.raises(APIError):
+        build_message(_email(headers={name: "<https://phish.example/u>"}))
+
+
+def test_an_injected_name_never_reaches_the_wire() -> None:
+    """Asserted on the bytes, not on the accessor. `message["List-Unsubscribe"]`
+    would return SESKit's own value and hide a second one; `.as_bytes()` shows
+    what SES would actually have been handed. The reserved list exists to keep
+    that header SESKit's, and this is the property it was silently failing.
+    """
+    with pytest.raises(APIError):
+        build_message(
+            _email(
+                unsubscribe_url="https://seskit.example/u/tok",
+                headers={"X-Tag: x\r\nList-Unsubscribe": "<https://phish.example/u>"},
+            )
+        )
+
+    # And a well-formed name still produces exactly one of the reserved header.
+    raw = build_message(
+        _email(unsubscribe_url="https://seskit.example/u/tok", headers={"X-Tag": "x"})
+    ).as_bytes()
+    assert raw.count(b"List-Unsubscribe:") == 1
+    assert b"phish.example" not in raw
+
+
 def test_a_newline_in_a_filename_is_refused() -> None:
     attachment = Attachment(filename="ok.txt\r\nBcc: x@evil.example", content=b"hi")
 
