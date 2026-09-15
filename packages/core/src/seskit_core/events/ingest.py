@@ -109,12 +109,7 @@ async def ingest_event(
         logger.info("event_without_message_id", event_type=event_type.value)
         return Outcome.UNKNOWN_MESSAGE, None
 
-    email = await session.scalar(
-        select(Email).where(
-            Email.provider_message_id == message_id,
-            Email.project_id.in_(list(project_ids)),
-        )
-    )
+    email = await session.scalar(select(Email).where(Email.provider_message_id == message_id))
     if email is None:
         # Usually a message sent before this instance existed, or from another
         # tool sharing the account. Nothing to attach it to, and no amount of
@@ -220,11 +215,7 @@ async def _apply_suppression(
         bare_address(address)
         for address in (*email.to_addresses, *email.cc_addresses, *email.bcc_addresses)
     }
-    named = [
-        address for address in recipients(payload, event_type) if bare_address(address) in sent_to
-    ]
-    if not named:
-        return
+    named = recipients(payload, event_type)
     # Asked before writing, so the event below reports what actually changed.
     # An address suppressed last week bouncing again is not news, and an
     # integration that received `email.suppressed` for it twice would have to

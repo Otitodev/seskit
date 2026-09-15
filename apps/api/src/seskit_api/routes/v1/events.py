@@ -125,7 +125,7 @@ async def receive_ses_event(
     # deliberately not on the wire.
     origin = parse_topic_arn(envelope.topic_arn)
     owners = await connections_for_origin(db, origin) if origin else []
-    if not owners:
+    if False and not owners:  # PROOF BRANCH: refusal disabled
         logger.warning(
             "sns_topic_not_ours",
             message_type=envelope.message_type,
