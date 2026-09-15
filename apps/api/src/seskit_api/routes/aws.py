@@ -22,17 +22,22 @@ from seskit_core.db import get_session
 from seskit_core.errors import APIError, ErrorType
 from seskit_core.logging import get_logger
 from seskit_core.models import Project
-from seskit_core.providers import AWSCredentials
+from seskit_core.providers import AWSCredentials, ContactLanguage, MailType
 from seskit_core.redis import get_redis
 from seskit_core.services import (
+    ACKNOWLEDGEMENT,
     ProviderFactory,
     ProvisionerFactory,
+    Readiness,
+    SetupStep,
     connect_aws,
     disconnect_aws,
     get_connection,
     list_projects,
+    production_access_readiness,
     queue_name_for,
     refresh_connection,
+    request_production_access,
     set_open_click_tracking,
     setup_events,
     teardown_events,
@@ -78,6 +83,14 @@ async def _page(
 ) -> HTMLResponse:
     """Render the page from whatever the project's current state is."""
     resolved = settings or get_settings()
+    connection = await get_connection(db, project.id)
+    # The prerequisites for leaving the sandbox, only when there is a sandbox
+    # to leave. Three cheap queries; nothing here calls AWS.
+    readiness = (
+        await production_access_readiness(db, connection)
+        if connection is not None and connection.is_connected and connection.sandbox
+        else None
+    )
     return render(
         request,
         "pages/aws.html",
@@ -87,9 +100,12 @@ async def _page(
         nav_active="aws",
         project=project,
         projects=await list_projects(db, current.user.id),
-        connection=await get_connection(db, project.id),
+        connection=connection,
         regions=SES_REGIONS,
         production_access_url=PRODUCTION_ACCESS_URL,
+        readiness=readiness,
+        readiness_steps=_readiness_steps(readiness) if readiness else [],
+        acknowledgement=ACKNOWLEDGEMENT,
         # Named so the page can say exactly what will be created in the user's
         # account before they agree to it, rather than after.
         event_queue_name=queue_name_for(resolved.EVENT_RESOURCE_PREFIX),
@@ -422,6 +438,128 @@ async def change_tracking(
         else "Open and click tracking off."
     )
     return await _page(request, db, current, project, settings=settings, flash=message)
+
+
+@router.post(
+    "/aws/production-access",
+    response_class=HTMLResponse,
+    dependencies=[Depends(verify_csrf)],
+    summary="Request production access",
+)
+async def production_access(
+    request: Request,
+    db: Annotated[AsyncSession, Depends(get_session)],
+    current: Annotated[CurrentUser, Depends(require_user)],
+    project: Annotated[Project, Depends(require_project)],
+    settings: Annotated[Settings, Depends(get_app_settings)],
+    provider_factory: Annotated[ProviderFactory, Depends(get_provider_factory)],
+    mail_type: Annotated[str, Form()] = "",
+    website_url: Annotated[str, Form()] = "",
+    contact_addresses: Annotated[str, Form()] = "",
+    contact_language: Annotated[str, Form()] = "EN",
+    acknowledged: Annotated[str, Form()] = "",
+) -> HTMLResponse:
+    """Ask AWS to take the account out of the sandbox (§31 Phase 16).
+
+    The service checks the prerequisites and refuses with them named, so a
+    request that reaches AWS is one AWS can grant. The page's disabled button
+    is a courtesy; a POST with a gate unmet is refused here the same way.
+    """
+    connection = await get_connection(db, project.id)
+    if connection is None or not connection.is_connected:
+        return await _page(request, db, current, project, settings=settings)
+
+    try:
+        kind = MailType(mail_type.strip().upper())
+        language = ContactLanguage(contact_language.strip().upper() or "EN")
+    except ValueError:
+        return await _page(
+            request,
+            db,
+            current,
+            project,
+            settings=settings,
+            error="Choose a kind of mail and a language from the lists.",
+            status_code=400,
+        )
+
+    try:
+        await request_production_access(
+            db,
+            provider_factory,
+            connection,
+            mail_type=kind,
+            website_url=website_url,
+            contact_addresses=contact_addresses.split(","),
+            contact_language=language,
+            acknowledged=acknowledged == "yes",
+            secret_key=settings.SECRET_KEY,
+        )
+    except APIError as error:
+        await db.rollback()
+        return await _page(
+            request,
+            db,
+            current,
+            project,
+            settings=settings,
+            error=error.message,
+            status_code=_status_for(error),
+        )
+
+    await db.commit()
+    return await _page(
+        request,
+        db,
+        current,
+        project,
+        settings=settings,
+        flash="Production access requested. AWS usually answers within 24 hours, by email.",
+    )
+
+
+def _readiness_steps(readiness: Readiness) -> list[SetupStep]:
+    """The gates as a checklist, in the order they are done.
+
+    The same shape as the overview's setup steps, because they are the same
+    kind of thing, and a done step says its evidence: which domain, how many
+    messages. That is what turns a tick into something the user believes.
+    """
+    domain = readiness.verified_domain
+    delivered = readiness.delivered_count
+    return [
+        SetupStep(
+            title=f"Domain verified: {domain}" if domain else "Verify a domain",
+            why=(
+                "AWS says a verified domain is what gets a request approved quickly. "
+                "A verified address alone is not enough."
+            ),
+            href="/domains",
+            done=readiness.has_verified_domain,
+        ),
+        SetupStep(
+            title="Delivery event reporting set up",
+            why=(
+                "This is the bounce and complaint handling AWS asks you to confirm: "
+                "bounces and complaints come back and the addresses are suppressed."
+            ),
+            href="/aws",
+            done=readiness.events_enabled,
+        ),
+        SetupStep(
+            title=(
+                f"{delivered} message{'s' if delivered != 1 else ''} delivered"
+                if delivered
+                else "Send a test message to a verified address"
+            ),
+            why=(
+                "Proves the pipeline end to end: SES accepted the message and the "
+                "delivery event came back."
+            ),
+            href="/emails",
+            done=readiness.has_delivered,
+        ),
+    ]
 
 
 def _status_for(error: APIError) -> int:

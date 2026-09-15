@@ -1,0 +1,130 @@
+{# Leaving the SES sandbox (§31 Phase 16).
+
+   Replaces the warning-with-a-link. Three states, in the order a user meets
+   them: not yet asked (the prerequisites and the form), asked and waiting,
+   and asked and refused. Granted has no state here - the sandbox flag flips
+   on refresh and the whole block disappears, as the warning always did.
+
+   The prerequisites are shown as the same numbered list as the setup
+   checklist, because they are the same kind of thing: steps in an order,
+   with a tick when done. The button stays disabled until every one is; the
+   service refuses regardless, so the disabled button is a courtesy. #}
+{% from "components/ui.html" import button, card_open, card_close, field %}
+
+{% if connection.production_access_pending %}
+  <div class="alert" role="status">
+    <p class="alert__title">Production access requested</p>
+    <p>
+      {% if connection.production_requested_at %}
+        Asked on {{ connection.production_requested_at.strftime("%Y-%m-%d %H:%M UTC") }}.
+      {% endif %}
+      AWS usually answers within 24 hours and will email the contact addresses
+      given. Until then sending stays limited to verified recipients.
+      {% if connection.review_case_id %}
+        Support case <code>{{ connection.review_case_id }}</code>.
+      {% endif %}
+    </p>
+    <p class="muted">
+      If AWS asks a follow-up question it arrives by email and in the AWS Support
+      Center; answer it there. Refresh here to see the outcome.
+    </p>
+  </div>
+
+{% else %}
+  {% if connection.review_status in ("DENIED", "FAILED") %}
+    <div class="alert alert--danger" role="status">
+      <p class="alert__title">
+        {% if connection.review_status == "DENIED" %}
+          AWS declined the last production access request
+        {% else %}
+          The last production access request did not go through
+        {% endif %}
+      </p>
+      <p>
+        AWS explains why by email
+        {%- if connection.review_case_id %} and in Support case
+          <code>{{ connection.review_case_id }}</code>{% endif %}.
+        Address what it asks for, then request again below.
+      </p>
+    </div>
+  {% endif %}
+
+  {{ card_open("Request production access") }}
+    <p class="muted">
+      This account is in the Amazon SES sandbox: sending is limited to verified
+      recipients, {{ connection.max_24_hour_send|int }} messages per 24 hours and
+      {{ connection.max_send_rate }} per second. AWS lifts that after a short
+      review. It approves quickly when the things below are already in place,
+      so SESKit checks them first.
+    </p>
+
+    <ol class="setup" aria-label="Before requesting">
+      {% for step in readiness_steps %}
+        <li class="setup__step{% if step.done %} setup__step--done{% endif %}">
+          <span class="setup__mark" aria-hidden="true">
+            {%- if step.done %}&check;{% else %}{{ loop.index }}{% endif -%}
+          </span>
+          <span class="setup__body">
+            {% if step.done %}
+              <span class="setup__title">{{ step.title }}</span>
+              <span class="visually-hidden">- done</span>
+            {% else %}
+              <a class="setup__title" href="{{ step.href }}">{{ step.title }}</a>
+            {% endif %}
+            <span class="setup__why muted">{{ step.why }}</span>
+          </span>
+        </li>
+      {% endfor %}
+    </ol>
+
+    <form method="post" action="/aws/production-access" class="stack">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+
+      <div class="field">
+        <label class="field__label" for="mail_type">Kind of mail</label>
+        <select class="select" id="mail_type" name="mail_type">
+          <option value="TRANSACTIONAL" selected>Transactional — one-to-one, triggered by a user's action</option>
+          <option value="MARKETING">Marketing — one-to-many, to a list</option>
+        </select>
+        <p class="field__hint">Whichever the majority of this project's mail is.</p>
+      </div>
+
+      {{ field("website_url", "Website", type="url", placeholder="https://example.com",
+               required=True,
+               hint="The site the mail is for. AWS looks at it to understand what
+                     you send.",
+               attrs='maxlength="255" autocomplete="url"') }}
+
+      {{ field("contact_addresses", "Contact addresses", type="text",
+               value=current.user.email, required=True,
+               hint="Where AWS writes about the review. Up to four, separated by
+                     commas.",
+               attrs='maxlength="400" autocomplete="off"') }}
+
+      <div class="field">
+        <label class="field__label" for="contact_language">Language for AWS's reply</label>
+        <select class="select" id="contact_language" name="contact_language">
+          <option value="EN" selected>English</option>
+          <option value="JA">Japanese</option>
+        </select>
+      </div>
+
+      {# AWS's own checkbox, in its words. SESKit does not tick it on the
+         user's behalf: the attestation is theirs to make. #}
+      <label class="check">
+        <input class="check__input" type="checkbox" name="acknowledged" value="yes" required>
+        <span class="check__label">{{ acknowledgement }}</span>
+      </label>
+
+      <div class="row row--end">
+        {{ button("Request production access", variant="primary", type="submit",
+                  disabled=not readiness.ready) }}
+      </div>
+      <p class="field__hint">
+        {% if not readiness.ready %}Available once every step above is done.{% endif %}
+        <a class="link" href="{{ production_access_url }}"
+           target="_blank" rel="noopener noreferrer">What AWS reviews</a>.
+      </p>
+    </form>
+  {{ card_close() }}
+{% endif %}

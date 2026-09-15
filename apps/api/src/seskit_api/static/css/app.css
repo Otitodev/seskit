@@ -1736,3 +1736,24 @@ svg {
 .setup__why {
   font-size: var(--text-sm);
 }
+
+/* A checkbox and the statement it agrees to. The whole line is the label, so
+   the hit area is the sentence and not a 13px square; the box is nudged onto
+   the first line's baseline rather than centred against a wrapped sentence. */
+.check {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  cursor: pointer;
+}
+
+.check__input {
+  flex: 0 0 auto;
+  margin: 0.2em 0 0;
+  accent-color: var(--accent);
+}
+
+.check__label {
+  font-size: var(--text-sm);
+  text-wrap: pretty;
+}

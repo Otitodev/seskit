@@ -13,8 +13,16 @@ from fakes.ses import ACCOUNT_ID, FAKE_CREDENTIALS, TEST_SECRET_KEY, FakeProvide
 from httpx import AsyncClient
 from redis.asyncio import Redis
 from seskit_core.errors import APIError, ErrorType
-from seskit_core.models import ConnectionStatus, Project
-from seskit_core.providers import ReviewStatus
+from seskit_core.models import (
+    AWSConnection,
+    ConnectionStatus,
+    Email,
+    EmailStatus,
+    Identity,
+    Project,
+    utcnow,
+)
+from seskit_core.providers import IdentityType, MailType, ReviewStatus, VerificationStatus
 from seskit_core.services import (
     connect_aws,
     create_project,
@@ -560,7 +568,229 @@ async def test_a_production_account_is_not_warned(
     page = await app_client.post("/aws/connect", data=_connect_form(token))
 
     assert PRODUCTION_ACCESS_MARKER not in page.text
+    assert 'action="/aws/production-access"' not in page.text
     assert "Production access" in page.text
+
+
+async def test_a_sandboxed_account_is_offered_the_request_with_its_prerequisites(
+    app_client: AsyncClient,
+) -> None:
+    """Phase 16: the warning is where the request is made. A fresh account has
+    done none of the three things AWS approves on, so every step shows as
+    still to do and the button is disabled.
+    """
+    await _sign_in(app_client)
+    token = await _csrf(app_client)
+    await app_client.post("/aws/connect", data=_connect_form(token))
+
+    page = await app_client.get("/aws")
+
+    assert 'action="/aws/production-access"' in page.text
+    assert "Verify a domain" in page.text
+    assert "Delivery event reporting set up" in page.text
+    assert "Send a test message" in page.text
+    assert "setup__step--done" not in page.text
+    assert _request_button(page.text).endswith("disabled >")
+
+
+async def _make_ready(session: AsyncSession) -> AWSConnection:
+    """Every gate passed, on the one connection the test made through the page."""
+    connection = (await session.execute(select(AWSConnection))).scalar_one()
+    session.add(
+        Identity(
+            project_id=connection.project_id,
+            value="otito.site",
+            identity_type=IdentityType.DOMAIN.value,
+            region=connection.region,
+            verification_status=VerificationStatus.SUCCESS.value,
+            dkim_tokens=[],
+        )
+    )
+    connection.configuration_set = "seskit-events"
+    connection.event_topic_arn = f"arn:aws:sns:{connection.region}:{ACCOUNT_ID}:seskit-events"
+    session.add(
+        Email(
+            project_id=connection.project_id,
+            from_address="hello@otito.site",
+            to_addresses=["you@example.com"],
+            cc_addresses=[],
+            bcc_addresses=[],
+            reply_to=[],
+            subject="Test",
+            text_body="Hello",
+            status=EmailStatus.SENT.value,
+            provider="ses",
+            provider_message_id="m-1",
+            delivered_at=utcnow(),
+        )
+    )
+    await session.flush()
+    await session.commit()
+    return connection
+
+
+def _request_button(html: str) -> str:
+    start = html.index('<button class="btn btn--primary"')
+    tag = html[start : html.index(">", start) + 1]
+    assert "Request production access" in html[start : start + 200]
+    return tag
+
+
+def _request_form(token: str, **overrides: str) -> dict[str, str]:
+    form = {
+        "csrf_token": token,
+        "mail_type": "TRANSACTIONAL",
+        "website_url": "https://otito.site",
+        "contact_addresses": "owner@example.com",
+        "contact_language": "EN",
+        "acknowledged": "yes",
+    }
+    form.update(overrides)
+    return form
+
+
+async def test_with_every_prerequisite_met_the_button_is_live(
+    app_client: AsyncClient, db_session: AsyncSession
+) -> None:
+    await _sign_in(app_client)
+    token = await _csrf(app_client)
+    await app_client.post("/aws/connect", data=_connect_form(token))
+    await _make_ready(db_session)
+
+    page = await app_client.get("/aws")
+
+    assert "Domain verified: otito.site" in page.text
+    assert "1 message delivered" in page.text
+    assert page.text.count("setup__step--done") == 3
+    assert "disabled" not in _request_button(page.text)
+    # The signed-in user's address is the default contact.
+    assert 'value="owner@example.com"' in page.text
+
+
+async def test_requesting_through_the_page_asks_aws_and_shows_the_wait(
+    app_client: AsyncClient, db_session: AsyncSession, provider_factory: FakeProviderFactory
+) -> None:
+    await _sign_in(app_client)
+    token = await _csrf(app_client)
+    await app_client.post("/aws/connect", data=_connect_form(token))
+    await _make_ready(db_session)
+
+    page = await app_client.post(
+        "/aws/production-access",
+        data=_request_form(token, contact_addresses="owner@example.com, dev@example.com"),
+    )
+
+    assert page.status_code == 200, page.text
+    (sent,) = provider_factory.provider.production_access_requests
+    assert sent.mail_type is MailType.TRANSACTIONAL
+    assert sent.website_url == "https://otito.site"
+    assert sent.contact_addresses == ("owner@example.com", "dev@example.com")
+    assert "Production access requested" in page.text
+    assert 'action="/aws/production-access"' not in page.text
+
+    # And still on the next load - the wait is recorded, not flashed.
+    again = await app_client.get("/aws")
+    assert "Production access requested" in again.text
+    assert 'action="/aws/production-access"' not in again.text
+
+
+async def test_a_post_with_a_prerequisite_unmet_is_refused_and_aws_is_not_asked(
+    app_client: AsyncClient, provider_factory: FakeProviderFactory
+) -> None:
+    """The disabled button is a courtesy. The service is the guard, and a
+    request built by hand meets it the same way.
+    """
+    await _sign_in(app_client)
+    token = await _csrf(app_client)
+    await app_client.post("/aws/connect", data=_connect_form(token))
+
+    page = await app_client.post("/aws/production-access", data=_request_form(token))
+
+    assert page.status_code == 400
+    assert "a verified domain" in page.text
+    assert provider_factory.provider.production_access_requests == []
+
+
+async def test_a_request_without_the_acknowledgement_is_refused(
+    app_client: AsyncClient, db_session: AsyncSession, provider_factory: FakeProviderFactory
+) -> None:
+    await _sign_in(app_client)
+    token = await _csrf(app_client)
+    await app_client.post("/aws/connect", data=_connect_form(token))
+    await _make_ready(db_session)
+
+    page = await app_client.post(
+        "/aws/production-access", data=_request_form(token, acknowledged="")
+    )
+
+    assert page.status_code == 400
+    assert "acknowledgement" in page.text
+    assert provider_factory.provider.production_access_requests == []
+
+
+async def test_a_request_without_a_csrf_token_is_refused(
+    app_client: AsyncClient, db_session: AsyncSession, provider_factory: FakeProviderFactory
+) -> None:
+    await _sign_in(app_client)
+    token = await _csrf(app_client)
+    await app_client.post("/aws/connect", data=_connect_form(token))
+    await _make_ready(db_session)
+
+    page = await app_client.post("/aws/production-access", data=_request_form("forged"))
+
+    assert page.status_code == 403
+    assert provider_factory.provider.production_access_requests == []
+
+
+async def test_a_key_without_the_permission_is_told_the_line_to_add(
+    app_client: AsyncClient, db_session: AsyncSession, provider_factory: FakeProviderFactory
+) -> None:
+    """A key made from the older documented policy lacks ses:PutAccountDetails.
+    Shown on the page as the user's configuration to fix (400), not as an
+    unauthorised request to SESKit.
+    """
+    await _sign_in(app_client)
+    token = await _csrf(app_client)
+    await app_client.post("/aws/connect", data=_connect_form(token))
+    await _make_ready(db_session)
+    provider_factory.provider.request_error = denied("ses:PutAccountDetails")
+
+    page = await app_client.post("/aws/production-access", data=_request_form(token))
+
+    assert page.status_code == 400
+    assert "ses:PutAccountDetails" in page.text
+    assert 'action="/aws/production-access"' in page.text  # the form is still there
+
+
+async def test_a_review_opened_in_the_console_is_shown_as_the_wait(
+    app_client: AsyncClient, provider_factory: FakeProviderFactory
+) -> None:
+    """SES reports a pending review whether it was asked for here or in the
+    console. The page shows the wait rather than a button SES would refuse.
+    """
+    provider_factory.provider.review_status = ReviewStatus.PENDING
+    provider_factory.provider.review_case_id = "1234567890"
+    await _sign_in(app_client)
+    token = await _csrf(app_client)
+
+    page = await app_client.post("/aws/connect", data=_connect_form(token))
+
+    assert "Production access requested" in page.text
+    assert "1234567890" in page.text
+    assert 'action="/aws/production-access"' not in page.text
+
+
+async def test_a_denied_review_says_so_and_offers_the_form_again(
+    app_client: AsyncClient, provider_factory: FakeProviderFactory
+) -> None:
+    provider_factory.provider.review_status = ReviewStatus.DENIED
+    await _sign_in(app_client)
+    token = await _csrf(app_client)
+
+    page = await app_client.post("/aws/connect", data=_connect_form(token))
+
+    assert "AWS declined" in page.text
+    assert 'action="/aws/production-access"' in page.text
 
 
 async def test_an_unknown_region_is_refused_without_calling_aws(
