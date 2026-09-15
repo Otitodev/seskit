@@ -14,6 +14,7 @@ from httpx import AsyncClient
 from redis.asyncio import Redis
 from seskit_core.errors import APIError, ErrorType
 from seskit_core.models import ConnectionStatus, Project
+from seskit_core.providers import ReviewStatus
 from seskit_core.services import (
     connect_aws,
     create_project,
@@ -265,6 +266,67 @@ async def test_refresh_asks_aws_again(db_session: AsyncSession, redis_client: Re
 
     assert factory.provider.calls == calls_before + 1
     assert connection.sandbox is False
+
+
+async def test_a_refresh_records_what_became_of_a_production_access_request(
+    db_session: AsyncSession, redis_client: Redis
+) -> None:
+    """SES reports the review under GetAccount, whether the request was made
+    here or in the console. The row carries it so the page can say "asked,
+    waiting" without an AWS round trip - and so a request made in the console
+    before SESKit existed is not shown a button that would fail.
+    """
+    project_id = await _project(db_session)
+    factory = FakeProviderFactory(sandbox=True)
+    connection = await connect_aws(
+        db_session,
+        redis_client,
+        factory,
+        project_id=project_id,
+        region=REGION,
+        credentials=FAKE_CREDENTIALS,
+        secret_key=TEST_SECRET_KEY,
+    )
+    assert (connection.review_status, connection.production_access_pending) == (None, False)
+
+    factory.provider.review_status = ReviewStatus.PENDING
+    factory.provider.review_case_id = "1234567890"
+    await refresh_connection(
+        db_session,
+        redis_client,
+        factory,
+        connection,
+        interval_seconds=INTERVAL,
+        secret_key=TEST_SECRET_KEY,
+    )
+
+    assert connection.review_status == "PENDING"
+    assert connection.review_case_id == "1234567890"
+    assert connection.production_access_pending is True
+
+
+async def test_a_granted_request_is_no_longer_pending(
+    db_session: AsyncSession, redis_client: Redis
+) -> None:
+    """Granted means the sandbox flag flips. The review line then says
+    nothing more: the warning it belonged to is gone.
+    """
+    project_id = await _project(db_session)
+    factory = FakeProviderFactory(sandbox=False, review_status=ReviewStatus.GRANTED)
+
+    connection = await connect_aws(
+        db_session,
+        redis_client,
+        factory,
+        project_id=project_id,
+        region=REGION,
+        credentials=FAKE_CREDENTIALS,
+        secret_key=TEST_SECRET_KEY,
+    )
+
+    assert connection.sandbox is False
+    assert connection.review_status == "GRANTED"
+    assert connection.production_access_pending is False
 
 
 async def test_a_second_refresh_inside_the_interval_does_not_call_aws(
