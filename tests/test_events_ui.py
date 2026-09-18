@@ -18,7 +18,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from fakes.ses import FAKE_CREDENTIALS, TEST_SECRET_KEY, FakeProvisioner
+from fakes.ses import FAKE_CREDENTIALS, TEST_SECRET_KEY, FakeProvisioner, denied
 from httpx import AsyncClient
 from seskit_core.models import (
     AWSConnection,
@@ -116,6 +116,10 @@ async def test_the_page_says_what_it_will_create(
     assert "configuration set" in page.text
     # And that it can be undone, which is the other half of informed consent.
     assert "deletes them" in page.text
+    # And, on the default name, that another instance on the account would
+    # share the queue. Seen on a real host; said before the button.
+    assert "These are the default names" in page.text
+    assert "EVENT_RESOURCE_PREFIX" in page.text
 
 
 async def test_setting_up_events_records_the_infrastructure(
@@ -143,6 +147,70 @@ async def test_removing_events_takes_them_out_of_aws(
     await db_session.refresh(connection)
     assert connection.events_enabled is False
     assert "remove" in FakeProvisioner.calls
+
+
+# ------------------------------------------------------------ AWS said no ---
+#
+# Seen on a real host: IAM refused sns:CreateTopic, the adapter normalised it
+# correctly, and the user saw "Internal Server Error". The route rolled the
+# session back before re-rendering, which expired every loaded object, and the
+# template then lazy-loaded the project from inside sync Jinja. The harness
+# cannot reproduce the greenlet failure itself - `app_client` joins the test
+# transaction as a savepoint - so what these pin is the contract: the message
+# on the page, a 400, and a row that still says what AWS still has.
+
+
+async def test_a_refused_setup_shows_the_message_not_a_500(
+    signed_in_client: AsyncClient, db_session: AsyncSession
+) -> None:
+    connection = await _connect(db_session)
+    FakeProvisioner.error = denied("sns:CreateTopic")
+    token = await _csrf(signed_in_client)
+
+    page = await signed_in_client.post("/aws/events/setup", data={"csrf_token": token})
+
+    assert page.status_code == 400
+    assert "sns:CreateTopic" in page.text
+    assert "Internal Server Error" not in page.text
+    await db_session.refresh(connection)
+    assert connection.events_enabled is False
+
+
+async def test_a_refused_removal_leaves_the_row_and_aws_agreeing(
+    signed_in_client: AsyncClient, db_session: AsyncSession
+) -> None:
+    """Removing failed, so nothing changed - including the row. Before, the
+    row was cleared first and a failure left the queue, topic and
+    configuration set in AWS with nothing left that named them.
+    """
+    connection = await _connect(db_session, events=True)
+    FakeProvisioner.error = denied("sqs:DeleteQueue")
+    token = await _csrf(signed_in_client)
+
+    page = await signed_in_client.post("/aws/events/remove", data={"csrf_token": token})
+
+    assert page.status_code == 400
+    assert "sqs:DeleteQueue" in page.text
+    await db_session.refresh(connection)
+    assert connection.events_enabled is True
+
+
+async def test_a_refused_tracking_change_does_not_claim_it_happened(
+    signed_in_client: AsyncClient, db_session: AsyncSession
+) -> None:
+    connection = await _connect(db_session, events=True)
+    FakeProvisioner.error = denied("ses:UpdateConfigurationSetEventDestination")
+    token = await _csrf(signed_in_client)
+
+    page = await signed_in_client.post(
+        "/aws/events/tracking", data={"csrf_token": token, "enabled": "on"}
+    )
+
+    assert page.status_code == 400
+    assert "ses:UpdateConfigurationSetEventDestination" in page.text
+    await db_session.refresh(connection)
+    assert connection.track_opens_and_clicks is False
+    assert "tracking on" not in page.text.lower()
 
 
 async def test_setup_without_a_connection_does_nothing(
@@ -361,6 +429,34 @@ async def test_a_bounce_does_not_contradict_the_send_status(
 
     assert "Sent" in page.text
     assert "Bounced" in page.text
+    # And the bounce is said at the top, beside the status, not only on the
+    # timeline below it. Seen on a real host: a bounced message whose header
+    # said "Sent" and nothing else.
+    delivery = page.text[page.text.index("Outcome") : page.text.index("Timeline")]
+    assert "Bounced" in delivery
+
+
+async def test_a_delivered_message_says_so_at_the_top(
+    signed_in_client: AsyncClient, db_session: AsyncSession
+) -> None:
+    email = await _email(db_session, configuration_set="seskit")
+    email.delivered_at = datetime(2026, 8, 30, 9, 0, 1, tzinfo=UTC)
+    await db_session.flush()
+
+    page = await signed_in_client.get(f"/emails/{email.id}")
+
+    delivery = page.text[page.text.index("Outcome") : page.text.index("Timeline")]
+    assert "Delivered" in delivery
+
+
+async def test_a_message_nothing_was_reported_for_has_no_outcome(
+    signed_in_client: AsyncClient, db_session: AsyncSession
+) -> None:
+    email = await _email(db_session, configuration_set="seskit")
+
+    page = await signed_in_client.get(f"/emails/{email.id}")
+
+    assert "Outcome" not in page.text
 
 
 async def test_events_are_newest_first(
@@ -389,4 +485,6 @@ async def test_events_are_newest_first(
 
     page = await signed_in_client.get(f"/emails/{email.id}")
 
-    assert page.text.index("Opened") < page.text.index("Delivered")
+    # Within the timeline: the Outcome row above it also says "Delivered".
+    timeline = page.text[page.text.index("Timeline") :]
+    assert timeline.index("Opened") < timeline.index("Delivered")

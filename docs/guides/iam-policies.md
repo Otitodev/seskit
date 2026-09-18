@@ -50,7 +50,7 @@ account by itself - it files the request AWS reviews - and a key without it
 is told so, by name, when the button is pressed. A key made before this line
 was here still connects and sends; add the action and the request works.
 
-## Delivery events — nine more (optional)
+## Delivery events — fifteen more (optional)
 
 !!! caution "Read this one before granting it"
     Everything above is scoped to SES and mostly read-only. This adds
@@ -72,7 +72,7 @@ was here still connects and sends; add the action and the request works.
         "sqs:ReceiveMessage",
         "sqs:DeleteMessage"
       ],
-      "Resource": "arn:aws:sqs:*:*:seskit-events"
+      "Resource": "arn:aws:sqs:*:*:seskit-*"
     },
     {
       "Effect": "Allow",
@@ -82,7 +82,7 @@ was here still connects and sends; add the action and the request works.
         "sns:Unsubscribe",
         "sns:DeleteTopic"
       ],
-      "Resource": "arn:aws:sns:*:*:seskit-events"
+      "Resource": "arn:aws:sns:*:*:seskit-*"
     },
     {
       "Effect": "Allow",
@@ -99,9 +99,11 @@ was here still connects and sends; add the action and the request works.
 }
 ```
 
-The SQS and SNS statements are **scoped by resource** to the queue and topic
-SESKit creates, so this policy cannot touch anything else you own even by
-mistake. If you change `EVENT_RESOURCE_PREFIX`, change those ARNs to match.
+The SQS and SNS statements are **scoped by resource** to names beginning
+`seskit-`, so this policy cannot touch anything else you own even by mistake.
+That matches the default name and the one the installer generates for each
+instance (`seskit-a1b2c3-events`). If you set `EVENT_RESOURCE_PREFIX` to
+something that does not begin with `seskit-`, change those ARNs to match.
 
 The delete permissions are there so that removing event reporting, or
 disconnecting the account, actually cleans up. Granting create without delete

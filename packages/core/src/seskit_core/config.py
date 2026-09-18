@@ -50,6 +50,14 @@ class EventIngestion(StrEnum):
     BOTH = "both"
 
 
+#: What EVENT_RESOURCE_PREFIX is when nobody set it. Named so the doctor and
+#: the AWS page can both ask "is this instance still on the shared name?":
+#: two instances on one AWS account and region with this prefix adopt each
+#: other's queue, and each receives a random half of the other's delivery
+#: events. The installer writes a unique one; a hand-made deployment is told.
+DEFAULT_EVENT_PREFIX = "seskit"
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=".env",
@@ -133,7 +141,7 @@ class Settings(BaseSettings):
     #: can host more than one instance without them fighting over one queue.
     #: Changing it after setup orphans the previous resources - teardown removes
     #: what was recorded, not what the current setting would name.
-    EVENT_RESOURCE_PREFIX: str = "seskit"
+    EVENT_RESOURCE_PREFIX: str = DEFAULT_EVENT_PREFIX
 
     #: The SES configuration set sends go through. Without one SES publishes no
     #: events at all, which is why it is recorded per message rather than
@@ -308,6 +316,13 @@ class Settings(BaseSettings):
         return not self.is_local
 
     @computed_field  # type: ignore[prop-decorator]
+    @property
+    def event_prefix_is_shared(self) -> bool:
+        """Still on the default name, which any other SESKit on the same AWS
+        account and region would also use.
+        """
+        return self.EVENT_RESOURCE_PREFIX == DEFAULT_EVENT_PREFIX
+
     @property
     def event_https_endpoint(self) -> str | None:
         """The URL to subscribe SNS to, or None if we cannot know it.

@@ -65,6 +65,10 @@ router = APIRouter(tags=["aws"], include_in_schema=False)
 #: than spent as a round trip that would fail with a message about endpoints.
 UNKNOWN_REGION_MESSAGE = "That is not a region where Amazon SES is available."
 
+#: The select no longer pre-chooses one, so this is what a form submitted
+#: without touching it gets - naming the field rather than calling it unknown.
+NO_REGION_MESSAGE = "Choose the region your Amazon SES identities are in."
+
 #: Where AWS takes a user to leave the sandbox (§8 asks for the link, not just
 #: the warning).
 PRODUCTION_ACCESS_URL = "https://docs.aws.amazon.com/ses/latest/dg/request-production-access.html"
@@ -111,6 +115,7 @@ async def _page(
         event_queue_name=queue_name_for(resolved.EVENT_RESOURCE_PREFIX),
         event_topic_name=topic_name_for(resolved.EVENT_RESOURCE_PREFIX),
         event_configuration_set=resolved.EVENT_CONFIGURATION_SET,
+        event_prefix_is_shared=resolved.event_prefix_is_shared,
         public_event_endpoint=resolved.event_https_endpoint,
         error=error,
     )
@@ -161,6 +166,8 @@ async def connect(
     access_key_id = access_key_id.strip()
     secret_access_key = secret_access_key.strip()
 
+    if not region:
+        return await _page(request, db, current, project, error=NO_REGION_MESSAGE, status_code=400)
     if not is_known_region(region):
         return await _page(
             request, db, current, project, error=UNKNOWN_REGION_MESSAGE, status_code=400
@@ -314,7 +321,12 @@ async def setup_event_reporting(
             secret_key=settings.SECRET_KEY,
         )
     except APIError as error:
-        await db.rollback()
+        # No rollback, as on the Emails page. Nothing is written before the
+        # call to AWS in any of the event services, and a rollback expires
+        # every loaded object - the template then lazy-loads the project from
+        # inside sync Jinja and the user sees a 500 instead of the message.
+        # Seen on a real host: an IAM refusal of sns:CreateTopic, normalised
+        # correctly, rendered as "Internal Server Error".
         return await _page(
             request,
             db,
@@ -364,7 +376,12 @@ async def remove_event_reporting(
     try:
         await teardown_events(db, provisioners, connection, secret_key=settings.SECRET_KEY)
     except APIError as error:
-        await db.rollback()
+        # No rollback, as on the Emails page. Nothing is written before the
+        # call to AWS in any of the event services, and a rollback expires
+        # every loaded object - the template then lazy-loads the project from
+        # inside sync Jinja and the user sees a 500 instead of the message.
+        # Seen on a real host: an IAM refusal of sns:CreateTopic, normalised
+        # correctly, rendered as "Internal Server Error".
         return await _page(
             request,
             db,
@@ -418,7 +435,12 @@ async def change_tracking(
             db, provisioners, connection, enabled=on, secret_key=settings.SECRET_KEY
         )
     except APIError as error:
-        await db.rollback()
+        # No rollback, as on the Emails page. Nothing is written before the
+        # call to AWS in any of the event services, and a rollback expires
+        # every loaded object - the template then lazy-loads the project from
+        # inside sync Jinja and the user sees a 500 instead of the message.
+        # Seen on a real host: an IAM refusal of sns:CreateTopic, normalised
+        # correctly, rendered as "Internal Server Error".
         return await _page(
             request,
             db,

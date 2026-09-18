@@ -70,6 +70,63 @@ def _llms_pages(config: dict[str, Any]) -> set[str]:
     return pages
 
 
+WORDS = {
+    "one": 1,
+    "two": 2,
+    "three": 3,
+    "four": 4,
+    "five": 5,
+    "six": 6,
+    "seven": 7,
+    "eight": 8,
+    "nine": 9,
+    "ten": 10,
+    "eleven": 11,
+    "twelve": 12,
+    "thirteen": 13,
+    "fourteen": 14,
+    "fifteen": 15,
+    "sixteen": 16,
+    "seventeen": 17,
+    "eighteen": 18,
+    "nineteen": 19,
+    "twenty": 20,
+}
+
+
+def test_the_iam_guide_counts_its_own_actions() -> None:
+    """Each policy heading says how many actions follow. The events heading
+    said nine for a policy that listed fifteen, and nobody noticed for six
+    releases - a number in prose and a list under it drift apart unless
+    something compares them.
+    """
+    import json
+    import re
+
+    guide = (ROOT / "docs" / "guides" / "iam-policies.md").read_text(encoding="utf-8")
+    sections = re.split(r"^## ", guide, flags=re.MULTILINE)[1:]
+    checked = 0
+    for section in sections:
+        heading = section.splitlines()[0]
+        said = re.search(r"\b(" + "|".join(WORDS) + r")\b (?:actions|more)", heading)
+        block = re.search(r"```json\n(.*?)```", section, re.S)
+        if not said or not block:
+            continue
+        policy = json.loads(block.group(1))
+        actions = [
+            action
+            for statement in policy["Statement"]
+            for action in (
+                statement["Action"]
+                if isinstance(statement["Action"], list)
+                else [statement["Action"]]
+            )
+        ]
+        assert WORDS[said.group(1)] == len(actions), heading
+        checked += 1
+    assert checked == 2, "both policy sections should have been counted"
+
+
 def test_the_agent_index_describes_every_page() -> None:
     """A page missing from llms.txt is invisible to anything reading it.
 

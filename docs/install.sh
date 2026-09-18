@@ -20,10 +20,15 @@
 #   SESKIT_DIR         where to clone. Default: ./seskit
 #   SESKIT_PUBLIC_URL  where this instance is reachable from outside.
 #                      Default: guessed from the public IP.
+#   SESKIT_EVENT_PREFIX
+#                      the name this instance's SQS queue, SNS topic and SES
+#                      configuration set are created under. Default: "seskit-"
+#                      plus six random hex digits, so two instances on one AWS
+#                      account never share a queue.
 #
 # Safe to run twice: an existing checkout is left alone, and an existing .env is
 # never overwritten, so a rerun cannot rotate SECRET_KEY and lock every project
-# out of its stored AWS credentials.
+# out of its stored AWS credentials - or rename its event resources.
 
 set -eu
 
@@ -158,10 +163,26 @@ else
         SECRET=$(od -An -tx1 -N32 /dev/urandom | tr -d ' \n')
     fi
 
+    # Event resources are named after this instance, not after "seskit".
+    # Two instances on one AWS account and region with the default name
+    # adopt each other's queue, and each then receives a random half of the
+    # other's delivery events; removing events on either deletes the
+    # other's. Seen on a real host. Six hex digits from the same source as
+    # the secret; the IAM policy in the docs matches any seskit-* name.
+    if [ -n "${SESKIT_EVENT_PREFIX:-}" ]; then
+        PREFIX="$SESKIT_EVENT_PREFIX"
+    else
+        PREFIX="seskit-$(od -An -tx1 -N3 /dev/urandom | tr -d ' \n')"
+    fi
+
     # A temporary file rather than sed -i, which takes a different argument on
     # BSD and GNU and silently creates a backup file on one of them.
-    sed "s|^SECRET_KEY=.*|SECRET_KEY=${SECRET}|" .env > .env.tmp
+    sed -e "s|^SECRET_KEY=.*|SECRET_KEY=${SECRET}|" \
+        -e "s|^EVENT_RESOURCE_PREFIX=.*|EVENT_RESOURCE_PREFIX=${PREFIX}|" \
+        -e "s|^EVENT_CONFIGURATION_SET=.*|EVENT_CONFIGURATION_SET=${PREFIX}|" \
+        .env > .env.tmp
     mv .env.tmp .env
+    say "event resources will be named ${PREFIX}-events and ${PREFIX}"
 
     # PUBLIC_BASE_URL is where this instance is reachable from outside. Unset,
     # every message goes out with no one-click unsubscribe header at all - a
@@ -178,17 +199,29 @@ else
 
     chmod 600 .env
     say "wrote .env with a generated SECRET_KEY"
+    FRESH=1
 fi
 
 # --------------------------------------------------------------------- run ---
 
-say "building and starting - the first build takes a few minutes"
+if [ "${FRESH:-0}" = 1 ]; then
+    say "building and starting - the first build takes a few minutes"
+else
+    say "building and starting"
+fi
 docker compose up -d --wait
+
+# The address the instance is reachable at, which is what was written to
+# .env - on a rerun, what an earlier run wrote. `hostname -I` was here
+# before and printed the private address on every cloud host, so the one
+# link a first-time user copies was dead.
+DASHBOARD=$(grep '^PUBLIC_BASE_URL=' .env | cut -d= -f2-)
+DASHBOARD="${DASHBOARD:-${PUBLIC_URL:-http://localhost:8000}}"
 
 printf '\n'
 say "SESKit is running."
 printf '\n'
-printf '  Dashboard   http://%s:8000\n' "$(hostname -I 2>/dev/null | awk '{print $1}' || echo localhost)"
+printf '  Dashboard   %s\n' "$DASHBOARD"
 printf '  Mailpit     http://localhost:8025    (local mail, until AWS is connected)\n'
 printf '\n'
 printf '  Next:\n'

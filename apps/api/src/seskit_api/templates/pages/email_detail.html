@@ -34,6 +34,15 @@
           {% endif %}
         </dd>
       </div>
+      {% if outcome %}
+        {# What the world did after SESKit sent it. Beside Status, not in
+           place of it: a bounced message was still sent. Before this, a
+           bounce showed only on the timeline below a status saying Sent. #}
+        <div class="datalist__row">
+          <dt>Outcome</dt>
+          <dd>{{ badge(outcome[0], tone=outcome[1]) }}</dd>
+        </div>
+      {% endif %}
       <div class="datalist__row">
         <dt>From</dt>
         <dd class="table__mono">{{ email.from_address }}</dd>

@@ -98,6 +98,27 @@ def test_an_unset_public_url_says_what_it_costs(settings: Settings) -> None:
     assert _named(results, "public url").fix
 
 
+def test_the_default_event_prefix_is_reported_with_the_reason(settings: Settings) -> None:
+    """Two instances on one AWS account with the default name adopt each
+    other's queue. Seen on a real host. Reported and not failed: one instance
+    per account is the common case and the default is fine for it.
+    """
+    results = check_configuration(_settings(settings, EVENT_RESOURCE_PREFIX="seskit"))
+
+    prefix = _named(results, "event prefix")
+    assert prefix.ok is True
+    assert "steals" in prefix.detail
+    assert "EVENT_RESOURCE_PREFIX" in prefix.fix
+
+
+def test_a_prefix_of_the_instances_own_passes_quietly(settings: Settings) -> None:
+    results = check_configuration(_settings(settings, EVENT_RESOURCE_PREFIX="seskit-a1b2c3"))
+
+    prefix = _named(results, "event prefix")
+    assert prefix.detail == "seskit-a1b2c3"
+    assert prefix.fix == ""
+
+
 # ---------------------------------------------------------------- probing ---
 
 

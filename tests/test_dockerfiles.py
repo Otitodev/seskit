@@ -145,6 +145,25 @@ def _compose() -> dict[str, Any]:
     return loaded
 
 
+def test_only_the_api_is_published_beyond_localhost() -> None:
+    """Docker publishes a bare "host:container" port on every interface and
+    writes its own iptables rules ahead of ufw, so on a server with no cloud
+    firewall the shipped stack put an unauthenticated Redis, a seskit/seskit
+    Postgres and Mailpit's inbox on the internet. Seen on a real host, hidden
+    there only by the security group. The API on 8000 is the one port meant
+    to be reached from outside.
+    """
+    services = _compose()["services"]
+    exposed = {
+        (name, str(port))
+        for name, service in services.items()
+        for port in service.get("ports", [])
+        if not str(port).startswith("127.0.0.1:")
+    }
+
+    assert exposed == {("api", "8000:8000")}
+
+
 def test_the_stack_applies_its_own_migrations() -> None:
     """`docker compose up` on a clean machine has to produce a working
     instance.

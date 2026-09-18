@@ -261,6 +261,7 @@ def provisioner_factory() -> type[FakeProvisioner]:
     reach AWS by forgetting to substitute something.
     """
     FakeProvisioner.calls = []
+    FakeProvisioner.error = None
     return FakeProvisioner
 
 
