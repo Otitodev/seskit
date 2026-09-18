@@ -485,4 +485,6 @@ async def test_events_are_newest_first(
 
     page = await signed_in_client.get(f"/emails/{email.id}")
 
-    assert page.text.index("Opened") < page.text.index("Delivered")
+    # Within the timeline: the Outcome row above it also says "Delivered".
+    timeline = page.text[page.text.index("Timeline") :]
+    assert timeline.index("Opened") < timeline.index("Delivered")
