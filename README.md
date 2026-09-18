@@ -4,48 +4,44 @@
 
 # SESKit
 
-**A self-hosted developer email platform built on Amazon SES.**
+**Self-hosted email platform built on Amazon SES.**
 
-The API, dashboard, delivery events, webhooks and suppression a hosted email
-service sells you — running in your own AWS account, on your own server.
+Run it on your own server, connect your AWS account, and get an email API
+and dashboard.
 
 [![CI](https://github.com/Otitodev/seskit/actions/workflows/ci.yml/badge.svg)](https://github.com/Otitodev/seskit/actions/workflows/ci.yml)
 [![PyPI](https://img.shields.io/pypi/v/seskit.svg)](https://pypi.org/project/seskit/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue.svg)](https://www.python.org/downloads/)
 
-[Documentation](https://otitodev.github.io/seskit/) ·
+[Docs](https://otitodev.github.io/seskit/) ·
 [Install](https://otitodev.github.io/seskit/getting-started/installation/) ·
-[Your first email](https://otitodev.github.io/seskit/getting-started/first-email/) ·
-[HTTP API](https://otitodev.github.io/seskit/reference/api/)
+[First email](https://otitodev.github.io/seskit/getting-started/first-email/) ·
+[API](https://otitodev.github.io/seskit/reference/api/)
 
 </div>
 
-<!-- screenshot: docs/assets/dashboard.png — the Overview page, light theme -->
-
 ## Features
 
-- **Send API** — `POST /v1/emails` with attachments, custom headers,
-  idempotency keys. Answers in milliseconds; a worker talks to SES.
-- **Python SDK** — `pip install seskit`. Typed, sync and async, optional.
-- **Bring your own AWS** — paste an access key per project; it is verified
-  against AWS and stored encrypted. Different projects, different accounts.
-- **Sender verification** — addresses and domains, with the DKIM records to
-  add and automatic re-checking.
-- **Delivery events** — delivered, bounced, complained, opened, clicked.
-  Polled over SQS by default, so it works behind NAT with no inbound port.
-- **Webhooks** — signed, retried with backoff, delivery log per endpoint.
-- **Suppression** — hard bounces and complaints stop future sends; RFC 8058
-  one-click unsubscribe.
-- **Dashboard** — delivery metrics, message timelines, a test-send form.
-  Server-rendered, no JavaScript build.
-- **One image** — Python + PostgreSQL + Redis. Runs anywhere Docker does.
+- **Send email** through a REST API or the Python SDK
+- **Verify senders** — email addresses and domains, with the DNS records to add
+- **Delivery events** — see whether each message was delivered, bounced, opened or clicked
+- **Webhooks** — get notified when something happens to a message
+- **Suppression list** — bounced and unsubscribed addresses are never sent to again
+- **Dashboard** — send a test message, watch deliveries, manage everything
+- **Request SES production access** from the dashboard
 
-## Get started
+## Run it
 
-Requires [Docker](https://docs.docker.com/get-docker/). No AWS account
-needed to try it — mail is captured by
-[Mailpit](https://mailpit.axllent.org/) instead of sent.
+You need Docker.
+
+```bash
+curl -fsSL https://otitodev.github.io/seskit/install.sh | sh
+```
+
+Open `http://<your-server>:8000`, create your account, and paste in an AWS
+access key. Put a TLS proxy in front before sending real mail.
+
+To try it locally without an AWS account, mail is captured by Mailpit:
 
 ```bash
 git clone https://github.com/Otitodev/seskit.git && cd seskit
@@ -53,8 +49,9 @@ cp .env.example .env
 docker compose up
 ```
 
-Dashboard at <http://localhost:8000>, inbox at <http://localhost:8025>. The
-first registration claims the instance. Create an API key, then send:
+## Send email
+
+Create an API key in the dashboard, then:
 
 ```bash
 curl -X POST http://localhost:8000/v1/emails \
@@ -63,6 +60,8 @@ curl -X POST http://localhost:8000/v1/emails \
   -d '{"from":"hello@example.com","to":["you@example.com"],
        "subject":"Hello","html":"<h1>It works</h1>"}'
 ```
+
+Or with Python (`pip install seskit`):
 
 ```python
 from seskit import SesKit
@@ -76,44 +75,11 @@ client.emails.send(
 )
 ```
 
-**On a server**, one line installs it and generates a real `SECRET_KEY`:
-
-```bash
-curl -fsSL https://otitodev.github.io/seskit/install.sh | sh
-```
-
-Behind a TLS proxy or on a managed platform? See
-[deploying](https://otitodev.github.io/seskit/operating/deploying/).
-
-## How it works
-
-```text
-your application                    your server
-┌──────────────────────┐           ┌──────────────────────────┐
-│ client.emails.send() │  ─HTTP→   │ API + dashboard          │
-│                      │           │ worker  ──────────────── │ ──→ Amazon SES
-└──────────────────────┘           │ PostgreSQL · Redis       │
-                                   └──────────────────────────┘
-```
-
-Two processes from one image. The API records a message and queues a job; the
-worker sends it, delivers webhooks, and polls for delivery events.
-
-Python 3.12 · FastAPI · SQLAlchemy 2 · PostgreSQL · Redis · ARQ · HTMX.
-No Node.js, anywhere.
-
-## Status
-
-Pre-release. Every candidate is tagged and
-[documented](https://github.com/Otitodev/seskit/releases). What remains before
-`v0.1.0` is stated in each release's notes.
-
 ## Contributing
 
-[**CONTRIBUTING.md**](CONTRIBUTING.md) has the setup, checks and commit
-convention. [`AGENTS.md`](AGENTS.md) orients a coding agent. Security issues
-go to [SECURITY.md](SECURITY.md), not a public issue.
+See [CONTRIBUTING.md](CONTRIBUTING.md). Report security issues through
+[SECURITY.md](SECURITY.md).
 
 ## License
 
-[MIT](LICENSE) © SESKit contributors
+[MIT](LICENSE)
