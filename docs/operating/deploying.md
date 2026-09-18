@@ -93,11 +93,14 @@ they cannot drift to different versions of the code.
 
 The shipped `docker-compose.yml` is a development stack, not a production one — it
 runs Mailpit, mounts your source for live reload, and publishes database ports
-to the host. For a server, take it as a starting point and:
+to the host. Those ports are bound to `127.0.0.1`, so nothing but the API on
+8000 is reachable from another machine even on a host with no firewall — and
+a host firewall would not have helped, since Docker writes its own iptables
+rules ahead of `ufw`. For a server, take it as a starting point and:
 
 - Remove the Mailpit service and the source bind mounts.
-- Stop publishing Postgres and Redis to the host; the Compose network is
-  enough.
+- Stop publishing Postgres and Redis to the host at all; the Compose network
+  is enough.
 - Set a real `SECRET_KEY`. It refuses to boot on the example value.
 - Put a TLS terminator in front — Caddy, nginx, or a load balancer.
 

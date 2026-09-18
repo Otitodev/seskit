@@ -23,7 +23,13 @@ services:
       # before Docker does - the container then looks healthy while every host
       # connection silently reaches the wrong database. Inside the Compose
       # network this is still plain "db:5432", so nothing else changes.
-      - "${POSTGRES_HOST_PORT:-55432}:5432"
+      #
+      # Bound to localhost, as is every port here except the API's. Without
+      # the address Docker publishes on every interface and writes its own
+      # iptables rules ahead of ufw - so on a server with no cloud firewall
+      # this was a seskit/seskit Postgres on the internet. Seen on a real
+      # host. `localhost:55432` still works for a developer.
+      - "127.0.0.1:${POSTGRES_HOST_PORT:-55432}:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-seskit} -d ${POSTGRES_DB:-seskit}"]
       interval: 5s
@@ -38,7 +44,7 @@ services:
       - seskit-redis-data:/data
     ports:
       # Same reasoning as Postgres above.
-      - "${REDIS_HOST_PORT:-56379}:6379"
+      - "127.0.0.1:${REDIS_HOST_PORT:-56379}:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -53,8 +59,10 @@ services:
       MP_SMTP_AUTH_ACCEPT_ANY: 1
       MP_SMTP_AUTH_ALLOW_INSECURE: 1
     ports:
-      - "1025:1025"
-      - "8025:8025"
+      # Localhost only: Mailpit's inbox shows every message this instance
+      # captured, and its SMTP port accepts anything.
+      - "127.0.0.1:1025:1025"
+      - "127.0.0.1:8025:8025"
 
   # Applies the schema, then exits. api and worker wait for it to succeed, so
   # `docker compose up` on a clean machine produces a working instance rather
