@@ -38,7 +38,7 @@ It is region-free, so it does not matter which region the console is showing.
 Name it `seskit-sending` and create it.
 
 Seven actions, and only two of them are needed to connect and look around.
-What each one is for, and the nine more that delivery events need, are in
+What each one is for, and the fifteen more that delivery events need, are in
 [IAM policies](iam-policies.md). **Do not attach `AdministratorAccess`** — an
 access key is a long-lived credential, and this one only needs to send mail.
 
