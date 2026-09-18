@@ -65,6 +65,10 @@ router = APIRouter(tags=["aws"], include_in_schema=False)
 #: than spent as a round trip that would fail with a message about endpoints.
 UNKNOWN_REGION_MESSAGE = "That is not a region where Amazon SES is available."
 
+#: The select no longer pre-chooses one, so this is what a form submitted
+#: without touching it gets - naming the field rather than calling it unknown.
+NO_REGION_MESSAGE = "Choose the region your Amazon SES identities are in."
+
 #: Where AWS takes a user to leave the sandbox (§8 asks for the link, not just
 #: the warning).
 PRODUCTION_ACCESS_URL = "https://docs.aws.amazon.com/ses/latest/dg/request-production-access.html"
@@ -162,6 +166,8 @@ async def connect(
     access_key_id = access_key_id.strip()
     secret_access_key = secret_access_key.strip()
 
+    if not region:
+        return await _page(request, db, current, project, error=NO_REGION_MESSAGE, status_code=400)
     if not is_known_region(region):
         return await _page(
             request, db, current, project, error=UNKNOWN_REGION_MESSAGE, status_code=400

@@ -297,7 +297,15 @@
         <div class="grow">
           <div class="field">
             <label class="field__label" for="region">Region</label>
-            <select class="select" id="region" name="region">
+            {# Nothing chosen until the user chooses. With the first region
+               selected by default, a connect went to us-east-1 on a real host
+               because nothing drew the eye to the field - and identities,
+               quota and the sandbox are all per region, so every later step
+               was in the wrong place. #}
+            <select class="select" id="region" name="region" required>
+              <option value="" {% if not connection %}selected{% endif %} disabled>
+                Choose the region your SES identities are in
+              </option>
               {% for code, label in regions %}
                 <option value="{{ code }}"
                         {% if connection and connection.region == code %}selected{% endif %}>
@@ -306,8 +314,9 @@
               {% endfor %}
             </select>
             <p class="field__hint">
-              The region your Amazon SES identities live in. Verification and
-              quota are per region.
+              The region your Amazon SES identities live in. Verification,
+              quota, the sandbox and delivery events are all per region, and
+              changing it later means disconnecting and connecting again.
             </p>
           </div>
         </div>

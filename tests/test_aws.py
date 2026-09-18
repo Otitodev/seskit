@@ -793,6 +793,35 @@ async def test_a_denied_review_says_so_and_offers_the_form_again(
     assert 'action="/aws/production-access"' in page.text
 
 
+async def test_no_region_is_pre_chosen(app_client: AsyncClient) -> None:
+    """With the first region selected by default a connect went to us-east-1
+    on a real host, and every later step was in the wrong region. The select
+    starts on a placeholder that cannot be submitted.
+    """
+    await _sign_in(app_client)
+
+    page = await app_client.get("/aws")
+
+    select = page.text[page.text.index('name="region"') :]
+    select = select[: select.index("</select>")]
+    assert "Choose the region" in select
+    assert select.count("selected") == 1
+    assert 'value="" selected' in select
+
+
+async def test_connecting_without_a_region_names_the_field(
+    app_client: AsyncClient, provider_factory: FakeProviderFactory
+) -> None:
+    await _sign_in(app_client)
+    token = await _csrf(app_client)
+
+    page = await app_client.post("/aws/connect", data=_connect_form(token, region=""))
+
+    assert page.status_code == 400
+    assert "Choose the region" in page.text
+    assert provider_factory.builds == 0
+
+
 async def test_an_unknown_region_is_refused_without_calling_aws(
     app_client: AsyncClient, provider_factory: FakeProviderFactory
 ) -> None:
