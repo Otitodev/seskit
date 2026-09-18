@@ -313,6 +313,9 @@ async def test_a_provider_failure_never_carries_the_botocore_message(
         (NoCredentialsError(), ErrorType.AUTHORIZATION_FAILED),
         (_client_error("AccessDenied"), ErrorType.AUTHORIZATION_FAILED),
         (_client_error("InvalidClientTokenId"), ErrorType.AUTHENTICATION_FAILED),
+        (_client_error("SignatureDoesNotMatch"), ErrorType.AUTHENTICATION_FAILED),
+        (_client_error("IncompleteSignature"), ErrorType.AUTHENTICATION_FAILED),
+        (_client_error("ExpiredToken"), ErrorType.AUTHENTICATION_FAILED),
         (_client_error("ExpiredToken"), ErrorType.AUTHENTICATION_FAILED),
         (_client_error("NotFoundException"), ErrorType.NOT_FOUND),
         (_client_error("ThrottlingException"), ErrorType.PROVIDER_ERROR),
@@ -322,6 +325,28 @@ async def test_a_provider_failure_never_carries_the_botocore_message(
 )
 def test_each_botocore_failure_maps_to_its_error_type(exc: Exception, expected: ErrorType) -> None:
     assert normalise_boto_error(exc, action=SES_ACCOUNT_ACTION).error_type is expected
+
+
+@pytest.mark.parametrize(
+    ("code", "says"),
+    [
+        ("InvalidClientTokenId", "does not recognise that access key ID"),
+        ("InvalidAccessKeyId", "does not recognise that access key ID"),
+        ("SignatureDoesNotMatch", "secret access key does not match"),
+        ("IncompleteSignature", "not an access key ID"),
+        ("ExpiredToken", "expired"),
+    ],
+)
+def test_a_rejected_credential_says_which_half_was_wrong(code: str, says: str) -> None:
+    """One sentence for four different refusals sent a user to rotate a key
+    that was fine, twice. A password manager had refilled the secret field
+    under a new key ID, and "rejected - expired or incorrect" pointed at the
+    key. AWS says which half is wrong; so does this.
+    """
+    error = normalise_boto_error(_client_error(code), action=SES_ACCOUNT_ACTION)
+
+    assert error.error_type is ErrorType.AUTHENTICATION_FAILED
+    assert says in error.message
 
 
 def test_missing_credentials_name_the_credential_chain() -> None:

@@ -47,15 +47,49 @@ _AUTHORIZATION_CODES = frozenset(
 )
 
 #: Codes that mean the credentials themselves are bad.
-_AUTHENTICATION_CODES = frozenset(
-    {
-        "InvalidClientTokenId",
-        "UnrecognizedClientException",
-        "InvalidAccessKeyId",
-        "SignatureDoesNotMatch",
-        "ExpiredToken",
-        "ExpiredTokenException",
-    }
+# Four different things AWS says about a credential, which used to come back
+# as one sentence: "rejected - expired or incorrect". On a real host that sent
+# a user to rotate a key that was fine, twice, when the secret field had been
+# refilled by a password manager. Each code now says which half is wrong.
+
+#: The access key ID is not one AWS knows. Mistyped, deleted, or not yet
+#: propagated to the regional endpoint - a key made seconds ago can be this.
+_UNKNOWN_KEY_CODES = frozenset(
+    {"InvalidClientTokenId", "UnrecognizedClientException", "InvalidAccessKeyId"}
+)
+
+#: The access key ID is known and the secret does not go with it.
+_WRONG_SECRET_CODES = frozenset({"SignatureDoesNotMatch"})
+
+#: The access key ID could not even be read as one - a character AWS does not
+#: allow, which is what a stray quote or a secret pasted into the ID field
+#: looks like. Was unmapped, and so a 502 "did not complete".
+_MALFORMED_KEY_CODES = frozenset({"IncompleteSignature", "InvalidSignatureException"})
+
+#: A session token past its time. SESKit stores long-term keys, so this only
+#: reaches a user who pasted temporary credentials from the console.
+_EXPIRED_CODES = frozenset({"ExpiredToken", "ExpiredTokenException"})
+
+_AUTHENTICATION_CODES = (
+    _UNKNOWN_KEY_CODES | _WRONG_SECRET_CODES | _MALFORMED_KEY_CODES | _EXPIRED_CODES
+)
+
+UNKNOWN_KEY_MESSAGE = (
+    "AWS does not recognise that access key ID. Check it was copied whole and is "
+    "active in IAM; a key created moments ago can take a little while to be known."
+)
+MISMATCHED_KEY_MESSAGE = (
+    "The secret access key does not match that access key ID. If your browser "
+    "offered a saved password for the field, it was an older secret - clear the "
+    "field and paste the new one."
+)
+MALFORMED_KEY_MESSAGE = (
+    "That is not an access key ID as AWS reads it - check nothing extra was "
+    "pasted, and that the ID and the secret are in the right fields."
+)
+EXPIRED_MESSAGE = (
+    "Those AWS credentials have expired. SESKit needs a long-term access key, "
+    "not temporary session credentials."
 )
 
 _NOT_FOUND_CODES = frozenset({"NotFoundException", "ResourceNotFoundException"})
@@ -83,6 +117,16 @@ def error_code(exc: ClientError) -> str:
     return str(code) if code else ""
 
 
+def _credential_message(code: str) -> str:
+    if code in _WRONG_SECRET_CODES:
+        return MISMATCHED_KEY_MESSAGE
+    if code in _MALFORMED_KEY_CODES:
+        return MALFORMED_KEY_MESSAGE
+    if code in _EXPIRED_CODES:
+        return EXPIRED_MESSAGE
+    return UNKNOWN_KEY_MESSAGE
+
+
 def normalise_boto_error(exc: Exception, *, action: str) -> APIError:
     """Map a botocore exception onto an :class:`APIError`.
 
@@ -105,10 +149,7 @@ def normalise_boto_error(exc: Exception, *, action: str) -> APIError:
                 f"Add {action} to its IAM policy and try again.",
             )
         if code in _AUTHENTICATION_CODES:
-            return APIError(
-                ErrorType.AUTHENTICATION_FAILED,
-                "The AWS credentials were rejected. They may be expired or incorrect.",
-            )
+            return APIError(ErrorType.AUTHENTICATION_FAILED, _credential_message(code))
         if code in _NOT_FOUND_CODES:
             return APIError(ErrorType.NOT_FOUND, "The requested AWS resource was not found.")
         if code in _REJECTED_CODES:
