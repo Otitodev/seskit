@@ -226,10 +226,9 @@ async def teardown_events(
     others = await count_other_users(session, connection)
     infrastructure = connection.event_infrastructure
 
-    connection.clear_event_infrastructure()
-    await session.flush()
-
     if others:
+        connection.clear_event_infrastructure()
+        await session.flush()
         logger.info(
             "events_kept_for_other_projects",
             project_id=connection.project_id,
@@ -238,10 +237,16 @@ async def teardown_events(
         )
         return False
 
+    # AWS first, the row second. The other way round, a removal that fails
+    # halfway leaves a row saying "no events" while the queue, topic and
+    # configuration set are all still there - and nothing left to name them.
     provisioner = provisioner_factory(
         connection.region, stored_credentials(connection, secret_key=secret_key)
     )
     await provisioner.remove_events(infrastructure)
+
+    connection.clear_event_infrastructure()
+    await session.flush()
 
     logger.info("events_torn_down", project_id=connection.project_id, region=connection.region)
     return True
@@ -260,9 +265,8 @@ async def set_open_click_tracking(
     Stored even when there is no infrastructure yet, so the preference survives
     until events are set up rather than being silently forgotten.
     """
-    connection.track_opens_and_clicks = enabled
-
     if connection.events_enabled:
+        # AWS first: a refusal must leave the row saying what AWS still does.
         provisioner = provisioner_factory(
             connection.region, stored_credentials(connection, secret_key=secret_key)
         )
@@ -271,5 +275,6 @@ async def set_open_click_tracking(
         )
         connection.record_event_infrastructure(infrastructure)
 
+    connection.track_opens_and_clicks = enabled
     await session.flush()
     return connection

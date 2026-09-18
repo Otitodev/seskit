@@ -223,10 +223,17 @@ class FakeProvisioner:
     #: Shared, because a factory builds a new instance per call and a test needs
     #: to see every call across a request.
     calls: ClassVar[list[str]] = []
+    #: What every call should fail with, if it should. Class-level for the
+    #: same reason as `calls`; the fixture resets it.
+    error: ClassVar[APIError | None] = None
 
     def __init__(self, region: str, credentials: AWSCredentials | None = None) -> None:
         self.region = region
         self.credentials = credentials
+
+    def _refuse(self) -> None:
+        if FakeProvisioner.error is not None:
+            raise FakeProvisioner.error
 
     async def provision_events(
         self,
@@ -237,6 +244,7 @@ class FakeProvisioner:
         https_endpoint: str | None = None,
         track_opens_and_clicks: bool = False,
     ) -> EventInfrastructure:
+        self._refuse()
         FakeProvisioner.calls.append("provision")
         return EventInfrastructure(
             configuration_set=configuration_set,
@@ -248,11 +256,13 @@ class FakeProvisioner:
         )
 
     async def remove_events(self, infrastructure: EventInfrastructure) -> None:
+        self._refuse()
         FakeProvisioner.calls.append("remove")
 
     async def set_open_click_tracking(
         self, infrastructure: EventInfrastructure, *, enabled: bool
     ) -> EventInfrastructure:
+        self._refuse()
         FakeProvisioner.calls.append(f"tracking:{enabled}")
         return replace(infrastructure, tracks_opens_and_clicks=enabled)
 

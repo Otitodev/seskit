@@ -314,7 +314,12 @@ async def setup_event_reporting(
             secret_key=settings.SECRET_KEY,
         )
     except APIError as error:
-        await db.rollback()
+        # No rollback, as on the Emails page. Nothing is written before the
+        # call to AWS in any of the event services, and a rollback expires
+        # every loaded object - the template then lazy-loads the project from
+        # inside sync Jinja and the user sees a 500 instead of the message.
+        # Seen on a real host: an IAM refusal of sns:CreateTopic, normalised
+        # correctly, rendered as "Internal Server Error".
         return await _page(
             request,
             db,
@@ -364,7 +369,12 @@ async def remove_event_reporting(
     try:
         await teardown_events(db, provisioners, connection, secret_key=settings.SECRET_KEY)
     except APIError as error:
-        await db.rollback()
+        # No rollback, as on the Emails page. Nothing is written before the
+        # call to AWS in any of the event services, and a rollback expires
+        # every loaded object - the template then lazy-loads the project from
+        # inside sync Jinja and the user sees a 500 instead of the message.
+        # Seen on a real host: an IAM refusal of sns:CreateTopic, normalised
+        # correctly, rendered as "Internal Server Error".
         return await _page(
             request,
             db,
@@ -418,7 +428,12 @@ async def change_tracking(
             db, provisioners, connection, enabled=on, secret_key=settings.SECRET_KEY
         )
     except APIError as error:
-        await db.rollback()
+        # No rollback, as on the Emails page. Nothing is written before the
+        # call to AWS in any of the event services, and a rollback expires
+        # every loaded object - the template then lazy-loads the project from
+        # inside sync Jinja and the user sees a 500 instead of the message.
+        # Seen on a real host: an IAM refusal of sns:CreateTopic, normalised
+        # correctly, rendered as "Internal Server Error".
         return await _page(
             request,
             db,

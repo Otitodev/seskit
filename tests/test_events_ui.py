@@ -18,7 +18,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from fakes.ses import FAKE_CREDENTIALS, TEST_SECRET_KEY, FakeProvisioner
+from fakes.ses import FAKE_CREDENTIALS, TEST_SECRET_KEY, FakeProvisioner, denied
 from httpx import AsyncClient
 from seskit_core.models import (
     AWSConnection,
@@ -143,6 +143,70 @@ async def test_removing_events_takes_them_out_of_aws(
     await db_session.refresh(connection)
     assert connection.events_enabled is False
     assert "remove" in FakeProvisioner.calls
+
+
+# ------------------------------------------------------------ AWS said no ---
+#
+# Seen on a real host: IAM refused sns:CreateTopic, the adapter normalised it
+# correctly, and the user saw "Internal Server Error". The route rolled the
+# session back before re-rendering, which expired every loaded object, and the
+# template then lazy-loaded the project from inside sync Jinja. The harness
+# cannot reproduce the greenlet failure itself - `app_client` joins the test
+# transaction as a savepoint - so what these pin is the contract: the message
+# on the page, a 400, and a row that still says what AWS still has.
+
+
+async def test_a_refused_setup_shows_the_message_not_a_500(
+    signed_in_client: AsyncClient, db_session: AsyncSession
+) -> None:
+    connection = await _connect(db_session)
+    FakeProvisioner.error = denied("sns:CreateTopic")
+    token = await _csrf(signed_in_client)
+
+    page = await signed_in_client.post("/aws/events/setup", data={"csrf_token": token})
+
+    assert page.status_code == 400
+    assert "sns:CreateTopic" in page.text
+    assert "Internal Server Error" not in page.text
+    await db_session.refresh(connection)
+    assert connection.events_enabled is False
+
+
+async def test_a_refused_removal_leaves_the_row_and_aws_agreeing(
+    signed_in_client: AsyncClient, db_session: AsyncSession
+) -> None:
+    """Removing failed, so nothing changed - including the row. Before, the
+    row was cleared first and a failure left the queue, topic and
+    configuration set in AWS with nothing left that named them.
+    """
+    connection = await _connect(db_session, events=True)
+    FakeProvisioner.error = denied("sqs:DeleteQueue")
+    token = await _csrf(signed_in_client)
+
+    page = await signed_in_client.post("/aws/events/remove", data={"csrf_token": token})
+
+    assert page.status_code == 400
+    assert "sqs:DeleteQueue" in page.text
+    await db_session.refresh(connection)
+    assert connection.events_enabled is True
+
+
+async def test_a_refused_tracking_change_does_not_claim_it_happened(
+    signed_in_client: AsyncClient, db_session: AsyncSession
+) -> None:
+    connection = await _connect(db_session, events=True)
+    FakeProvisioner.error = denied("ses:UpdateConfigurationSetEventDestination")
+    token = await _csrf(signed_in_client)
+
+    page = await signed_in_client.post(
+        "/aws/events/tracking", data={"csrf_token": token, "enabled": "on"}
+    )
+
+    assert page.status_code == 400
+    assert "ses:UpdateConfigurationSetEventDestination" in page.text
+    await db_session.refresh(connection)
+    assert connection.track_opens_and_clicks is False
+    assert "tracking on" not in page.text.lower()
 
 
 async def test_setup_without_a_connection_does_nothing(
