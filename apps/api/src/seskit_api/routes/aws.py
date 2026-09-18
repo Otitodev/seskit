@@ -111,6 +111,7 @@ async def _page(
         event_queue_name=queue_name_for(resolved.EVENT_RESOURCE_PREFIX),
         event_topic_name=topic_name_for(resolved.EVENT_RESOURCE_PREFIX),
         event_configuration_set=resolved.EVENT_CONFIGURATION_SET,
+        event_prefix_is_shared=resolved.event_prefix_is_shared,
         public_event_endpoint=resolved.event_https_endpoint,
         error=error,
     )

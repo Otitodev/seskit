@@ -116,6 +116,10 @@ async def test_the_page_says_what_it_will_create(
     assert "configuration set" in page.text
     # And that it can be undone, which is the other half of informed consent.
     assert "deletes them" in page.text
+    # And, on the default name, that another instance on the account would
+    # share the queue. Seen on a real host; said before the button.
+    assert "These are the default names" in page.text
+    assert "EVENT_RESOURCE_PREFIX" in page.text
 
 
 async def test_setting_up_events_records_the_infrastructure(

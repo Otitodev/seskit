@@ -96,6 +96,25 @@ def check_configuration(settings: Settings) -> list[Result]:
                 fix="Set PUBLIC_BASE_URL to where this instance is reachable, if you want either.",
             )
         )
+
+    # Reported, not failed: one instance per account is the common case and
+    # the default is fine for it. The installer writes a unique prefix; this
+    # is for the deployment that was set up by hand.
+    if settings.event_prefix_is_shared:
+        results.append(
+            Result(
+                "event prefix",
+                True,
+                f"{settings.EVENT_RESOURCE_PREFIX!r} - the default. Any other SESKit on the "
+                "same AWS account and region shares its queue and steals its delivery events",
+                fix=(
+                    "Set EVENT_RESOURCE_PREFIX and EVENT_CONFIGURATION_SET to a name of this "
+                    "instance's own, e.g. seskit-a1b2c3, before setting up event reporting."
+                ),
+            )
+        )
+    else:
+        results.append(Result("event prefix", True, settings.EVENT_RESOURCE_PREFIX))
     return results
 
 
