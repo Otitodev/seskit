@@ -1031,6 +1031,24 @@ async def test_the_stored_key_is_shown_shortened(
     assert FAKE_CREDENTIALS.access_key_id not in page.text
 
 
+async def test_the_secret_field_keeps_the_password_manager_out(
+    app_client: AsyncClient,
+) -> None:
+    """A password field beside a text field is what a password manager saves
+    and refills. On a real host Chrome refilled an older key's secret under a
+    new key ID; autocomplete=new-password is the one signal every browser
+    honours for "do not fill this".
+    """
+    await _sign_in(app_client)
+
+    page = await app_client.get("/aws")
+
+    field = page.text[page.text.index('name="secret_access_key"') :]
+    field = field[: field.index(">")]
+    assert 'autocomplete="new-password"' in field
+    assert 'type="password"' in field
+
+
 async def test_the_secret_never_reaches_the_page(
     app_client: AsyncClient, db_session: AsyncSession
 ) -> None:

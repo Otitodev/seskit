@@ -234,7 +234,7 @@
         {{ field("access_key_id", "New access key ID",
                  attrs='maxlength="128" autocomplete="off" spellcheck="false"') }}
         {{ field("secret_access_key", "New secret access key", type="password",
-                 attrs='maxlength="256" autocomplete="off"') }}
+                 attrs='maxlength="256" autocomplete="new-password" spellcheck="false" data-lpignore="true" data-1p-ignore data-bwignore') }}
 
         {{ button("Replace key", type="submit") }}
       </form>
@@ -288,11 +288,18 @@
 
         {# type=password so it is not left legible on a shared screen, and never
            rendered back into the form on an error - there is no route that can
-           return it once stored. #}
+           return it once stored.
+
+           autocomplete=new-password, and the vendor opt-outs, because a
+           password field on a form with a text field beside it is exactly what
+           a password manager saves and refills. On a real host Chrome refilled
+           an older key's secret under a new key ID, and the user rotated a good
+           key twice chasing "rejected - expired or incorrect". #}
         {{ field("secret_access_key", "Secret access key", type="password",
                  hint="Shown once by AWS when the key is created. SESKit stores
-                       it encrypted and never displays it again.",
-                 attrs='maxlength="256" autocomplete="off"') }}
+                       it encrypted and never displays it again. If your browser
+                       offers a saved password here, decline it - it is an old key.",
+                 attrs='maxlength="256" autocomplete="new-password" spellcheck="false" data-lpignore="true" data-1p-ignore data-bwignore') }}
 
         <div class="grow">
           <div class="field">
