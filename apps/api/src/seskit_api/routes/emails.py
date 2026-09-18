@@ -25,7 +25,7 @@ from seskit_core.config import Settings
 from seskit_core.db import get_session
 from seskit_core.errors import APIError
 from seskit_core.logging import get_logger
-from seskit_core.models import Email, EmailStatus, Project
+from seskit_core.models import Email, EmailEvent, EmailStatus, EventType, Project
 from seskit_core.services import (
     Outgoing,
     accept_email,
@@ -269,6 +269,7 @@ async def email_detail(
         # answer either way, so a stranger cannot probe for real ids.
         raise AuthenticationRequired("/emails")
 
+    events = await list_events(db, email.id)
     return render(
         request,
         "pages/email_detail.html",
@@ -277,8 +278,31 @@ async def email_detail(
         project=project,
         projects=await list_projects(db, current.user.id),
         email=email,
-        events=await list_events(db, email.id),
+        events=events,
+        outcome=_outcome(email, events),
     )
+
+
+def _outcome(email: Email, events: list[EmailEvent]) -> tuple[str, str] | None:
+    """What became of the message after SESKit sent it, as a badge.
+
+    Status says whether SESKit did its job; this says what the world did
+    next. Kept separate rather than collapsed, because a bounced message was
+    still sent - and on a real host a bounce showed only on the timeline,
+    below the fold, under a status that said "Sent".
+
+    Bounce and complaint win over delivery: a message delivered and then
+    complained about is a complaint. Nothing reported is no row at all - the
+    timeline already explains that state.
+    """
+    kinds = {event.event_type for event in events}
+    if EventType.COMPLAINED.value in kinds:
+        return ("Complained", "danger")
+    if EventType.BOUNCED.value in kinds:
+        return ("Bounced", "danger")
+    if email.delivered_at or EventType.DELIVERED.value in kinds:
+        return ("Delivered", "success")
+    return None
 
 
 async def status_counts(db: AsyncSession, project_id: str) -> dict[str, int]:

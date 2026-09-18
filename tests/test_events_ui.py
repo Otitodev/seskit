@@ -429,6 +429,34 @@ async def test_a_bounce_does_not_contradict_the_send_status(
 
     assert "Sent" in page.text
     assert "Bounced" in page.text
+    # And the bounce is said at the top, beside the status, not only on the
+    # timeline below it. Seen on a real host: a bounced message whose header
+    # said "Sent" and nothing else.
+    delivery = page.text[page.text.index("Outcome") : page.text.index("Timeline")]
+    assert "Bounced" in delivery
+
+
+async def test_a_delivered_message_says_so_at_the_top(
+    signed_in_client: AsyncClient, db_session: AsyncSession
+) -> None:
+    email = await _email(db_session, configuration_set="seskit")
+    email.delivered_at = datetime(2026, 8, 30, 9, 0, 1, tzinfo=UTC)
+    await db_session.flush()
+
+    page = await signed_in_client.get(f"/emails/{email.id}")
+
+    delivery = page.text[page.text.index("Outcome") : page.text.index("Timeline")]
+    assert "Delivered" in delivery
+
+
+async def test_a_message_nothing_was_reported_for_has_no_outcome(
+    signed_in_client: AsyncClient, db_session: AsyncSession
+) -> None:
+    email = await _email(db_session, configuration_set="seskit")
+
+    page = await signed_in_client.get(f"/emails/{email.id}")
+
+    assert "Outcome" not in page.text
 
 
 async def test_events_are_newest_first(
