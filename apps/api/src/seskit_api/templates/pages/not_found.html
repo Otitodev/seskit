@@ -1,0 +1,12 @@
+{% extends "base_auth.html" %}
+{% from "components/ui.html" import button %}
+
+{% block title %}Page not found · SESKit{% endblock %}
+
+{% block content %}
+  <div class="auth__header">
+    <h1 class="auth__title">Page not found</h1>
+    <p class="auth__subtitle">That address doesn't lead anywhere in SESKit.</p>
+  </div>
+  {{ button("Go to dashboard", variant="primary", href="/", attrs='class="btn btn--primary auth__submit"') }}
+{% endblock %}

@@ -17,6 +17,7 @@ from seskit_core.db import dispose_engine
 from seskit_core.errors import APIError, ErrorType
 from seskit_core.logging import configure_logging, get_logger
 from seskit_core.redis import close_redis
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from seskit_api.dependencies import AuthenticationRequired
 from seskit_api.middleware import (
@@ -38,6 +39,7 @@ from seskit_api.routes import (
     webhooks,
 )
 from seskit_api.routes import v1 as v1_routes
+from seskit_api.templating import templates
 
 PACKAGE_DIR = Path(__file__).parent
 STATIC_DIR = PACKAGE_DIR / "static"
@@ -196,6 +198,34 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         return JSONResponse(
             status_code=422,
             content=APIError(ErrorType.INVALID_REQUEST, _describe(exc), status_code=422).as_dict(),
+        )
+
+    @app.exception_handler(StarletteHTTPException)
+    async def _http_exception(request: Request, exc: StarletteHTTPException) -> Response:
+        """A styled page for an unmatched route, an envelope for an unmatched call (§19).
+
+        Starlette raises this both for "no route matched" and for "method not
+        allowed on a known route" - so a stray ``POST /aws`` gets the same
+        treatment as a typo'd path instead of a second, unhandled gap.
+
+        Rendered with ``TemplateResponse`` directly rather than ``render()``:
+        this page is reachable whether or not the visitor is signed in, and
+        ``render()`` requires a ``CurrentUser`` that no dependency has run here
+        to produce.
+        """
+        if request.url.path.startswith("/v1"):
+            return JSONResponse(
+                status_code=exc.status_code,
+                content=APIError(
+                    ErrorType.NOT_FOUND, "Not found.", status_code=exc.status_code
+                ).as_dict(),
+            )
+
+        return templates.TemplateResponse(
+            request=request,
+            name="pages/not_found.html",
+            context={"csp_nonce": getattr(request.state, "csp_nonce", "")},
+            status_code=exc.status_code,
         )
 
     @app.exception_handler(Exception)
