@@ -144,17 +144,125 @@ def queue_policy(*, queue_arn: str, topic_arn: str) -> str:
     )
 
 
-class SESEventProvisioner:
+class _QueueTopicPlumbing:
+    """The SQS and SNS calls both provisioners make.
+
+    Events and received mail travel the same way - SES publishes to a topic,
+    the topic writes to a queue, the worker polls it - so the create, subscribe
+    and tear-down calls, and the "already gone is done" rule for teardown, are
+    written once. What differs is what sits in front of the topic: a
+    configuration set for events, a receipt rule for mail.
+    """
+
+    def __init__(self, region: str, credentials: AWSCredentials) -> None:
+        self.region = region
+        self._session = build_session(region, credentials)
+
+    def _sqs(self) -> Any:
+        return self._session.client("sqs", config=BOTO_CONFIG)
+
+    def _sns(self) -> Any:
+        return self._session.client("sns", config=BOTO_CONFIG)
+
+    async def _create_queue(self, name: str) -> str:
+        try:
+            response = await call(self._sqs().create_queue, QueueName=name)
+        except Exception as exc:
+            raise normalise_boto_error(exc, action=SQS_CREATE_ACTION) from exc
+        return str(response["QueueUrl"])
+
+    async def _queue_arn(self, queue_url: str) -> str:
+        try:
+            response = await call(
+                self._sqs().get_queue_attributes,
+                QueueUrl=queue_url,
+                AttributeNames=["QueueArn"],
+            )
+        except Exception as exc:
+            raise normalise_boto_error(exc, action=SQS_ATTRIBUTES_ACTION) from exc
+        return str(response["Attributes"]["QueueArn"])
+
+    async def _allow_topic_to_send(self, *, queue_url: str, queue_arn: str, topic_arn: str) -> None:
+        try:
+            await call(
+                self._sqs().set_queue_attributes,
+                QueueUrl=queue_url,
+                Attributes={"Policy": queue_policy(queue_arn=queue_arn, topic_arn=topic_arn)},
+            )
+        except Exception as exc:
+            raise normalise_boto_error(exc, action=SQS_POLICY_ACTION) from exc
+
+    async def _create_topic(self, name: str) -> str:
+        try:
+            response = await call(self._sns().create_topic, Name=name)
+        except Exception as exc:
+            raise normalise_boto_error(exc, action=SNS_CREATE_ACTION) from exc
+        return str(response["TopicArn"])
+
+    async def _subscribe(self, topic_arn: str, *, protocol: str, endpoint: str) -> str:
+        try:
+            response = await call(
+                self._sns().subscribe,
+                TopicArn=topic_arn,
+                Protocol=protocol,
+                Endpoint=endpoint,
+                # Off, and this is load-bearing. Raw delivery strips the SNS
+                # envelope, and its MessageId is what deduplication keys on -
+                # the event body is identical across redeliveries.
+                Attributes={"RawMessageDelivery": "false"},
+                ReturnSubscriptionArn=True,
+            )
+        except Exception as exc:
+            raise normalise_boto_error(exc, action=SNS_SUBSCRIBE_ACTION) from exc
+        return str(response["SubscriptionArn"])
+
+    async def _unsubscribe(self, subscription_arn: str) -> None:
+        if not subscription_arn.startswith("arn:"):
+            # SNS returns "PendingConfirmation" instead of an ARN for an
+            # unconfirmed HTTPS subscription. There is nothing to unsubscribe
+            # yet, and passing that string back would be an error, not a no-op.
+            return
+        await self._tolerate_missing(
+            self._sns().unsubscribe,
+            action=SNS_UNSUBSCRIBE_ACTION,
+            SubscriptionArn=subscription_arn,
+        )
+
+    async def _delete_topic(self, topic_arn: str) -> None:
+        await self._tolerate_missing(
+            self._sns().delete_topic, action=SNS_DELETE_ACTION, TopicArn=topic_arn
+        )
+
+    async def _delete_queue(self, queue_url: str) -> None:
+        await self._tolerate_missing(
+            self._sqs().delete_queue, action=SQS_DELETE_ACTION, QueueUrl=queue_url
+        )
+
+    async def _tolerate_missing(self, func: Any, *, action: str, **kwargs: Any) -> None:
+        """Run one teardown step, treating "already gone" as done.
+
+        Logged rather than raised for any other failure too. Teardown removes
+        several things and the caller has already decided they should go; one
+        step failing must not strand the rest, and the user needs to be told
+        what is left rather than handed a traceback mid-way.
+        """
+        try:
+            await call(func, **kwargs)
+        except ClientError as exc:
+            if error_code(exc) in _NOT_FOUND:
+                return
+            logger.warning("event_teardown_step_failed", action=action, code=error_code(exc))
+        except Exception:
+            logger.warning("event_teardown_step_failed", action=action)
+
+
+class SESEventProvisioner(_QueueTopicPlumbing):
     """Builds and removes event infrastructure in one account and region.
 
     Constructed per request like :class:`~seskit_provider_aws_ses.SESProvider`,
     and for the same reasons: clients are cheap, region varies per project, and
     a cached client outlives the credentials it was built with.
     """
-
-    def __init__(self, region: str, credentials: AWSCredentials) -> None:
-        self.region = region
-        self._session = build_session(region, credentials)
 
     # ------------------------------------------------------------- create ---
 
@@ -274,66 +382,8 @@ class SESEventProvisioner:
 
     # ------------------------------------------------------------ internal ---
 
-    def _sqs(self) -> Any:
-        return self._session.client("sqs", config=BOTO_CONFIG)
-
-    def _sns(self) -> Any:
-        return self._session.client("sns", config=BOTO_CONFIG)
-
     def _ses(self) -> Any:
         return self._session.client("sesv2", config=BOTO_CONFIG)
-
-    async def _create_queue(self, name: str) -> str:
-        try:
-            response = await call(self._sqs().create_queue, QueueName=name)
-        except Exception as exc:
-            raise normalise_boto_error(exc, action=SQS_CREATE_ACTION) from exc
-        return str(response["QueueUrl"])
-
-    async def _queue_arn(self, queue_url: str) -> str:
-        try:
-            response = await call(
-                self._sqs().get_queue_attributes,
-                QueueUrl=queue_url,
-                AttributeNames=["QueueArn"],
-            )
-        except Exception as exc:
-            raise normalise_boto_error(exc, action=SQS_ATTRIBUTES_ACTION) from exc
-        return str(response["Attributes"]["QueueArn"])
-
-    async def _allow_topic_to_send(self, *, queue_url: str, queue_arn: str, topic_arn: str) -> None:
-        try:
-            await call(
-                self._sqs().set_queue_attributes,
-                QueueUrl=queue_url,
-                Attributes={"Policy": queue_policy(queue_arn=queue_arn, topic_arn=topic_arn)},
-            )
-        except Exception as exc:
-            raise normalise_boto_error(exc, action=SQS_POLICY_ACTION) from exc
-
-    async def _create_topic(self, name: str) -> str:
-        try:
-            response = await call(self._sns().create_topic, Name=name)
-        except Exception as exc:
-            raise normalise_boto_error(exc, action=SNS_CREATE_ACTION) from exc
-        return str(response["TopicArn"])
-
-    async def _subscribe(self, topic_arn: str, *, protocol: str, endpoint: str) -> str:
-        try:
-            response = await call(
-                self._sns().subscribe,
-                TopicArn=topic_arn,
-                Protocol=protocol,
-                Endpoint=endpoint,
-                # Off, and this is load-bearing. Raw delivery strips the SNS
-                # envelope, and its MessageId is what deduplication keys on -
-                # the event body is identical across redeliveries.
-                Attributes={"RawMessageDelivery": "false"},
-                ReturnSubscriptionArn=True,
-            )
-        except Exception as exc:
-            raise normalise_boto_error(exc, action=SNS_SUBSCRIBE_ACTION) from exc
-        return str(response["SubscriptionArn"])
 
     async def _create_configuration_set(self, name: str) -> None:
         try:
@@ -405,42 +455,3 @@ class SESEventProvisioner:
             action=SES_DELETE_SET_ACTION,
             ConfigurationSetName=name,
         )
-
-    async def _unsubscribe(self, subscription_arn: str) -> None:
-        if not subscription_arn.startswith("arn:"):
-            # SNS returns "PendingConfirmation" instead of an ARN for an
-            # unconfirmed HTTPS subscription. There is nothing to unsubscribe
-            # yet, and passing that string back would be an error, not a no-op.
-            return
-        await self._tolerate_missing(
-            self._sns().unsubscribe,
-            action=SNS_UNSUBSCRIBE_ACTION,
-            SubscriptionArn=subscription_arn,
-        )
-
-    async def _delete_topic(self, topic_arn: str) -> None:
-        await self._tolerate_missing(
-            self._sns().delete_topic, action=SNS_DELETE_ACTION, TopicArn=topic_arn
-        )
-
-    async def _delete_queue(self, queue_url: str) -> None:
-        await self._tolerate_missing(
-            self._sqs().delete_queue, action=SQS_DELETE_ACTION, QueueUrl=queue_url
-        )
-
-    async def _tolerate_missing(self, func: Any, *, action: str, **kwargs: Any) -> None:
-        """Run one teardown step, treating "already gone" as done.
-
-        Logged rather than raised for any other failure too. Teardown removes
-        several things and the caller has already decided they should go; one
-        step failing must not strand the rest, and the user needs to be told
-        what is left rather than handed a traceback mid-way.
-        """
-        try:
-            await call(func, **kwargs)
-        except ClientError as exc:
-            if error_code(exc) in _NOT_FOUND:
-                return
-            logger.warning("event_teardown_step_failed", action=action, code=error_code(exc))
-        except Exception:
-            logger.warning("event_teardown_step_failed", action=action)
