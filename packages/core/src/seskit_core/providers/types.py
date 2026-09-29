@@ -309,3 +309,54 @@ class QueuedNotification:
     body: str
     #: The queue's own id, for logs. Also not the deduplication key.
     queue_message_id: str = ""
+
+
+# --------------------------------------------------- inbound infrastructure ---
+
+
+@dataclass(frozen=True, slots=True)
+class InboundInfrastructure:
+    """What a provider created so received mail can reach SESKit.
+
+    The shared half: one bucket, one topic and one queue per account and
+    region, however many domains receive mail through them. Recorded rather
+    than re-derived from names for the same reason :class:`EventInfrastructure`
+    is - teardown must remove what was created and nothing else.
+
+    A raw message is held in ``bucket`` and only announced on the topic. The
+    announcement carries the message's metadata and where it was put, never
+    its content, so it stays small however large the mail is.
+    """
+
+    bucket: str = ""
+    topic_arn: str = ""
+    queue_url: str = ""
+    queue_arn: str = ""
+    subscription_arn: str = ""
+
+    @property
+    def exists(self) -> bool:
+        """Whether anything was provisioned at all."""
+        return bool(self.bucket or self.topic_arn or self.queue_url)
+
+
+@dataclass(frozen=True, slots=True)
+class InboundRule:
+    """One domain's rule for receiving mail: what SESKit added, and where.
+
+    The other half of the plumbing, and the half that is per domain. It goes
+    into whichever rule set the account already has active - a provider may
+    never replace that set, because doing so would switch off whatever the
+    user was already receiving.
+    """
+
+    name: str
+    rule_set: str
+    #: Whether SESKit had to create the rule set because none was active.
+    #: Teardown may remove a set only if this is true and it is now empty;
+    #: one the user made is theirs, empty or not.
+    created_rule_set: bool = False
+    #: The name of an earlier rule that stops evaluation for this domain's
+    #: mail, when there is one. This rule would never run, and the user needs
+    #: to be told rather than left wondering why nothing arrives.
+    shadowed_by: str | None = None

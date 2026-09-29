@@ -15,7 +15,13 @@ from seskit_provider_aws_ses.provisioning import (
     event_types,
     queue_policy,
 )
-from seskit_provider_aws_ses.regions import SES_REGION_CODES, SES_REGIONS, is_known_region
+from seskit_provider_aws_ses.regions import (
+    RECEIVING_REGION_CODES,
+    SES_REGION_CODES,
+    SES_REGIONS,
+    is_known_region,
+    supports_receiving,
+)
 from seskit_provider_aws_ses.sns_signature import (
     AWS_SNS_HOST,
     SignatureError,
@@ -31,6 +37,7 @@ __all__ = [
     "BASE_EVENT_TYPES",
     "EVENT_DESTINATION_NAME",
     "NO_CREDENTIALS_MESSAGE",
+    "RECEIVING_REGION_CODES",
     "SES_REGIONS",
     "SES_REGION_CODES",
     "TRACKING_EVENT_TYPES",
@@ -45,5 +52,6 @@ __all__ = [
     "is_known_region",
     "normalise_boto_error",
     "queue_policy",
+    "supports_receiving",
     "verify",
 ]

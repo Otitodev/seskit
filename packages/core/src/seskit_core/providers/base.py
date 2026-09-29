@@ -25,6 +25,8 @@ from seskit_core.providers.types import (
     EventInfrastructure,
     IdentityStatus,
     IdentityType,
+    InboundInfrastructure,
+    InboundRule,
     OutboundEmail,
     ProductionAccessRequest,
     QueuedNotification,
@@ -167,4 +169,79 @@ class NotificationQueue(Protocol):
 
     async def delete(self, notification: QueuedNotification) -> None:
         """Acknowledge one message, so it is not delivered again."""
+        ...
+
+
+@runtime_checkable
+class InboundProvisioner(Protocol):
+    """Creating and removing the plumbing that brings received mail in.
+
+    A fourth capability rather than more methods on :class:`EventProvisioner`.
+    A deployment can want delivery events and not want to receive mail, and
+    receiving needs permissions - to create buckets and to edit receipt rules -
+    that nobody should have to grant to get bounce reports.
+
+    Two halves, because they have different owners. The bucket, topic and queue
+    are shared by every domain in an account and region; a rule belongs to one
+    domain. Splitting them lets a second domain add its rule without touching
+    what the first is relying on.
+    """
+
+    async def provision_inbound(
+        self,
+        *,
+        bucket_name: str,
+        topic_name: str,
+        queue_name: str,
+        retention_days: int,
+    ) -> InboundInfrastructure:
+        """Create the bucket, topic and queue. Idempotent.
+
+        Running it again converges on the same resources, and is how a changed
+        ``retention_days`` is applied.
+        """
+        ...
+
+    async def add_inbound_rule(
+        self, infrastructure: InboundInfrastructure, *, domain: str, rule_name: str
+    ) -> InboundRule:
+        """Start receiving mail for ``domain``. Idempotent.
+
+        Adds a rule to the rule set that is already active and never replaces
+        it. If none is active it creates one and says so in the result.
+        """
+        ...
+
+    async def remove_inbound_rule(self, rule: InboundRule) -> None:
+        """Stop receiving for one domain. Removes that rule and nothing else."""
+        ...
+
+    async def remove_inbound(self, infrastructure: InboundInfrastructure) -> bool:
+        """Remove the bucket, topic and queue. Callers must have checked that
+        no other domain still receives through them.
+
+        Returns whether the bucket was removed too. A bucket that still holds
+        mail is kept, because deleting somebody's received mail as a side
+        effect of switching receiving off is not a call this method should
+        make; the bucket's own expiry empties it.
+        """
+        ...
+
+
+@runtime_checkable
+class InboundStore(Protocol):
+    """Reading a raw received message back out of storage.
+
+    The announcement of a message says where it was put; this is how the worker
+    gets it. Separate from :class:`NotificationQueue` because reading a queue
+    and reading stored mail are different capabilities with different failure
+    modes.
+    """
+
+    async def fetch_message(self, *, bucket: str, key: str) -> bytes:
+        """The raw, unmodified message.
+
+        Raises a normalised ``APIError`` rather than a provider-native
+        exception, and says so distinctly when the object has expired.
+        """
         ...

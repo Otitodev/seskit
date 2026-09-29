@@ -4,7 +4,13 @@ The interface and its vocabulary. Implementations live in their own packages
 and are never imported from here.
 """
 
-from seskit_core.providers.base import EmailProvider, EventProvisioner, NotificationQueue
+from seskit_core.providers.base import (
+    EmailProvider,
+    EventProvisioner,
+    InboundProvisioner,
+    InboundStore,
+    NotificationQueue,
+)
 from seskit_core.providers.types import (
     SANDBOX_DAILY_LIMIT,
     VERIFIED_STATUSES,
@@ -16,6 +22,8 @@ from seskit_core.providers.types import (
     EventInfrastructure,
     IdentityStatus,
     IdentityType,
+    InboundInfrastructure,
+    InboundRule,
     MailType,
     OutboundEmail,
     ProductionAccessRequest,
@@ -39,6 +47,10 @@ __all__ = [
     "EventProvisioner",
     "IdentityStatus",
     "IdentityType",
+    "InboundInfrastructure",
+    "InboundProvisioner",
+    "InboundRule",
+    "InboundStore",
     "MailType",
     "NotificationQueue",
     "OutboundEmail",
