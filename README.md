@@ -75,6 +75,14 @@ client.emails.send(
 )
 ```
 
+## Engineering notes
+
+Three changes that show how this project is maintained:
+
+- [PR #7](https://github.com/Otitodev/seskit/pull/7): the API reference is generated from the OpenAPI schema, and CI runs the same script with `--check`, so the docs cannot drift from the routes.
+- [PR #8](https://github.com/Otitodev/seskit/pull/8): `llms.txt` and `llms-full.txt` are generated at build time, so AI agents can read the docs without crawling the site.
+- [PR #51](https://github.com/Otitodev/seskit/pull/51): a proof only PR (closed, never merged) that shows the new security tests fail against the old behaviour, so the tests are known to catch the bug.
+
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md). Report security issues through
