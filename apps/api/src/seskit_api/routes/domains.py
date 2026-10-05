@@ -24,6 +24,7 @@ from seskit_core.logging import get_logger
 from seskit_core.models import Project
 from seskit_core.redis import get_redis
 from seskit_core.services import (
+    InboundProvisionerFactory,
     ProviderFactory,
     add_identity,
     get_connection,
@@ -38,6 +39,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from seskit_api.dependencies import (
     CurrentUser,
     get_app_settings,
+    get_inbound_provisioner_factory,
     get_provider_factory,
     require_project,
     require_user,
@@ -194,6 +196,7 @@ async def delete(
     current: Annotated[CurrentUser, Depends(require_user)],
     project: Annotated[Project, Depends(require_project)],
     provider_factory: Annotated[ProviderFactory, Depends(get_provider_factory)],
+    inbound: Annotated[InboundProvisionerFactory, Depends(get_inbound_provisioner_factory)],
     settings: Annotated[Settings, Depends(get_app_settings)],
 ) -> HTMLResponse:
     """Remove this project's identity.
@@ -212,7 +215,13 @@ async def delete(
     removed = identity.value
 
     try:
-        await remove_identity(db, provider_factory, identity, secret_key=settings.SECRET_KEY)
+        await remove_identity(
+            db,
+            provider_factory,
+            identity,
+            secret_key=settings.SECRET_KEY,
+            inbound_factory=inbound,
+        )
     except APIError as error:
         return await _page(
             request, db, current, project, error=error.message, status_code=_status_for(error)

@@ -29,6 +29,7 @@ from seskit_core.models import Identity, utcnow
 from seskit_core.providers import AWSCredentials, IdentityStatus, IdentityType
 from seskit_core.services.aws import ProviderFactory, check_is_allowed, get_connection
 from seskit_core.services.credentials import stored_credentials
+from seskit_core.services.inbound import InboundProvisionerFactory, teardown_receiving
 
 logger = get_logger(__name__)
 
@@ -248,6 +249,7 @@ async def remove_identity(
     identity: Identity,
     *,
     secret_key: str,
+    inbound_factory: InboundProvisionerFactory | None = None,
 ) -> bool:
     """Remove a project's identity, and the SES identity if nothing else uses it.
 
@@ -258,6 +260,20 @@ async def remove_identity(
     exception rolls the whole thing back and the row survives, rather than
     leaving a project that thinks it removed something SES still holds.
     """
+    # The receipt rule first. It names a bucket and a rule set in the user's
+    # account, and once this row is deleted nothing can say which rule was ours.
+    if identity.receives_mail:
+        if inbound_factory is None:
+            raise ValueError(
+                "This domain receives mail. Removing it needs an inbound provisioner "
+                "factory so its receipt rule can be removed rather than abandoned."
+            )
+        connection = await get_connection(session, identity.project_id)
+        if connection is not None:
+            await teardown_receiving(
+                session, inbound_factory, connection, identity, secret_key=secret_key
+            )
+
     others = await count_other_references(session, identity)
     value, region, identity_id = identity.value, identity.region, identity.id
     # Read before the row is deleted: afterwards there is no project_id to
