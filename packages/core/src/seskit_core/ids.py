@@ -41,6 +41,7 @@ class IDPrefix(StrEnum):
     WEBHOOK = "wh"
     WEBHOOK_DELIVERY = "whd"
     SUPPRESSION = "supp"
+    INBOUND_EMAIL = "inbound"
 
 
 def generate_id(prefix: IDPrefix) -> str:

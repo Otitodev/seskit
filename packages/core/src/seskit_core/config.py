@@ -175,6 +175,19 @@ class Settings(BaseSettings):
     #: only because it is there.
     EVENT_VISIBILITY_TIMEOUT_SECONDS: int = 60
 
+    # -- Received mail --------------------------------------------------------
+
+    #: How long the raw message stays in the project's S3 bucket before S3
+    #: removes it. The parsed message - sender, subject, bodies - stays in the
+    #: database regardless; this only bounds the original and its attachments,
+    #: which are the part that costs storage and the part that holds somebody's
+    #: files. Applied when receiving is set up, and again whenever setup is
+    #: repeated, so changing it takes effect on the next run rather than
+    #: retroactively - an object already in the bucket keeps the clock it had.
+    #: Upper bound is ten years, which is more than anyone means and less than
+    #: the point where a typo becomes "never".
+    INBOUND_RETENTION_DAYS: int = Field(default=30, ge=1, le=3650)
+
     # -- Webhooks (§16) -------------------------------------------------------
 
     #: Address ranges webhooks may reach even in production, as comma-separated
