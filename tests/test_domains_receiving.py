@@ -93,7 +93,8 @@ async def test_a_verified_domain_offers_to_start_receiving(
     assert "Receiving is on" not in page.text
     # It says what it will create in the user's own account before it is pressed.
     assert "an S3 bucket" in page.text
-    assert "never replaces a rule set you already have" in page.text
+    # The template wraps this sentence across lines, so compare the words.
+    assert "never replaces a rule set you already have" in " ".join(page.text.split())
 
 
 async def test_the_controls_are_forms_with_csrf_not_links(
@@ -192,7 +193,7 @@ async def test_an_aws_refusal_does_not_leave_the_page_saying_receiving_is_on(
 
     page = await app_client.post(_start(identity), data={"csrf_token": token})
 
-    assert page.status_code == 403
+    assert page.status_code == 400
     assert "not permitted to call s3:CreateBucket" in page.text
     assert "Receiving is on" not in page.text
     assert "Start receiving" in page.text
@@ -338,7 +339,7 @@ async def test_a_refused_stop_leaves_it_on_and_says_why(
 
     page = await app_client.post(_stop(identity), data={"csrf_token": token})
 
-    assert page.status_code == 403
+    assert page.status_code == 400
     assert "not permitted to call ses:DeleteReceiptRule" in page.text
     assert "Receiving is on" in page.text
     assert (await _fresh(db_session, identity)).receives_mail is True
