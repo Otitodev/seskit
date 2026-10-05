@@ -29,6 +29,11 @@ The body is the same normalised event the dashboard stores:
 }
 ```
 
+!!! note "Received mail arrives here too"
+    Mail sent *to* a domain you receive for produces an `email.received` event.
+    It has no `email_id` — it carries `inbound_id` — and describes the message
+    without carrying it. See the [events reference](../reference/events.md#emailreceived).
+
 !!! important "Webhooks need delivery events set up first"
     Without a configuration set, Amazon SES publishes nothing, so there is
     nothing to forward. See [delivery events](delivery-events.md).

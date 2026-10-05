@@ -149,6 +149,52 @@ later without a flag day.
   after a logout cannot re-display the previous user's dashboard from the
   browser cache.
 
+## Received mail is hostile input
+
+Everything in a message somebody sent to you was written by somebody who may mean
+you harm. It is a third untrusted boundary, and unlike the two above it is one
+SESKit serves *from*.
+
+**Announcements are believed only if they are ours.** Nothing in an SES
+notification is secret: the message id is written into the headers of every
+message SES delivers. So the project a message belongs to comes from the
+recipient's domain, and is accepted only if it is one of the projects the queue
+was read for and the bucket is the one SESKit created. Every way of being wrong
+is dropped the same way, before anything is downloaded, so a probe learns nothing
+from the difference.
+
+**A download is a download, whatever the sender declared.** Attachments and the
+original message are always served with `Content-Disposition: attachment`,
+`X-Content-Type-Options: nosniff` and `Content-Security-Policy: sandbox;
+default-src 'none'`, and attachments as `application/octet-stream` regardless of
+the type they claim. The filename is the sender's string and is reduced to a
+plain basename in both forms of the header, so it cannot carry a path or end the
+header. A test sends a file that declares itself HTML and carries script, and a
+name containing a CRLF-delimited `Set-Cookie`, and checks the bytes of the
+response.
+
+**The API does not clean what it returns.** `html` and the headers come back
+exactly as sent, and the field descriptions say to treat them as hostile. A
+sanitiser here would be a second place for a consumer to be wrong.
+
+**Verdicts are recorded and never acted on.** Amazon SES takes no action on a
+failed SPF, DKIM or DMARC check, and neither does SESKit; whether to trust a
+message is the reader's decision. A verdict that was not given is stored and
+returned as `null`, never as a pass.
+
+**Storage.** The bucket is private, encrypted, accessible over TLS only, and
+writable by receipt rules from this account named `seskit-*` and nothing else. The
+original is removed after the retention period; the parsed message is not, so a
+message past retention is still readable but its attachments can no longer be
+downloaded.
+
+**Credentials are the project's own.** A message is read with the key of the
+project that received it, in its own region. There is no instance-wide key.
+
+**Nothing from the message is logged.** Sender, recipients, subject and bodies
+stay out of logs; an error raised while handling a message is recorded by its type
+alone, because its text can carry a fragment of the mail.
+
 ## Response headers
 
 Set by one middleware on every response, because the failure mode of
@@ -156,7 +202,7 @@ per-route security is a route somebody forgot.
 
 | Header | |
 |---|---|
-| `Content-Security-Policy` | `default-src 'self'`, with a per-request nonce for the two inline theme scripts. No `unsafe-inline`, no `unsafe-eval` |
+| `Content-Security-Policy` | `default-src 'self'`, with a per-request nonce for the two inline theme scripts. No `unsafe-inline`, no `unsafe-eval`. A route that sets a stricter policy of its own keeps it - downloads of received mail do - and the middleware does not overwrite it |
 | `X-Frame-Options` / `frame-ancestors` | `DENY` / `'none'`. Every destructive action on the dashboard is a one-click form, which is what clickjacking needs |
 | `form-action 'self'` | The directive framing protection has no answer for: injected markup posting a CSRF token to another origin |
 | `X-Content-Type-Options` | `nosniff` |
@@ -209,6 +255,9 @@ Stated plainly rather than left to be discovered:
 - **No HTTP API for the suppression list.** Addresses are suppressed
   automatically and managed on the dashboard; there is no `/v1` endpoint to
   read or bulk-load the list. See [suppression](../guides/suppression.md).
+- **Received mail is not quarantined.** Amazon SES scans it for spam and viruses
+  and SESKit records the verdicts, but neither blocks a message from being
+  stored or served. SESKit does not scan attachments itself.
 - **No RBAC.** An account owns its projects; there are no roles or team
   members.
 - **No per-IP rate limit.** Limits are per project for the API and per account

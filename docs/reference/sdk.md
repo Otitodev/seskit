@@ -107,6 +107,33 @@ while True:
     cursor = page.last_id
 ```
 
+## Received mail
+
+```python
+page = client.inbound.list(domain="example.com")
+message = client.inbound.get(page.data[0].id)
+
+print(message.from_, message.subject)
+print(message.text)
+
+pdf = client.inbound.attachment(message.id, 0)  # bytes
+eml = client.inbound.raw(message.id)  # bytes
+```
+
+`list` returns **summaries** — who, what, when, how big, and what Amazon SES
+concluded — with no bodies, so a page of a hundred stays small. `get` returns
+the whole message. Like `emails.list`, it is **one page**: pass `page.last_id`
+as `starting_after` while `page.has_more`.
+
+`attachment` and `raw` return **bytes, untouched**. They need the stored
+original, so they raise `NotFound` once your [retention period](configuration.md)
+has removed it. The parsed message from `get` does not expire.
+
+**Everything in a received message was written by somebody else.** `html` in
+particular is exactly what was sent and may contain script, tracking images and
+links that lie; do not render it in a page that carries your own credentials.
+A verdict that is `None` means Amazon SES did not say — it is not a pass.
+
 ## Async
 
 The same surface, awaited:
