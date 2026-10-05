@@ -61,6 +61,8 @@ Per project, not per key. Every response carries `X-RateLimit-Limit`,
 | `GET` | [`/v1/emails/{email_id}`](#get-v1emailsemail_id) | Retrieve an email |
 | `GET` | [`/v1/inbound`](#get-v1inbound) | List received emails |
 | `GET` | [`/v1/inbound/{inbound_id}`](#get-v1inboundinbound_id) | Retrieve a received email |
+| `GET` | [`/v1/inbound/{inbound_id}/attachments/{index}`](#get-v1inboundinbound_idattachmentsindex) | Download an attachment |
+| `GET` | [`/v1/inbound/{inbound_id}/raw`](#get-v1inboundinbound_idraw) | Download the original message |
 | `GET` | [`/v1/webhooks`](#get-v1webhooks) | List webhook endpoints |
 | `GET` | [`/v1/webhooks/{endpoint_id}/deliveries`](#get-v1webhooksendpoint_iddeliveries) | List recent webhook deliveries |
 
@@ -265,6 +267,71 @@ was sent, and has to be treated as hostile by anything that renders it.
 | Status | |
 |---|---|
 | `200` | Successful Response |
+| `401` | Invalid or missing API key. |
+| `422` | Validation Error |
+| `429` | Rate limit exceeded. |
+
+
+---
+
+## `GET /v1/inbound/{inbound_id}/attachments/{index}`
+
+**Download an attachment**
+
+One attachment's bytes, fetched from the stored message.
+
+**Always served as `application/octet-stream`**, whatever the sender declared,
+with `Content-Disposition: attachment`, `nosniff` and a sandboxing CSP. The
+declared type is on the message's `attachments` for you to read; it is never
+one this endpoint believes. These are files a stranger sent, served from your
+API's origin.
+
+Needs the stored message, so it stops working when retention removes it. The
+parsed message does not.
+
+**Parameters**
+
+| Name | In | | |
+|---|---|---|---|
+| `inbound_id` | path | required | The id of the received message. |
+| `index` | path | required | The attachment's `index` from the message's `attachments`. |
+
+**Responses**
+
+| Status | |
+|---|---|
+| `200` | The bytes. |
+| `401` | Invalid or missing API key. |
+| `422` | Validation Error |
+| `429` | Rate limit exceeded. |
+
+
+---
+
+## `GET /v1/inbound/{inbound_id}/raw`
+
+**Download the original message**
+
+The message exactly as SES received it, as an `.eml` file.
+
+Unparsed and unmodified: every header, every part, every attachment. Useful for
+debugging a message that did not parse as expected, and for handing to another
+tool. It is the sender's bytes, served as a download with the same protections
+as an attachment.
+
+Needs the stored message, so it stops working when retention removes it.
+
+**Parameters**
+
+| Name | In | | |
+|---|---|---|---|
+| `inbound_id` | path | required | The id of the received message. |
+
+**Responses**
+
+| Status | |
+|---|---|
+| `200` | The original message, byte for byte. |
 | `401` | Invalid or missing API key. |
 | `422` | Validation Error |
 | `429` | Rate limit exceeded. |

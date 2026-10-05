@@ -47,6 +47,7 @@ from seskit_core.providers import (
     InboundInfrastructure,
     InboundProvisioner,
     InboundRule,
+    InboundStore,
 )
 from seskit_core.services.credentials import stored_credentials
 
@@ -55,6 +56,10 @@ logger = get_logger(__name__)
 #: Builds a provisioner for a region. Injected, for the same reason as
 #: ``ProvisionerFactory``: so this module never imports an adapter.
 InboundProvisionerFactory = Callable[[str, AWSCredentials], InboundProvisioner]
+
+#: Builds a reader of stored messages for a region, on one project's credentials.
+#: Injected so a route never imports an adapter, and a test can substitute one.
+InboundStoreFactory = Callable[[str, AWSCredentials], InboundStore]
 
 #: Every rule name starts with this. It must equal the adapter's
 #: ``RULE_NAME_PREFIX``, because the bucket policy admits only rules that carry
