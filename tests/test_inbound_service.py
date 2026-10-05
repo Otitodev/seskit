@@ -62,6 +62,11 @@ class FakeInbound:
     bucket_removed: ClassVar[bool] = True
     #: Raised by ``remove_inbound_rule`` when set.
     remove_rule_error: ClassVar[APIError | None] = None
+    #: Raised by ``provision_inbound`` when set, to stand in for AWS refusing -
+    #: a missing permission, say.
+    setup_error: ClassVar[APIError | None] = None
+    #: Raised by ``add_inbound_rule`` alone, after the plumbing was built.
+    rule_error: ClassVar[APIError | None] = None
 
     def __init__(self, region: str, credentials: AWSCredentials | None = None) -> None:
         self.region = region
@@ -75,6 +80,8 @@ class FakeInbound:
         queue_name: str,
         retention_days: int,
     ) -> InboundInfrastructure:
+        if FakeInbound.setup_error is not None:
+            raise FakeInbound.setup_error
         FakeInbound.calls.append(
             ("provision", {"bucket": bucket_name, "retention_days": retention_days})
         )
@@ -89,6 +96,8 @@ class FakeInbound:
     async def add_inbound_rule(
         self, infrastructure: InboundInfrastructure, *, domain: str, rule_name: str
     ) -> InboundRule:
+        if FakeInbound.rule_error is not None:
+            raise FakeInbound.rule_error
         FakeInbound.calls.append(("add_rule", domain))
         return InboundRule(name=rule_name, rule_set="seskit-inbound", created_rule_set=True)
 
@@ -107,6 +116,8 @@ def _reset() -> None:
     FakeInbound.calls = []
     FakeInbound.bucket_removed = True
     FakeInbound.remove_rule_error = None
+    FakeInbound.setup_error = None
+    FakeInbound.rule_error = None
 
 
 def factory(region: str, credentials: AWSCredentials) -> InboundProvisioner:
@@ -306,6 +317,84 @@ async def test_a_domain_already_receiving_elsewhere_is_refused_before_aws_is_tou
     # The refusal says nothing about whose it is.
     assert first.project_id not in caught.value.message
     assert mine.receives_mail is True
+
+
+# --------------------------------------------------- when AWS refuses ---
+
+
+async def test_a_refusal_from_aws_leaves_the_domain_not_receiving(
+    db_session: AsyncSession,
+) -> None:
+    """The claim is written before AWS is called, so that the unique index can
+    decide a race. If AWS then refuses, the identity must not say it receives: the
+    routes that call this do not roll back, so the same render would show
+    "Receiving: on" beside the reason it is not.
+    """
+    connection = await _project_connection(db_session, email="a@example.com")
+    identity = await _domain(db_session, connection)
+    FakeInbound.setup_error = APIError(
+        ErrorType.AUTHORIZATION_FAILED, "not permitted to call s3:CreateBucket"
+    )
+
+    with pytest.raises(APIError):
+        await _enable(db_session, connection, identity)
+
+    assert identity.receives_mail is False
+    assert identity.inbound_rule_name is None
+    assert identity.inbound_rule_set is None
+    assert identity.inbound_rule_set_created is False
+    # And it is not left holding the domain against a second attempt.
+    FakeInbound.setup_error = None
+    await _enable(db_session, connection, identity)
+    assert identity.receives_mail is True
+
+
+async def test_a_refusal_after_the_plumbing_exists_keeps_what_was_built(
+    db_session: AsyncSession,
+) -> None:
+    """The bucket, topic and queue are really in the account. Forgetting them
+    would leave resources teardown can never find; the identity is what is given
+    back, not the record of what was created.
+    """
+    connection = await _project_connection(db_session, email="a@example.com")
+    identity = await _domain(db_session, connection)
+    FakeInbound.rule_error = APIError(
+        ErrorType.AUTHORIZATION_FAILED, "not permitted to call ses:CreateReceiptRule"
+    )
+
+    with pytest.raises(APIError):
+        await _enable(db_session, connection, identity)
+
+    assert identity.receives_mail is False
+    assert connection.inbound_enabled is True
+
+
+async def test_a_failed_repair_puts_back_the_rule_that_was_there(
+    db_session: AsyncSession,
+) -> None:
+    """Running setup again on a domain that already receives must not leave it
+    blank if the second attempt fails. It was receiving before; it still is.
+    """
+    connection = await _project_connection(db_session, email="a@example.com")
+    identity = await _domain(db_session, connection)
+    await _enable(db_session, connection, identity)
+    before = (
+        identity.inbound_rule_name,
+        identity.inbound_rule_set,
+        identity.inbound_rule_set_created,
+    )
+    FakeInbound.setup_error = APIError(ErrorType.PROVIDER_ERROR, "AWS is down")
+
+    with pytest.raises(APIError):
+        await _enable(db_session, connection, identity)
+
+    after = (
+        identity.inbound_rule_name,
+        identity.inbound_rule_set,
+        identity.inbound_rule_set_created,
+    )
+    assert after == before
+    assert identity.receives_mail is True
 
 
 # ---------------------------------------------------------------- teardown ---

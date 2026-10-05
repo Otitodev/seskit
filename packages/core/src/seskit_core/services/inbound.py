@@ -210,20 +210,47 @@ async def setup_receiving(
         resource_prefix, account_id=connection.aws_account_id, region=connection.region
     )
 
+    before = (
+        identity.inbound_rule_name,
+        identity.inbound_rule_set,
+        identity.inbound_rule_set_created,
+    )
     await _claim_domain(session, identity, rule_name)
 
-    provisioner = factory(connection.region, credentials)
-    infrastructure = await provisioner.provision_inbound(
-        bucket_name=bucket,
-        topic_name=topic_name_for(resource_prefix),
-        queue_name=queue_name_for(resource_prefix),
-        retention_days=retention_days,
-    )
-    connection.record_inbound_infrastructure(infrastructure)
+    try:
+        provisioner = factory(connection.region, credentials)
+        infrastructure = await provisioner.provision_inbound(
+            bucket_name=bucket,
+            topic_name=topic_name_for(resource_prefix),
+            queue_name=queue_name_for(resource_prefix),
+            retention_days=retention_days,
+        )
+        # Recorded as soon as it exists, and kept if the rule below then fails:
+        # the bucket, topic and queue are really in the account, and a row that
+        # forgot them is one teardown could never find.
+        connection.record_inbound_infrastructure(infrastructure)
 
-    rule = await provisioner.add_inbound_rule(
-        infrastructure, domain=identity.value, rule_name=rule_name
-    )
+        rule = await provisioner.add_inbound_rule(
+            infrastructure, domain=identity.value, rule_name=rule_name
+        )
+    except Exception:
+        # Give the domain back. The claim above was written before AWS was
+        # called, so that the unique index could decide a race; if AWS then
+        # refuses, nothing is receiving, and the identity must not say it is.
+        #
+        # This matters beyond tidiness. The routes that call this deliberately
+        # do not roll back on an error - a rollback expires every loaded object
+        # and the page then 500s instead of showing the message - so without
+        # this the same render would show "Receiving: on" beside the reason it
+        # is not. A repair run puts back what was there, not blank.
+        (
+            identity.inbound_rule_name,
+            identity.inbound_rule_set,
+            identity.inbound_rule_set_created,
+        ) = before
+        await session.flush()
+        raise
+
     identity.inbound_rule_name = rule.name
     identity.inbound_rule_set = rule.rule_set
     identity.inbound_rule_set_created = rule.created_rule_set
