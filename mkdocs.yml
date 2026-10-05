@@ -119,18 +119,19 @@ plugins:
           - guides/no-aws-account-yet.md: The path from no AWS account to a verified sender, and what SES costs.
           - guides/get-an-access-key.md: The IAM console click-path to an access key SESKit can use, and how to rotate one.
           - guides/connect-aws.md: Pointing SESKit at an AWS account by pasting an access key, which is stored per project and encrypted.
-          - guides/iam-policies.md: The exact IAM permissions, why each is needed, and how to grant them in stages.
+          - guides/iam-policies.md: The exact IAM permissions for sending, delivery events and receiving mail, why each is needed, and how to grant them in stages.
           - guides/verify-a-sender.md: Verifying a domain or a single address; DKIM, SPF and DMARC.
           - guides/ses-sandbox.md: What the SES sandbox restricts and how to leave it.
           - guides/delivery-events.md: How SES reports deliveries and bounces, SQS versus HTTPS ingestion, and open/click tracking.
           - guides/webhooks.md: Registering endpoints, verifying the HMAC signature, retries, and the SSRF rules.
+          - guides/receive-email.md: Receiving mail for a domain - what it creates in your AWS account, the MX record and why to use a subdomain, the Inbox, retention, and why everything in a received message is untrusted.
           - guides/metrics.md: The six counts and five rates, and what each rate divides by.
           - guides/suppression.md: What lands on the suppression list, what a suppressed send answers, and one-click unsubscribe.
         Reference:
           - reference/api.md: Every HTTP endpoint, generated from the OpenAPI schema.
-          - reference/sdk.md: The Python SDK - send, get and list, sync and async, errors as classes, retries and idempotency.
+          - reference/sdk.md: The Python SDK - send, get and list, reading received mail, sync and async, errors as classes, retries and idempotency.
           - reference/configuration.md: Every environment variable, its default, and its effect.
-          - reference/events.md: The event vocabulary, webhook payload shape, and bounce types.
+          - reference/events.md: The event vocabulary, webhook payload shape, bounce types, and the email.received event for mail you receive.
           - reference/errors.md: Every error type, which are worth retrying, and which are not.
         Operating SESKit:
           - operating/deploying.md: What has to run, the required environment, and health checks.
@@ -178,6 +179,7 @@ nav:
       - Leave the SES sandbox: guides/ses-sandbox.md
       - Delivery events: guides/delivery-events.md
       - Webhooks: guides/webhooks.md
+      - Receive email: guides/receive-email.md
       - Suppression: guides/suppression.md
       - Reading your metrics: guides/metrics.md
   - Reference:
