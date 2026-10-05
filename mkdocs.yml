@@ -124,6 +124,7 @@ plugins:
           - guides/ses-sandbox.md: What the SES sandbox restricts and how to leave it.
           - guides/delivery-events.md: How SES reports deliveries and bounces, SQS versus HTTPS ingestion, and open/click tracking.
           - guides/webhooks.md: Registering endpoints, verifying the HMAC signature, retries, and the SSRF rules.
+          - guides/supabase-auth-emails.md: A Supabase Edge Function that sends Auth emails (sign-up, reset, magic link) through SESKit instead of Supabase's shared mailer - setup, what it sends, retries and failure behaviour.
           - guides/metrics.md: The six counts and five rates, and what each rate divides by.
           - guides/suppression.md: What lands on the suppression list, what a suppressed send answers, and one-click unsubscribe.
         Reference:
@@ -178,6 +179,7 @@ nav:
       - Leave the SES sandbox: guides/ses-sandbox.md
       - Delivery events: guides/delivery-events.md
       - Webhooks: guides/webhooks.md
+      - Supabase auth emails: guides/supabase-auth-emails.md
       - Suppression: guides/suppression.md
       - Reading your metrics: guides/metrics.md
   - Reference:
