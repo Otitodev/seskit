@@ -262,6 +262,17 @@
             ],
             "title": "Mail From Status"
           },
+          "receiving": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReceivingResponse"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Whether the project receives mail for this domain. Read-only: it reports what the dashboard set up. Mail that arrives is read with `GET /v1/inbound`."
+          },
           "region": {
             "description": "The AWS region the identity lives in. SES identities are per-region, so a domain verified in one region is not verified in another.",
             "examples": [
@@ -1102,6 +1113,51 @@
         "title": "InboundVerdicts",
         "type": "object"
       },
+      "MxRecordResponse": {
+        "description": "The MX record that sends a domain's mail to Amazon SES.",
+        "properties": {
+          "name": {
+            "description": "The record name: the domain itself. Some DNS providers want only the part before your domain, so check whether yours appends it for you.",
+            "examples": [
+              "example.com"
+            ],
+            "title": "Name",
+            "type": "string"
+          },
+          "priority": {
+            "description": "The preference value. SES takes mail at one host, so this only matters if the domain lists others.",
+            "examples": [
+              10
+            ],
+            "title": "Priority",
+            "type": "integer"
+          },
+          "record_type": {
+            "description": "`MX`.",
+            "examples": [
+              "MX"
+            ],
+            "title": "Record Type",
+            "type": "string"
+          },
+          "value": {
+            "description": "The Amazon SES inbound endpoint for the domain's region.",
+            "examples": [
+              "inbound-smtp.us-east-1.amazonaws.com"
+            ],
+            "title": "Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "record_type",
+          "name",
+          "priority",
+          "value"
+        ],
+        "title": "MxRecordResponse",
+        "type": "object"
+      },
       "ReadinessResponse": {
         "properties": {
           "dependencies": {
@@ -1123,6 +1179,32 @@
           "dependencies"
         ],
         "title": "ReadinessResponse",
+        "type": "object"
+      },
+      "ReceivingResponse": {
+        "description": "Whether SESKit receives mail for a domain, and what to publish for it.",
+        "properties": {
+          "enabled": {
+            "description": "Whether a receipt rule exists for this domain. Turned on from the Domains page in the dashboard; there is no endpoint for it yet.",
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "mx": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MxRecordResponse"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The record to publish at your DNS provider. **Null until receiving is on**: publishing it earlier would send senders' mail to Amazon SES with no rule to take it, and it would be refused. Publishing it replaces wherever the domain receives mail now - consider a subdomain."
+          }
+        },
+        "required": [
+          "enabled"
+        ],
+        "title": "ReceivingResponse",
         "type": "object"
       },
       "SendEmailRequest": {

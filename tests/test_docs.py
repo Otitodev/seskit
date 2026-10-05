@@ -124,7 +124,7 @@ def test_the_iam_guide_counts_its_own_actions() -> None:
         ]
         assert WORDS[said.group(1)] == len(actions), heading
         checked += 1
-    assert checked == 2, "both policy sections should have been counted"
+    assert checked == 3, "all three policy sections should have been counted"
 
 
 def test_the_agent_index_describes_every_page() -> None:

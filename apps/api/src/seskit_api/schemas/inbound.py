@@ -22,7 +22,6 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field
 from seskit_core.models import InboundEmail
-from seskit_core.models.base import utcnow
 
 
 class InboundVerdicts(BaseModel):
@@ -213,10 +212,6 @@ class InboundList(BaseModel):
     )
 
 
-def _raw_available(row: InboundEmail) -> bool:
-    return row.raw_expires_at is None or row.raw_expires_at > utcnow()
-
-
 def summary_of(row: InboundEmail) -> InboundSummary:
     return InboundSummary(
         id=row.id,
@@ -239,7 +234,7 @@ def summary_of(row: InboundEmail) -> InboundSummary:
         ),
         truncated=row.truncated,
         parse_failed=row.parse_failed,
-        raw_available=_raw_available(row),
+        raw_available=row.raw_available,
         raw_expires_at=row.raw_expires_at,
     )
 

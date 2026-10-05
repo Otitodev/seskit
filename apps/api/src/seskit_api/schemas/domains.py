@@ -39,6 +39,48 @@ class DnsRecordResponse(BaseModel):
     )
 
 
+class MxRecordResponse(BaseModel):
+    """The MX record that sends a domain's mail to Amazon SES."""
+
+    record_type: str = Field(description="`MX`.", examples=["MX"])
+    name: str = Field(
+        description=(
+            "The record name: the domain itself. Some DNS providers want only the part "
+            "before your domain, so check whether yours appends it for you."
+        ),
+        examples=["example.com"],
+    )
+    priority: int = Field(
+        description="The preference value. SES takes mail at one host, so this only matters "
+        "if the domain lists others.",
+        examples=[10],
+    )
+    value: str = Field(
+        description="The Amazon SES inbound endpoint for the domain's region.",
+        examples=["inbound-smtp.us-east-1.amazonaws.com"],
+    )
+
+
+class ReceivingResponse(BaseModel):
+    """Whether SESKit receives mail for a domain, and what to publish for it."""
+
+    enabled: bool = Field(
+        description=(
+            "Whether a receipt rule exists for this domain. Turned on from the Domains page "
+            "in the dashboard; there is no endpoint for it yet."
+        ),
+    )
+    mx: MxRecordResponse | None = Field(
+        default=None,
+        description=(
+            "The record to publish at your DNS provider. **Null until receiving is on**: "
+            "publishing it earlier would send senders' mail to Amazon SES with no rule to "
+            "take it, and it would be refused. Publishing it replaces wherever the domain "
+            "receives mail now - consider a subdomain."
+        ),
+    )
+
+
 class DomainResponse(BaseModel):
     """A sending domain and where its verification has got to."""
 
@@ -88,6 +130,13 @@ class DomainResponse(BaseModel):
     last_checked_at: datetime | None = Field(
         default=None,
         description="When SESKit last asked SES about this domain. Null until first checked. UTC.",
+    )
+    receiving: ReceivingResponse | None = Field(
+        default=None,
+        description=(
+            "Whether the project receives mail for this domain. Read-only: it reports what "
+            "the dashboard set up. Mail that arrives is read with `GET /v1/inbound`."
+        ),
     )
     created_at: datetime = Field(description="UTC.")
 

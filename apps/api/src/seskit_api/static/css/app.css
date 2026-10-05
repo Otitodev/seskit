@@ -29,6 +29,10 @@
      and in this theme also the wrong colour: --surface-raised is white, the
      same white as the card, so a code block had nothing but its border. */
   --surface-sunken: #f2f4f7;
+  /* The canvas a received message is shown on. White in both themes, on purpose: email
+     is written for a white page, and a message that sets dark text and no background
+     is unreadable on a dark one. Defined only here, so the dark blocks inherit it. */
+  --mail-canvas: #ffffff;
 
   --border: #e4e7ec;
   --border-strong: #d0d5dd;
@@ -1103,6 +1107,20 @@ svg {
   display: flex;
   gap: var(--space-2);
   margin-top: var(--space-2);
+}
+
+/* Mail frame -------------------------------------------------------------- */
+
+/* A received message's HTML, in a sandboxed iframe. The frame is the container; what is
+   inside it is a stranger's document and is styled by nothing here. */
+.frame {
+  display: block;
+  width: 100%;
+  height: 32rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--mail-canvas);
+  resize: vertical;
 }
 
 /* Code block -------------------------------------------------------------- */

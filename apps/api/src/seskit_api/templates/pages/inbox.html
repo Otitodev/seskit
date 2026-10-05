@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% from "components/ui.html" import empty %}
+
+{% block title %}Inbox · SESKit{% endblock %}
+
+{% block content %}
+  <div class="page-header">
+    <h1>Inbox</h1>
+    <p class="page-header__subtitle">
+      Mail sent to <code>{{ project.name }}</code>'s domains, newest first.
+    </p>
+  </div>
+
+  {% if domains or messages %}
+    {% include "partials/inbox_table.html" %}
+  {% else %}
+    {# Its own state. A project that has never turned receiving on has nothing to
+       wait for, and saying "no mail yet" would hide the one thing it has to do. #}
+    {{ empty(
+      "Not receiving mail yet",
+      "Turn receiving on for a verified domain and mail sent to it appears here, and
+       your application is told as it arrives.",
+      icon_name="inbox",
+      action_label="Go to Domains",
+      action_href="/domains",
+    ) }}
+  {% endif %}
+{% endblock %}

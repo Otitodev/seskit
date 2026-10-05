@@ -53,6 +53,17 @@ class FakeInboundProvisioner:
     """A provisioner that builds nothing and says it did."""
 
     calls: ClassVar[list[str]] = []
+    #: Raised by ``provision_inbound`` when set, to stand in for AWS refusing - a
+    #: missing permission, say.
+    error: ClassVar[APIError | None] = None
+    #: Raised by ``remove_inbound_rule`` when set.
+    remove_error: ClassVar[APIError | None] = None
+
+    @classmethod
+    def reset(cls) -> None:
+        cls.calls = []
+        cls.error = None
+        cls.remove_error = None
 
     def __init__(self, region: str, credentials: AWSCredentials | None = None) -> None:
         self.region = region
@@ -61,6 +72,8 @@ class FakeInboundProvisioner:
     async def provision_inbound(
         self, *, bucket_name: str, topic_name: str, queue_name: str, retention_days: int
     ) -> InboundInfrastructure:
+        if FakeInboundProvisioner.error is not None:
+            raise FakeInboundProvisioner.error
         FakeInboundProvisioner.calls.append("provision")
         return InboundInfrastructure(
             bucket=bucket_name,
@@ -77,6 +90,8 @@ class FakeInboundProvisioner:
         return InboundRule(name=rule_name, rule_set="seskit-inbound", created_rule_set=True)
 
     async def remove_inbound_rule(self, rule: InboundRule) -> None:
+        if FakeInboundProvisioner.remove_error is not None:
+            raise FakeInboundProvisioner.remove_error
         FakeInboundProvisioner.calls.append("remove_rule")
 
     async def remove_inbound(self, infrastructure: InboundInfrastructure) -> bool:

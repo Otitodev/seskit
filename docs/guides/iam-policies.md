@@ -1,8 +1,8 @@
 # IAM policies
 
-SESKit must never ask for `AdministratorAccess`. There are two policies because
+SESKit must never ask for `AdministratorAccess`. There are three policies because
 they grant genuinely different things, and **you should be able to run SESKit
-without the second**.
+without the second and the third**.
 
 ## Sending — seven actions (required)
 
@@ -114,6 +114,76 @@ them away.
 SNS does, under a queue policy SESKit sets during setup that admits that one
 topic and nothing else. Adding it here would grant a permission nothing uses.
 
+## Receiving mail — sixteen more (optional)
+
+!!! caution "Read this one before granting it"
+    This creates **S3 buckets** and edits **SES receipt rules** in your account —
+    the first is storage that holds other people's mail, and the second changes how
+    your account receives it. It is a third policy and a separate button for the same
+    reason the second is. You only need it to [receive mail](receive-email.md).
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "s3:CreateBucket",
+        "s3:PutBucketPublicAccessBlock",
+        "s3:PutEncryptionConfiguration",
+        "s3:PutLifecycleConfiguration",
+        "s3:PutBucketPolicy",
+        "s3:DeleteBucket",
+        "s3:ListBucket"
+      ],
+      "Resource": "arn:aws:s3:::seskit-*"
+    },
+    {
+      "Effect": "Allow",
+      "Action": "s3:GetObject",
+      "Resource": "arn:aws:s3:::seskit-*/*"
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "ses:CreateReceiptRuleSet",
+        "ses:CreateReceiptRule",
+        "ses:UpdateReceiptRule",
+        "ses:DeleteReceiptRule",
+        "ses:DescribeActiveReceiptRuleSet",
+        "ses:DescribeReceiptRuleSet",
+        "ses:SetActiveReceiptRuleSet",
+        "ses:DeleteReceiptRuleSet"
+      ],
+      "Resource": "*"
+    }
+  ]
+}
+```
+
+The topic and queue SESKit creates for received mail are named `seskit-inbound`, so
+the SNS and SQS statements in the [second policy](#delivery-events-fifteen-more-optional)
+already cover them. If you did not grant that policy, receiving needs those two
+statements as well.
+
+The bucket statements are **scoped by resource** to names beginning `seskit-`, so
+this policy cannot touch a bucket you made yourself. The same prefix as the second
+policy applies: if you set `EVENT_RESOURCE_PREFIX` to something that does not begin
+with `seskit-`, change those ARNs to match.
+
+`s3:ListBucket` is easy to leave out and worth keeping. Without it S3 answers a
+request for a message that has expired with *access denied* instead of *not found*,
+so an ordinary expiry would look like a permissions failure.
+
+The SES receipt-rule actions are granted on `*`. Whether they can be narrowed to a
+single rule set has not been checked, and a policy that claimed a scope AWS does not
+enforce would be worse than one that says it has none.
+
+`s3:DeleteBucket` is there so that turning receiving off, or disconnecting, can
+tidy up. A bucket that still holds mail is never emptied: it is left in place and
+removed by retention in time.
+
 ## Starting smaller
 
 A reasonable order, if you would rather not grant everything at once:
@@ -125,6 +195,7 @@ A reasonable order, if you would rather not grant everything at once:
 | Send for real | `+ ses:SendEmail` | Deliver through SES |
 | Leave the sandbox | `+ ses:PutAccountDetails` | Request production access from the AWS page |
 | See what happened | the second policy | Delivery events and webhooks |
+| Receive mail | the third policy | [Receiving on a domain](receive-email.md), the Inbox, and `email.received` |
 
 Each stage is usable on its own, and the dashboard says what is missing rather
 than failing obscurely.
