@@ -131,6 +131,26 @@
   </div>
 {%- endmacro %}
 
+{# What Amazon SES concluded about a received message.
+
+   Verbatim states, never a judgement: SESKit shows these and acts on none. A verdict
+   that was not given is "Not checked" and is deliberately not styled like a pass -
+   reading an unchecked message as a clean one is the one mistake this exists to
+   prevent. #}
+{% macro verdict(status) -%}
+  {%- if status == "PASS" -%}
+    {{ badge("Pass", tone="success") }}
+  {%- elif status == "FAIL" -%}
+    {{ badge("Fail", tone="danger") }}
+  {%- elif status == "GRAY" -%}
+    {{ badge("Inconclusive", tone="warning") }}
+  {%- elif status == "PROCESSING_FAILED" -%}
+    {{ badge("Could not check", tone="warning") }}
+  {%- else -%}
+    <span class="muted">Not checked</span>
+  {%- endif -%}
+{%- endmacro %}
+
 {# A single value with its own Copy. For a table of things that each go
    into a different field somewhere else - DNS records, mostly - where one
    Copy for the whole block still leaves the user picking the lines apart. #}

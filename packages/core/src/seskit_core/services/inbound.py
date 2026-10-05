@@ -41,7 +41,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from seskit_core.errors import APIError, ErrorType
 from seskit_core.logging import get_logger
-from seskit_core.models import AWSConnection, Identity
+from seskit_core.models import AWSConnection, Identity, InboundEmail
 from seskit_core.providers import (
     AWSCredentials,
     InboundInfrastructure,
@@ -495,3 +495,52 @@ async def distinct_inbound_queues(session: AsyncSession, *, secret_key: str) -> 
         )
         for (region, url), creds in credentials.items()
     ]
+
+
+# --------------------------------------------------------------------- reading ---
+
+
+async def get_received(
+    session: AsyncSession, project_id: str, inbound_id: str
+) -> InboundEmail | None:
+    """One received message, if it belongs to this project.
+
+    Ownership is part of the query, so an id from another project is
+    indistinguishable from one that never existed.
+    """
+    found: InboundEmail | None = await session.scalar(
+        select(InboundEmail).where(
+            InboundEmail.id == inbound_id, InboundEmail.project_id == project_id
+        )
+    )
+    return found
+
+
+async def list_received(
+    session: AsyncSession,
+    project_id: str,
+    *,
+    domain: str | None = None,
+    before: str | None = None,
+    limit: int = 50,
+) -> tuple[list[InboundEmail], bool]:
+    """A page of received mail, newest first, and whether there is another page.
+
+    By cursor and not by offset, for the reason ``/v1/inbound`` is: a message
+    arriving between two pages shifts every row of an offset down one and the
+    reader skips the one that moved across the boundary. Ids sort in the order they
+    were created, so ``before`` names a fixed point.
+
+    One more than asked for is read, so "is there another page?" is answered by the
+    query that fetched this one. A ``before`` that is not an id of this project
+    simply matches by comparison and returns what is older than it - the comparison
+    is lexical, but everything returned is still scoped to the project.
+    """
+    query = select(InboundEmail).where(InboundEmail.project_id == project_id)
+    if domain is not None:
+        query = query.where(InboundEmail.domain == domain)
+    if before is not None:
+        query = query.where(InboundEmail.id < before)
+
+    rows = list(await session.scalars(query.order_by(InboundEmail.id.desc()).limit(limit + 1)))
+    return rows[:limit], len(rows) > limit
