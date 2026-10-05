@@ -17,7 +17,7 @@ from datetime import datetime
 from enum import StrEnum
 from typing import TYPE_CHECKING
 
-from sqlalchemy import JSON, DateTime, ForeignKey, Index, String
+from sqlalchemy import JSON, CheckConstraint, DateTime, ForeignKey, Index, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from seskit_core.db import Base
@@ -26,6 +26,7 @@ from seskit_core.models.base import TimestampMixin
 
 if TYPE_CHECKING:
     from seskit_core.models.email import Email
+    from seskit_core.models.inbound_email import InboundEmail
 
 
 class EventType(StrEnum):
@@ -50,6 +51,11 @@ class EventType(StrEnum):
     #: bounces and reimplementing the permanent/transient rule.
     SUPPRESSED = "suppressed"
 
+    #: Mail arrived for one of the project's domains. The only type that is not
+    #: about a message SESKit sent: its parent is an ``InboundEmail``, not an
+    #: ``Email``, and it is the one event with no ``email_id``.
+    RECEIVED = "received"
+
     REJECTED = "rejected"
     DELIVERY_DELAYED = "delivery_delayed"
     RENDERING_FAILED = "rendering_failed"
@@ -71,6 +77,7 @@ PUBLIC_EVENT_TYPES = frozenset(
         EventType.OPENED,
         EventType.CLICKED,
         EventType.SUPPRESSED,
+        EventType.RECEIVED,
     }
 )
 
@@ -85,6 +92,7 @@ EVENT_LABELS: dict[EventType, str] = {
     EventType.OPENED: "Opened",
     EventType.CLICKED: "Link clicked",
     EventType.SUPPRESSED: "Added to the suppression list",
+    EventType.RECEIVED: "Received",
     EventType.REJECTED: "Rejected by SES",
     EventType.DELIVERY_DELAYED: "Delivery delayed",
     EventType.RENDERING_FAILED: "Template rendering failed",
@@ -101,6 +109,16 @@ class EmailEvent(Base, TimestampMixin):
         # Newest-first for one message, which is how both the detail page and
         # the API read them.
         Index("ix_email_events_email_occurred", "email_id", "occurred_at"),
+        # An event is about exactly one thing: a message SESKit sent, or a
+        # message that arrived. Neither would leave an event nothing can be
+        # delivered for - the project is found through the parent - and both
+        # would make it ambiguous which. The database holds this, so no path
+        # through the code can break it.
+        CheckConstraint(
+            "(email_id IS NOT NULL AND inbound_email_id IS NULL) "
+            "OR (email_id IS NULL AND inbound_email_id IS NOT NULL)",
+            name="ck_email_events_one_parent",
+        ),
     )
 
     id: Mapped[str] = mapped_column(
@@ -109,11 +127,21 @@ class EmailEvent(Base, TimestampMixin):
         default=lambda: generate_id(IDPrefix.EVENT),
     )
 
-    email_id: Mapped[str] = mapped_column(
+    #: The message this is about, when SESKit sent it. NULL for `received`,
+    #: which is about ``inbound_email_id`` instead - see the check constraint.
+    email_id: Mapped[str | None] = mapped_column(
         String(64),
         ForeignKey("emails.id", ondelete="CASCADE"),
         index=True,
-        nullable=False,
+        nullable=True,
+    )
+
+    #: The message this is about, when it arrived.
+    inbound_email_id: Mapped[str | None] = mapped_column(
+        String(64),
+        ForeignKey("inbound_emails.id", ondelete="CASCADE"),
+        index=True,
+        nullable=True,
     )
 
     event_type: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
@@ -148,7 +176,8 @@ class EmailEvent(Base, TimestampMixin):
         DateTime(timezone=True), nullable=False, index=True
     )
 
-    email: Mapped[Email] = relationship(back_populates="events")
+    email: Mapped[Email | None] = relationship(back_populates="events")
+    inbound_email: Mapped[InboundEmail | None] = relationship()
 
     @property
     def type(self) -> EventType:

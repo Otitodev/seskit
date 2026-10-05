@@ -34,6 +34,7 @@ from seskit_core.events.normalise import (
     summarise,
     suppression_reason,
     to_public,
+    to_public_received,
 )
 from seskit_core.events.origin import TopicOrigin, connections_for_origin, parse_topic_arn
 
@@ -66,5 +67,6 @@ __all__ = [
     "summarise",
     "suppression_reason",
     "to_public",
+    "to_public_received",
     "unwrap",
 ]
