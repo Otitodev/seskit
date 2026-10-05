@@ -59,6 +59,8 @@ Per project, not per key. Every response carries `X-RateLimit-Limit`,
 | `POST` | [`/v1/emails`](#post-v1emails) | Send an email |
 | `GET` | [`/v1/emails`](#get-v1emails) | List emails |
 | `GET` | [`/v1/emails/{email_id}`](#get-v1emailsemail_id) | Retrieve an email |
+| `GET` | [`/v1/inbound`](#get-v1inbound) | List received emails |
+| `GET` | [`/v1/inbound/{inbound_id}`](#get-v1inboundinbound_id) | Retrieve a received email |
 | `GET` | [`/v1/webhooks`](#get-v1webhooks) | List webhook endpoints |
 | `GET` | [`/v1/webhooks/{endpoint_id}/deliveries`](#get-v1webhooksendpoint_iddeliveries) | List recent webhook deliveries |
 
@@ -192,6 +194,71 @@ rather than a 403 - which would confirm the id exists.
 | Name | In | | |
 |---|---|---|---|
 | `email_id` | path | required | The id returned when the message was accepted. |
+
+**Responses**
+
+| Status | |
+|---|---|
+| `200` | Successful Response |
+| `401` | Invalid or missing API key. |
+| `422` | Validation Error |
+| `429` | Rate limit exceeded. |
+
+
+---
+
+## `GET /v1/inbound`
+
+**List received emails**
+
+This key's project, newest first, without bodies.
+
+Paged by cursor for the reason ``/v1/emails`` is: ids sort in the order they
+were created, so ``starting_after`` names a fixed point and stays correct
+while mail arrives underneath it, where an offset would silently skip the
+message that moved across the boundary. An unknown ``starting_after`` is a 404
+and not an empty page, because the comparison is lexical and an id from
+another project would otherwise position a page of real messages by a value
+the caller cannot see.
+
+Sorted by id and not by ``received_at``. A backlog means a message can be
+recorded long after it arrived, so the two orders can differ; id order is the
+one a cursor can be stable over, and ``received_at`` is on every row.
+
+**Parameters**
+
+| Name | In | | |
+|---|---|---|---|
+| `limit` | query | optional | How many messages to return, newest first. |
+| `starting_after` | query | optional | Return messages older than this id - the last id from the previous page. The id must belong to this project. |
+| `domain` | query | optional | Only messages received for this domain. |
+
+**Responses**
+
+| Status | |
+|---|---|
+| `200` | Successful Response |
+| `401` | Invalid or missing API key. |
+| `422` | Validation Error |
+| `429` | Rate limit exceeded. |
+
+
+---
+
+## `GET /v1/inbound/{inbound_id}`
+
+**Retrieve a received email**
+
+One message, parsed. Bodies, headers, attachments and what SES concluded.
+
+The bodies are the sender's, not SESKit's. In particular the HTML is whatever
+was sent, and has to be treated as hostile by anything that renders it.
+
+**Parameters**
+
+| Name | In | | |
+|---|---|---|---|
+| `inbound_id` | path | required | The id from the list, or from an `email.received` event. |
 
 **Responses**
 

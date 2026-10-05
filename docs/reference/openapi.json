@@ -565,6 +565,543 @@
         "title": "HealthResponse",
         "type": "object"
       },
+      "InboundAttachment": {
+        "description": "One attachment, described. The bytes are fetched separately.",
+        "properties": {
+          "content_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The `Content-ID` an HTML body refers to as `cid:`, if it has one.",
+            "title": "Content Id"
+          },
+          "content_type": {
+            "description": "What the sender *declared*. It is not checked, and a download is always served as `application/octet-stream` regardless.",
+            "examples": [
+              "application/pdf"
+            ],
+            "title": "Content Type",
+            "type": "string"
+          },
+          "filename": {
+            "description": "Reduced to a plain name: no path, no control characters. The sender chose it, so treat it as untrusted text.",
+            "examples": [
+              "report.pdf"
+            ],
+            "title": "Filename",
+            "type": "string"
+          },
+          "index": {
+            "description": "Its position among the message's attachments. Pass it to `GET /v1/inbound/{id}/attachments/{index}`.",
+            "examples": [
+              0
+            ],
+            "title": "Index",
+            "type": "integer"
+          },
+          "inline": {
+            "description": "Whether it is part of the message's layout, such as an embedded image.",
+            "title": "Inline",
+            "type": "boolean"
+          },
+          "size": {
+            "description": "Size in bytes, after decoding.",
+            "examples": [
+              48213
+            ],
+            "title": "Size",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "index",
+          "filename",
+          "content_type",
+          "size",
+          "inline"
+        ],
+        "title": "InboundAttachment",
+        "type": "object"
+      },
+      "InboundHeader": {
+        "description": "One header as the sender wrote it.",
+        "properties": {
+          "name": {
+            "description": "The header name.",
+            "examples": [
+              "Received-SPF"
+            ],
+            "title": "Name",
+            "type": "string"
+          },
+          "value": {
+            "description": "The raw value, unfolded and not decoded. Untrusted.",
+            "examples": [
+              "pass"
+            ],
+            "title": "Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "value"
+        ],
+        "title": "InboundHeader",
+        "type": "object"
+      },
+      "InboundList": {
+        "description": "One page of a project's received messages, newest first.",
+        "properties": {
+          "data": {
+            "description": "The page, ordered by id descending - newest first.",
+            "items": {
+              "$ref": "#/components/schemas/InboundSummary"
+            },
+            "title": "Data",
+            "type": "array"
+          },
+          "has_more": {
+            "description": "Whether another page exists. Pass the last id in `data` as `starting_after` to fetch it.",
+            "examples": [
+              false
+            ],
+            "title": "Has More",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "data",
+          "has_more"
+        ],
+        "title": "InboundList",
+        "type": "object"
+      },
+      "InboundResponse": {
+        "description": "One received message, in full.",
+        "properties": {
+          "attachment_count": {
+            "description": "How many attachments it has.",
+            "examples": [
+              0
+            ],
+            "title": "Attachment Count",
+            "type": "integer"
+          },
+          "attachments": {
+            "description": "Described in the order `/attachments/{index}` counts them.",
+            "items": {
+              "$ref": "#/components/schemas/InboundAttachment"
+            },
+            "title": "Attachments",
+            "type": "array"
+          },
+          "cc": {
+            "description": "The addresses in the `Cc` header. Empty if none.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Cc",
+            "type": "array"
+          },
+          "domain": {
+            "description": "The domain the message was received for.",
+            "examples": [
+              "example.com"
+            ],
+            "title": "Domain",
+            "type": "string"
+          },
+          "envelope_from": {
+            "description": "The SMTP envelope sender. Empty for a bounce. It need not match `from`.",
+            "title": "Envelope From",
+            "type": "string"
+          },
+          "from": {
+            "description": "The address in the `From` header, lower-cased. Empty if there was none. Anybody can write anything here: see `verdicts` for what SES checked.",
+            "examples": [
+              "ada@other.org"
+            ],
+            "title": "From",
+            "type": "string"
+          },
+          "from_name": {
+            "description": "The display name in `From`, if any.",
+            "examples": [
+              "Ada"
+            ],
+            "title": "From Name",
+            "type": "string"
+          },
+          "headers": {
+            "description": "Every header as sent, in order, up to a limit. See `truncated`.",
+            "items": {
+              "$ref": "#/components/schemas/InboundHeader"
+            },
+            "title": "Headers",
+            "type": "array"
+          },
+          "html": {
+            "description": "The HTML body, exactly as sent. **Untrusted.** It may contain script, tracking images and links that lie; do not render it in a page that carries your own credentials.",
+            "title": "Html",
+            "type": "string"
+          },
+          "id": {
+            "description": "Opaque and stable, prefixed `inbound_`.",
+            "examples": [
+              "inbound_01J8XQ2K3M4N5P6Q7R8S9T0V1W"
+            ],
+            "title": "Id",
+            "type": "string"
+          },
+          "in_reply_to": {
+            "description": "The message this one answers, without angle brackets. Empty if none.",
+            "title": "In Reply To",
+            "type": "string"
+          },
+          "message_id": {
+            "description": "The `Message-ID` header, without angle brackets. Empty if none.",
+            "title": "Message Id",
+            "type": "string"
+          },
+          "parse_failed": {
+            "description": "Whether the message could not be read at all. Everything else is empty; the original is available through `/raw` until it expires.",
+            "title": "Parse Failed",
+            "type": "boolean"
+          },
+          "raw_available": {
+            "description": "Whether the original is expected to still be in storage. Retention removes it at a day boundary, so a message just past `raw_expires_at` may already be gone and one just before it should not be.",
+            "title": "Raw Available",
+            "type": "boolean"
+          },
+          "raw_expires_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When retention will have removed the original and its attachments. Null when unknown. The parsed message below stays regardless. UTC.",
+            "title": "Raw Expires At"
+          },
+          "received_at": {
+            "description": "When SES received the message. UTC.",
+            "format": "date-time",
+            "title": "Received At",
+            "type": "string"
+          },
+          "recipients": {
+            "description": "Who the message was addressed to on the wire - the addresses that matched your rule. A blind copy is here and in neither `to` nor `cc`.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Recipients",
+            "type": "array"
+          },
+          "references": {
+            "description": "The ids of the thread it belongs to, oldest first, without brackets.",
+            "items": {
+              "type": "string"
+            },
+            "title": "References",
+            "type": "array"
+          },
+          "reply_to": {
+            "description": "The addresses in the `Reply-To` header.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Reply To",
+            "type": "array"
+          },
+          "size": {
+            "description": "Size of the whole message in bytes.",
+            "examples": [
+              4821
+            ],
+            "title": "Size",
+            "type": "integer"
+          },
+          "subject": {
+            "description": "The subject, decoded and on one line.",
+            "title": "Subject",
+            "type": "string"
+          },
+          "text": {
+            "description": "The plain-text body. Empty when the message had none.",
+            "title": "Text",
+            "type": "string"
+          },
+          "to": {
+            "description": "The addresses in the `To` header.",
+            "items": {
+              "type": "string"
+            },
+            "title": "To",
+            "type": "array"
+          },
+          "truncated": {
+            "description": "Whether a limit was hit while reading it, so something is missing from this representation. The original has all of it.",
+            "title": "Truncated",
+            "type": "boolean"
+          },
+          "verdicts": {
+            "$ref": "#/components/schemas/InboundVerdicts",
+            "description": "What SES concluded about the message."
+          }
+        },
+        "required": [
+          "id",
+          "domain",
+          "from",
+          "from_name",
+          "to",
+          "cc",
+          "subject",
+          "received_at",
+          "size",
+          "attachment_count",
+          "verdicts",
+          "truncated",
+          "parse_failed",
+          "raw_available",
+          "text",
+          "html",
+          "envelope_from",
+          "recipients",
+          "reply_to",
+          "message_id",
+          "in_reply_to",
+          "references",
+          "attachments",
+          "headers"
+        ],
+        "title": "InboundResponse",
+        "type": "object"
+      },
+      "InboundSummary": {
+        "description": "A received message, without its body. What the list returns.",
+        "properties": {
+          "attachment_count": {
+            "description": "How many attachments it has.",
+            "examples": [
+              0
+            ],
+            "title": "Attachment Count",
+            "type": "integer"
+          },
+          "cc": {
+            "description": "The addresses in the `Cc` header. Empty if none.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Cc",
+            "type": "array"
+          },
+          "domain": {
+            "description": "The domain the message was received for.",
+            "examples": [
+              "example.com"
+            ],
+            "title": "Domain",
+            "type": "string"
+          },
+          "from": {
+            "description": "The address in the `From` header, lower-cased. Empty if there was none. Anybody can write anything here: see `verdicts` for what SES checked.",
+            "examples": [
+              "ada@other.org"
+            ],
+            "title": "From",
+            "type": "string"
+          },
+          "from_name": {
+            "description": "The display name in `From`, if any.",
+            "examples": [
+              "Ada"
+            ],
+            "title": "From Name",
+            "type": "string"
+          },
+          "id": {
+            "description": "Opaque and stable, prefixed `inbound_`.",
+            "examples": [
+              "inbound_01J8XQ2K3M4N5P6Q7R8S9T0V1W"
+            ],
+            "title": "Id",
+            "type": "string"
+          },
+          "parse_failed": {
+            "description": "Whether the message could not be read at all. Everything else is empty; the original is available through `/raw` until it expires.",
+            "title": "Parse Failed",
+            "type": "boolean"
+          },
+          "raw_available": {
+            "description": "Whether the original is expected to still be in storage. Retention removes it at a day boundary, so a message just past `raw_expires_at` may already be gone and one just before it should not be.",
+            "title": "Raw Available",
+            "type": "boolean"
+          },
+          "raw_expires_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When retention will have removed the original and its attachments. Null when unknown. The parsed message below stays regardless. UTC.",
+            "title": "Raw Expires At"
+          },
+          "received_at": {
+            "description": "When SES received the message. UTC.",
+            "format": "date-time",
+            "title": "Received At",
+            "type": "string"
+          },
+          "size": {
+            "description": "Size of the whole message in bytes.",
+            "examples": [
+              4821
+            ],
+            "title": "Size",
+            "type": "integer"
+          },
+          "subject": {
+            "description": "The subject, decoded and on one line.",
+            "title": "Subject",
+            "type": "string"
+          },
+          "to": {
+            "description": "The addresses in the `To` header.",
+            "items": {
+              "type": "string"
+            },
+            "title": "To",
+            "type": "array"
+          },
+          "truncated": {
+            "description": "Whether a limit was hit while reading it, so something is missing from this representation. The original has all of it.",
+            "title": "Truncated",
+            "type": "boolean"
+          },
+          "verdicts": {
+            "$ref": "#/components/schemas/InboundVerdicts",
+            "description": "What SES concluded about the message."
+          }
+        },
+        "required": [
+          "id",
+          "domain",
+          "from",
+          "from_name",
+          "to",
+          "cc",
+          "subject",
+          "received_at",
+          "size",
+          "attachment_count",
+          "verdicts",
+          "truncated",
+          "parse_failed",
+          "raw_available"
+        ],
+        "title": "InboundSummary",
+        "type": "object"
+      },
+      "InboundVerdicts": {
+        "description": "What SES concluded about the message. Recorded, never acted on.",
+        "properties": {
+          "dkim": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The DKIM verdict, in the same values as `spf`. `GRAY` means the message was not signed or the signing domain does not match the sender's.",
+            "examples": [
+              "GRAY"
+            ],
+            "title": "Dkim"
+          },
+          "dmarc": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The DMARC verdict, in the same values as `spf`.",
+            "title": "Dmarc"
+          },
+          "dmarc_policy": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The sender domain's published policy - `none`, `quarantine` or `reject` - and present only when DMARC failed.",
+            "title": "Dmarc Policy"
+          },
+          "spam": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The spam verdict, in the same values.",
+            "title": "Spam"
+          },
+          "spf": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "`PASS`, `FAIL`, `GRAY` or `PROCESSING_FAILED`. Null means SES did not say, which is not the same as `PASS`.",
+            "examples": [
+              "PASS"
+            ],
+            "title": "Spf"
+          },
+          "virus": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The virus verdict, in the same values.",
+            "title": "Virus"
+          }
+        },
+        "title": "InboundVerdicts",
+        "type": "object"
+      },
       "ReadinessResponse": {
         "properties": {
           "dependencies": {
@@ -1429,6 +1966,175 @@
         "summary": "Retrieve an email",
         "tags": [
           "emails"
+        ]
+      }
+    },
+    "/v1/inbound": {
+      "get": {
+        "description": "This key's project, newest first, without bodies.\n\nPaged by cursor for the reason ``/v1/emails`` is: ids sort in the order they\nwere created, so ``starting_after`` names a fixed point and stays correct\nwhile mail arrives underneath it, where an offset would silently skip the\nmessage that moved across the boundary. An unknown ``starting_after`` is a 404\nand not an empty page, because the comparison is lexical and an id from\nanother project would otherwise position a page of real messages by a value\nthe caller cannot see.\n\nSorted by id and not by ``received_at``. A backlog means a message can be\nrecorded long after it arrived, so the two orders can differ; id order is the\none a cursor can be stable over, and ``received_at`` is on every row.",
+        "operationId": "list_inbound_v1_inbound_get",
+        "parameters": [
+          {
+            "description": "How many messages to return, newest first.",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 25,
+              "description": "How many messages to return, newest first.",
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Return messages older than this id - the last id from the previous page. The id must belong to this project.",
+            "in": "query",
+            "name": "starting_after",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Return messages older than this id - the last id from the previous page. The id must belong to this project.",
+              "title": "Starting After"
+            }
+          },
+          {
+            "description": "Only messages received for this domain.",
+            "in": "query",
+            "name": "domain",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only messages received for this domain.",
+              "title": "Domain"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InboundList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid or missing API key."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Rate limit exceeded."
+          }
+        },
+        "summary": "List received emails",
+        "tags": [
+          "inbound"
+        ]
+      }
+    },
+    "/v1/inbound/{inbound_id}": {
+      "get": {
+        "description": "One message, parsed. Bodies, headers, attachments and what SES concluded.\n\nThe bodies are the sender's, not SESKit's. In particular the HTML is whatever\nwas sent, and has to be treated as hostile by anything that renders it.",
+        "operationId": "get_inbound_v1_inbound__inbound_id__get",
+        "parameters": [
+          {
+            "description": "The id from the list, or from an `email.received` event.",
+            "in": "path",
+            "name": "inbound_id",
+            "required": true,
+            "schema": {
+              "description": "The id from the list, or from an `email.received` event.",
+              "title": "Inbound Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InboundResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid or missing API key."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Rate limit exceeded."
+          }
+        },
+        "summary": "Retrieve a received email",
+        "tags": [
+          "inbound"
         ]
       }
     },
