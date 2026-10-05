@@ -20,14 +20,23 @@ from typing import Any
 
 import httpx
 
-from seskit._models import Accepted, Email, EmailPage
+from seskit._models import Accepted, Email, EmailPage, InboundEmail, InboundPage
 from seskit._transport import (
     DEFAULT_MAX_ATTEMPTS,
     DEFAULT_TIMEOUT,
     BaseTransport,
     Request,
 )
-from seskit.resources import Attachment, build_get, build_list, build_send
+from seskit.resources import (
+    Attachment,
+    build_get,
+    build_inbound_attachment,
+    build_inbound_get,
+    build_inbound_list,
+    build_inbound_raw,
+    build_list,
+    build_send,
+)
 
 
 class _Transport(BaseTransport):
@@ -62,13 +71,13 @@ class _Transport(BaseTransport):
                 continue
 
             if not self.should_retry(status_code=last.status_code, attempt=attempt + 1):
-                return self.unwrap(last)
+                return self.unwrap(last, binary=request.binary)
             time.sleep(self.backoff(last, attempt))
 
         # Out of attempts with a response in hand: raise what it says rather
         # than a generic "gave up", so the caller sees the server's own reason.
         assert last is not None  # noqa: S101 - unreachable; the loop ran at least once
-        return self.unwrap(last)
+        return self.unwrap(last, binary=request.binary)
 
     def close(self) -> None:
         if self._owns_client:
@@ -145,6 +154,48 @@ class Emails:
         return EmailPage.from_payload(payload)
 
 
+class Inbound:
+    """`client.inbound` - mail your project received."""
+
+    def __init__(self, transport: _Transport) -> None:
+        self._transport = transport
+
+    def get(self, inbound_id: str) -> InboundEmail:
+        """One received message, parsed. `NotFound` if it is not this key's project's."""
+        return InboundEmail.from_payload(self._transport.send(build_inbound_get(inbound_id)))
+
+    def list(
+        self,
+        *,
+        limit: int | None = None,
+        starting_after: str | None = None,
+        domain: str | None = None,
+    ) -> InboundPage:
+        """One page of received messages, newest first, without bodies.
+
+        One page, not all of them. Pass `page.last_id` as `starting_after` while
+        `page.has_more`.
+        """
+        payload = self._transport.send(
+            build_inbound_list(limit=limit, starting_after=starting_after, domain=domain)
+        )
+        return InboundPage.from_payload(payload)
+
+    def attachment(self, inbound_id: str, index: int) -> bytes:
+        """One attachment's bytes. `index` is from the message's `attachments`.
+
+        Needs the stored original, so it raises `NotFound` once retention has
+        removed it. The parsed message from `get` does not expire.
+        """
+        data: bytes = self._transport.send(build_inbound_attachment(inbound_id, index))
+        return data
+
+    def raw(self, inbound_id: str) -> bytes:
+        """The message exactly as it was received, as the bytes of an `.eml`."""
+        data: bytes = self._transport.send(build_inbound_raw(inbound_id))
+        return data
+
+
 class SesKit:
     """A SESKit instance, addressed over HTTP.
 
@@ -173,6 +224,7 @@ class SesKit:
             client=http_client,
         )
         self.emails = Emails(self._transport)
+        self.inbound = Inbound(self._transport)
 
     def close(self) -> None:
         """Release the connection pool. Not needed for a client you kept."""

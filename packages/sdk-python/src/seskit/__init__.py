@@ -29,8 +29,8 @@ is not Python, or you would rather not add a dependency, an HTTP request is a
 first-class way to use SESKit.
 """
 
-from seskit._async_client import AsyncEmails, AsyncSesKit
-from seskit._client import Emails, SesKit
+from seskit._async_client import AsyncEmails, AsyncInbound, AsyncSesKit
+from seskit._client import Emails, Inbound, SesKit
 from seskit._errors import (
     AttachmentTooLarge,
     AuthenticationFailed,
@@ -48,7 +48,16 @@ from seskit._errors import (
     SESKitError,
     SuppressedRecipient,
 )
-from seskit._models import Accepted, Email, EmailPage
+from seskit._models import (
+    Accepted,
+    Email,
+    EmailPage,
+    InboundAttachment,
+    InboundEmail,
+    InboundPage,
+    InboundSummary,
+    Verdicts,
+)
 from seskit.resources import Attachment
 
 __version__ = "0.1.0"
@@ -56,6 +65,7 @@ __version__ = "0.1.0"
 __all__ = [
     "Accepted",
     "AsyncEmails",
+    "AsyncInbound",
     "AsyncSesKit",
     "Attachment",
     "AttachmentTooLarge",
@@ -66,6 +76,11 @@ __all__ = [
     "EmailPage",
     "EmailRejected",
     "Emails",
+    "Inbound",
+    "InboundAttachment",
+    "InboundEmail",
+    "InboundPage",
+    "InboundSummary",
     "InternalError",
     "InvalidRecipient",
     "InvalidRequest",
@@ -77,5 +92,6 @@ __all__ = [
     "SendingLimitExceeded",
     "SesKit",
     "SuppressedRecipient",
+    "Verdicts",
     "__version__",
 ]
