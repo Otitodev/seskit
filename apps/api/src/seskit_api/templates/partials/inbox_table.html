@@ -15,6 +15,7 @@
          href="/inbox"
          hx-get="/partials/inbox"
          hx-target="#inbox-table"
+         hx-indicator="#inbox-filter-busy"
          hx-swap="outerHTML"
          hx-push-url="/inbox"
          {% if not selected_domain %}aria-current="page"{% endif %}>All</a>
@@ -23,11 +24,17 @@
            href="/inbox?domain={{ domain | urlencode }}"
            hx-get="/partials/inbox?domain={{ domain | urlencode }}"
            hx-target="#inbox-table"
+           hx-indicator="#inbox-filter-busy"
            hx-swap="outerHTML"
            hx-push-url="/inbox?domain={{ domain | urlencode }}"
            {% if domain == selected_domain %}aria-current="page"{% endif %}>{{ domain }}</a>
       {% endfor %}
     </nav>
+    {# aria-hidden: the swapped table is the announcement, and a live region for the
+       wait as well would say two things about one click. #}
+    <span class="segmented-busy htmx-indicator" id="inbox-filter-busy" aria-hidden="true">
+      <span class="spinner"></span>
+    </span>
   {% endif %}
 
   {% if messages %}

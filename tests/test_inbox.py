@@ -254,7 +254,9 @@ async def test_a_verdict_ses_did_not_give_reads_not_checked_never_pass(
 
     page = await app_client.get(f"/inbox/{message.id}")
 
-    assert page.text.count("Not checked") == 5
+    # Five verdict rows. Counted as rows and not as the phrase, which the page's own
+    # explanation also uses once.
+    assert page.text.count('<span class="muted">Not checked</span>') == 5
     assert "Pass" not in page.text
 
 
