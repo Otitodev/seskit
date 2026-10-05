@@ -18,6 +18,7 @@ from seskit_core.models.email_event import (
     EventType,
 )
 from seskit_core.models.identity import Identity
+from seskit_core.models.inbound_email import InboundEmail
 from seskit_core.models.project import DEFAULT_PROJECT_NAME, Project
 from seskit_core.models.suppression import SuppressedAddress, SuppressionReason
 from seskit_core.models.user import User, normalise_email
@@ -46,6 +47,7 @@ __all__ = [
     "EmailStatus",
     "EventType",
     "Identity",
+    "InboundEmail",
     "Project",
     "SuppressedAddress",
     "SuppressionReason",

@@ -27,7 +27,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from seskit_core.db import Base
 from seskit_core.ids import IDPrefix, generate_id
 from seskit_core.models.base import TimestampMixin
-from seskit_core.providers.types import EventInfrastructure, SendingQuota
+from seskit_core.providers.types import EventInfrastructure, InboundInfrastructure, SendingQuota
 
 if TYPE_CHECKING:
     from seskit_core.models.project import Project
@@ -142,6 +142,24 @@ class AWSConnection(Base, TimestampMixin):
     event_subscription_arn: Mapped[str | None] = mapped_column(String(255), nullable=True)
     event_https_subscription_arn: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
+    # ---------------------------------------------- received-mail plumbing ---
+    #
+    # What SESKit created so that mail sent to a domain can come back (the
+    # receiving counterpart of the event infrastructure above, and recorded for
+    # the same reason: teardown removes what was created, not what a name would
+    # suggest). Shared by every domain in this account and region; the rule that
+    # points a domain at it lives on the identity.
+    #
+    # `inbound_bucket` is deliberately kept after the topic and queue are gone if
+    # the bucket still holds mail, so a later setup finds it again rather than
+    # leaving a bucket nothing records.
+
+    inbound_bucket: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    inbound_topic_arn: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    inbound_queue_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    inbound_queue_arn: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    inbound_subscription_arn: Mapped[str | None] = mapped_column(String(255), nullable=True)
+
     #: Off unless the project turns it on. Enabling it makes SES rewrite every
     #: link in the mail this project sends and add a tracking pixel - a visible
     #: change to the customer's own product, with privacy consequences, which
@@ -243,6 +261,34 @@ class AWSConnection(Base, TimestampMixin):
     def clear_event_infrastructure(self) -> None:
         """Forget it, after it has been removed at the provider."""
         self.record_event_infrastructure(EventInfrastructure())
+
+    @property
+    def inbound_enabled(self) -> bool:
+        """Whether the plumbing for receiving mail is in place.
+
+        The topic and queue, not the bucket: a bucket kept for the mail still in
+        it does not mean anything is being received.
+        """
+        return bool(self.inbound_topic_arn and self.inbound_queue_url)
+
+    @property
+    def inbound_infrastructure(self) -> InboundInfrastructure:
+        """The stored columns as the vocabulary a provisioner speaks."""
+        return InboundInfrastructure(
+            bucket=self.inbound_bucket or "",
+            topic_arn=self.inbound_topic_arn or "",
+            queue_url=self.inbound_queue_url or "",
+            queue_arn=self.inbound_queue_arn or "",
+            subscription_arn=self.inbound_subscription_arn or "",
+        )
+
+    def record_inbound_infrastructure(self, infrastructure: InboundInfrastructure) -> None:
+        """Write what a provisioner built onto the row. Empty becomes NULL."""
+        self.inbound_bucket = infrastructure.bucket or None
+        self.inbound_topic_arn = infrastructure.topic_arn or None
+        self.inbound_queue_url = infrastructure.queue_url or None
+        self.inbound_queue_arn = infrastructure.queue_arn or None
+        self.inbound_subscription_arn = infrastructure.subscription_arn or None
 
     @property
     def quota(self) -> SendingQuota:

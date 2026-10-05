@@ -21,6 +21,7 @@ if TYPE_CHECKING:
     from seskit_core.models.aws_connection import AWSConnection
     from seskit_core.models.email import Email
     from seskit_core.models.identity import Identity
+    from seskit_core.models.inbound_email import InboundEmail
     from seskit_core.models.user import User
     from seskit_core.models.webhook import WebhookEndpoint
 
@@ -58,6 +59,9 @@ class Project(Base, TimestampMixin):
         back_populates="project", cascade="all, delete-orphan"
     )
     emails: Mapped[list[Email]] = relationship(
+        back_populates="project", cascade="all, delete-orphan"
+    )
+    inbound_emails: Mapped[list[InboundEmail]] = relationship(
         back_populates="project", cascade="all, delete-orphan"
     )
     webhook_endpoints: Mapped[list[WebhookEndpoint]] = relationship(
