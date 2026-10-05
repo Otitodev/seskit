@@ -170,3 +170,18 @@ def test_the_deployment_that_found_this_would_now_start() -> None:
     assert settings.EVENT_INGESTION.value == "sqs"
     assert settings.SMTP_PORT == 1025
     assert settings.SMTP_TLS is False
+
+
+def test_inbound_retention_defaults_to_thirty_days() -> None:
+    assert _settings().INBOUND_RETENTION_DAYS == 30
+
+
+@pytest.mark.parametrize("value", ["0", "-1", "3651"])
+def test_inbound_retention_outside_its_bounds_is_refused(value: str) -> None:
+    """Zero would make S3 expire mail the moment it lands, and an unbounded
+    number turns a typo into "never". Refused at startup, where the message
+    names the setting, rather than at provisioning where AWS would say
+    something about a lifecycle rule.
+    """
+    with pytest.raises(ValidationError, match="INBOUND_RETENTION_DAYS"):
+        _settings(INBOUND_RETENTION_DAYS=value)

@@ -148,6 +148,12 @@ so a value you find in the code has somewhere to be looked up.
 | `EVENT_POLL_MAX_BATCHES` | `10` | tuning. Bounds one pass, so a backlog cannot starve sends |
 | `EVENT_VISIBILITY_TIMEOUT_SECONDS` | `60` | tuning. Must comfortably exceed one ingest, or a slow database becomes duplicate processing |
 
+### Received mail
+
+| Variable | Default | |
+|---|---|---|
+| `INBOUND_RETENTION_DAYS` | `30` | How long the original message and its attachments stay in S3 before AWS removes them, from `1` to `3650`. The parsed message stays in the database either way. Changing it applies the next time receiving is set up; messages already stored keep the clock they had |
+
 ### Webhooks
 
 | Variable | Default | |
