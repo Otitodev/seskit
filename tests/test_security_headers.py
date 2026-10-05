@@ -19,8 +19,10 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
+from typing import Any
 
 import pytest
+from fastapi import Response
 from httpx import AsyncClient
 from seskit_api.middleware.security import BASE_POLICY, HSTS, policy_for
 
@@ -217,3 +219,32 @@ def test_the_base_policy_leaves_scripts_to_be_completed() -> None:
     all, because it would look complete.
     """
     assert "script-src" not in BASE_POLICY
+
+
+async def test_a_route_that_sets_its_own_policy_keeps_it(app: Any, client: AsyncClient) -> None:
+    """Found by a test for something else. A download of somebody's file sets a
+    `sandbox` policy, and the middleware overwrote it with the dashboard's, which
+    allows `script-src 'self'`: the stricter header was discarded and the looser
+    one shipped, with nothing anywhere to say so.
+    """
+
+    async def strict() -> Response:
+        return Response("x", headers={"Content-Security-Policy": "sandbox; default-src 'none'"})
+
+    app.add_api_route("/_strict_policy", strict)
+
+    response = await client.get("/_strict_policy")
+
+    assert response.headers["Content-Security-Policy"] == "sandbox; default-src 'none'"
+    # Only the policy yields; the rest of the headers are still applied.
+    assert response.headers["X-Frame-Options"] == "DENY"
+    assert response.headers["X-Content-Type-Options"] == "nosniff"
+
+
+async def test_a_route_that_sets_no_policy_still_gets_the_dashboards(client: AsyncClient) -> None:
+    """The other half: letting a route override must not leave every other one
+    without a policy.
+    """
+    policy = (await client.get("/healthz")).headers["Content-Security-Policy"]
+
+    assert "script-src 'self' 'nonce-" in policy
