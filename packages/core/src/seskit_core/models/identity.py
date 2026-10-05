@@ -19,7 +19,18 @@ from __future__ import annotations
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import JSON, DateTime, ForeignKey, Index, String, Text, UniqueConstraint
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    DateTime,
+    ForeignKey,
+    Index,
+    String,
+    Text,
+    UniqueConstraint,
+    false,
+    text,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from seskit_core.db import Base
@@ -59,6 +70,18 @@ class Identity(Base, TimestampMixin):
         # `alembic revision --autogenerate` would have written a migration
         # dropping it - silently removing the index that query depends on.
         Index("ix_identities_value_region", "value", "region"),
+        # A domain can receive mail in one place. Its MX record names a single
+        # endpoint, in a single region, so two identities - in two projects, or
+        # two regions - both receiving for the same domain could not both be
+        # right, and mail would belong to whichever happened to be looked up
+        # first. Partial, because most identities receive nothing and any number
+        # of them may share a value.
+        Index(
+            "uq_identities_receiving_value",
+            "value",
+            unique=True,
+            postgresql_where=text("inbound_rule_name IS NOT NULL"),
+        ),
     )
 
     id: Mapped[str] = mapped_column(
@@ -108,7 +131,30 @@ class Identity(Base, TimestampMixin):
     #: Normalised (§19), never raw botocore text - this is rendered into a page.
     last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
 
+    # ---------------------------------------------------- receiving mail ---
+    #
+    # The receipt rule that points this domain's mail at the project's bucket.
+    # NULL name means the domain does not receive. Recorded rather than derived
+    # so teardown removes exactly the rule that was created, from the rule set it
+    # was actually put in - which is whichever the account had active at the
+    # time, and is not something a name can reconstruct.
+
+    inbound_rule_name: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    inbound_rule_set: Mapped[str | None] = mapped_column(String(64), nullable=True)
+
+    #: Whether SESKit created the rule set because the account had none active.
+    #: Only then may it remove the set, and only once the set is empty - one the
+    #: user made is theirs, however empty it ends up.
+    inbound_rule_set_created: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=false()
+    )
+
     project: Mapped[Project] = relationship(back_populates="identities")
+
+    @property
+    def receives_mail(self) -> bool:
+        """Whether a receipt rule has been created for this domain."""
+        return bool(self.inbound_rule_name)
 
     @property
     def type(self) -> IdentityType:
