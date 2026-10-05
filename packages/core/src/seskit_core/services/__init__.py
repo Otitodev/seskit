@@ -58,6 +58,7 @@ from seskit_core.services.identities import (
 )
 from seskit_core.services.inbound import (
     InboundProvisionerFactory,
+    InboundStoreFactory,
     PolledInbox,
     bucket_name_for,
     count_other_receivers,
@@ -136,6 +137,7 @@ __all__ = [
     "ActivityPoint",
     "EmailAlreadyRegistered",
     "InboundProvisionerFactory",
+    "InboundStoreFactory",
     "IssuedKey",
     "Metrics",
     "Outgoing",

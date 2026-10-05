@@ -36,12 +36,15 @@ os.environ["SMTP_HOST"] = os.environ.get("SESKIT_TEST_SMTP_HOST", "localhost")
 os.environ.setdefault("SMTP_PORT", "1025")
 os.environ.setdefault("EMAILS_FROM_EMAIL", "tests@seskit.local")
 
+from fakes.inbound import FakeInboundProvisioner, FakeInboundStore
 from fakes.queue import FakeQueue
 from fakes.ses import FakeProviderFactory, FakeProvisioner
 from httpx import ASGITransport, AsyncClient
 from redis.asyncio import Redis, from_url
 from seskit_api.dependencies import (
     get_destination_resolver,
+    get_inbound_provisioner_factory,
+    get_inbound_store_factory,
     get_provider_factory,
     get_provisioner_factory,
 )
@@ -266,6 +269,17 @@ def provisioner_factory() -> type[FakeProvisioner]:
 
 
 @pytest.fixture
+def inbound_store() -> FakeInboundStore:
+    """The stored-mail reader every ``app_client`` test talks to.
+
+    Overridden for the same reason as the others: a download fetches from S3, and
+    no test should be able to reach AWS by forgetting to substitute something.
+    Seed it with ``inbound_store.put(bucket, key, raw)``.
+    """
+    return FakeInboundStore()
+
+
+@pytest.fixture
 def destination_resolver() -> Callable[[str], list[str]]:
     """Resolves every webhook hostname to one public address.
 
@@ -288,6 +302,7 @@ async def app_client(
     redis_client: Redis,
     provider_factory: FakeProviderFactory,
     provisioner_factory: type[FakeProvisioner],
+    inbound_store: FakeInboundStore,
     destination_resolver: Callable[[str], list[str]],
     queue: FakeQueue,
 ) -> AsyncIterator[AsyncClient]:
@@ -308,6 +323,10 @@ async def app_client(
     # asks for the `provider_factory` fixture and configures it.
     application.dependency_overrides[get_provider_factory] = lambda: provider_factory
     application.dependency_overrides[get_provisioner_factory] = lambda: provisioner_factory
+    application.dependency_overrides[get_inbound_provisioner_factory] = lambda: (
+        FakeInboundProvisioner
+    )
+    application.dependency_overrides[get_inbound_store_factory] = lambda: inbound_store.factory
     application.dependency_overrides[get_destination_resolver] = lambda: destination_resolver
     # The ASGI transport does not run lifespan, so app.state.queue is never
     # built - and a real pool would make every send need one anyway.

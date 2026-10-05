@@ -2138,6 +2138,150 @@
         ]
       }
     },
+    "/v1/inbound/{inbound_id}/attachments/{index}": {
+      "get": {
+        "description": "One attachment's bytes, fetched from the stored message.\n\n**Always served as `application/octet-stream`**, whatever the sender declared,\nwith `Content-Disposition: attachment`, `nosniff` and a sandboxing CSP. The\ndeclared type is on the message's `attachments` for you to read; it is never\none this endpoint believes. These are files a stranger sent, served from your\nAPI's origin.\n\nNeeds the stored message, so it stops working when retention removes it. The\nparsed message does not.",
+        "operationId": "download_attachment_v1_inbound__inbound_id__attachments__index__get",
+        "parameters": [
+          {
+            "description": "The id of the received message.",
+            "in": "path",
+            "name": "inbound_id",
+            "required": true,
+            "schema": {
+              "description": "The id of the received message.",
+              "title": "Inbound Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The attachment's `index` from the message's `attachments`.",
+            "in": "path",
+            "name": "index",
+            "required": true,
+            "schema": {
+              "description": "The attachment's `index` from the message's `attachments`.",
+              "minimum": 0,
+              "title": "Index",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
+              }
+            },
+            "description": "The bytes."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid or missing API key."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Rate limit exceeded."
+          }
+        },
+        "summary": "Download an attachment",
+        "tags": [
+          "inbound"
+        ]
+      }
+    },
+    "/v1/inbound/{inbound_id}/raw": {
+      "get": {
+        "description": "The message exactly as SES received it, as an `.eml` file.\n\nUnparsed and unmodified: every header, every part, every attachment. Useful for\ndebugging a message that did not parse as expected, and for handing to another\ntool. It is the sender's bytes, served as a download with the same protections\nas an attachment.\n\nNeeds the stored message, so it stops working when retention removes it.",
+        "operationId": "download_raw_v1_inbound__inbound_id__raw_get",
+        "parameters": [
+          {
+            "description": "The id of the received message.",
+            "in": "path",
+            "name": "inbound_id",
+            "required": true,
+            "schema": {
+              "description": "The id of the received message.",
+              "title": "Inbound Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "message/rfc822": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
+              }
+            },
+            "description": "The original message, byte for byte."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Invalid or missing API key."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Rate limit exceeded."
+          }
+        },
+        "summary": "Download the original message",
+        "tags": [
+          "inbound"
+        ]
+      }
+    },
     "/v1/webhooks": {
       "get": {
         "description": "Every webhook endpoint registered on this key's project.\n\nThe signing secret is not included - see the note in\n``schemas/webhooks.py``. It is available on the dashboard, where it is read\nonce by a person rather than returned to code on every call.",

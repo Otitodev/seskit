@@ -25,6 +25,7 @@ from seskit_core.security.ratelimit import RateLimitStatus, check_rate_limit
 from seskit_core.security.sessions import SessionData, read_session
 from seskit_core.services import (
     InboundProvisionerFactory,
+    InboundStoreFactory,
     ProviderFactory,
     ProvisionerFactory,
     get_default_project,
@@ -33,7 +34,12 @@ from seskit_core.services import (
     touch_last_used,
     verify_api_key,
 )
-from seskit_provider_aws_ses import SESEventProvisioner, SESInboundProvisioner, SESProvider
+from seskit_provider_aws_ses import (
+    S3InboundStore,
+    SESEventProvisioner,
+    SESInboundProvisioner,
+    SESProvider,
+)
 from sqlalchemy.ext.asyncio import AsyncSession
 
 
@@ -111,6 +117,16 @@ def get_inbound_provisioner_factory() -> InboundProvisionerFactory:
     cannot receive at all.
     """
     return SESInboundProvisioner
+
+
+def get_inbound_store_factory() -> InboundStoreFactory:
+    """How a route reads a stored message back out of its bucket.
+
+    Separate from the provisioner because reading mail and building the plumbing
+    for it are different capabilities with different permissions - a key that
+    can fetch an object does not need to be able to create a bucket.
+    """
+    return S3InboundStore
 
 
 async def get_optional_user(
