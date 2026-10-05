@@ -30,6 +30,11 @@ from seskit_core.providers import AccountStatus, AWSCredentials, EmailProvider
 from seskit_core.security.aws_credentials import encrypt_secret_access_key
 from seskit_core.services.credentials import stored_credentials
 from seskit_core.services.events import ProvisionerFactory, teardown_events
+from seskit_core.services.inbound import (
+    InboundProvisionerFactory,
+    has_inbound_to_remove,
+    teardown_all_receiving,
+)
 
 logger = get_logger(__name__)
 
@@ -185,6 +190,7 @@ async def disconnect_aws(
     *,
     secret_key: str,
     provisioner_factory: ProvisionerFactory | None = None,
+    inbound_factory: InboundProvisionerFactory | None = None,
 ) -> None:
     """Forget the connection, and remove what SESKit built in AWS.
 
@@ -200,6 +206,16 @@ async def disconnect_aws(
     left to say where they came from.
     """
     project_id = connection.project_id
+
+    # Receipt rules first. They live in the account's own rule set, and once the
+    # connection row is gone there is no key left to remove them with.
+    if await has_inbound_to_remove(session, connection):
+        if inbound_factory is None:
+            raise ValueError(
+                "This project receives mail through AWS. Disconnecting needs an inbound "
+                "provisioner factory so its receipt rules can be removed rather than abandoned."
+            )
+        await teardown_all_receiving(session, inbound_factory, connection, secret_key=secret_key)
 
     if connection.events_enabled:
         if provisioner_factory is None:

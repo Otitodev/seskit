@@ -24,6 +24,7 @@ from seskit_core.security.destinations import Resolver
 from seskit_core.security.ratelimit import RateLimitStatus, check_rate_limit
 from seskit_core.security.sessions import SessionData, read_session
 from seskit_core.services import (
+    InboundProvisionerFactory,
     ProviderFactory,
     ProvisionerFactory,
     get_default_project,
@@ -32,7 +33,7 @@ from seskit_core.services import (
     touch_last_used,
     verify_api_key,
 )
-from seskit_provider_aws_ses import SESEventProvisioner, SESProvider
+from seskit_provider_aws_ses import SESEventProvisioner, SESInboundProvisioner, SESProvider
 from sqlalchemy.ext.asyncio import AsyncSession
 
 
@@ -99,6 +100,17 @@ def get_provisioner_factory() -> ProvisionerFactory:
     things it can never do.
     """
     return SESEventProvisioner
+
+
+def get_inbound_provisioner_factory() -> InboundProvisionerFactory:
+    """How a route obtains a received-mail provisioner for a region.
+
+    A fourth capability beside the provider, the event provisioner and the queue
+    reader, for the same reason they are separate: receiving needs permissions
+    nobody should have to grant to get bounce reports, and the SMTP provider
+    cannot receive at all.
+    """
+    return SESInboundProvisioner
 
 
 async def get_optional_user(

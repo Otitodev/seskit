@@ -26,6 +26,7 @@ from seskit_core.providers import AWSCredentials, ContactLanguage, MailType
 from seskit_core.redis import get_redis
 from seskit_core.services import (
     ACKNOWLEDGEMENT,
+    InboundProvisionerFactory,
     ProviderFactory,
     ProvisionerFactory,
     Readiness,
@@ -49,6 +50,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from seskit_api.dependencies import (
     CurrentUser,
     get_app_settings,
+    get_inbound_provisioner_factory,
     get_provider_factory,
     get_provisioner_factory,
     require_project,
@@ -261,6 +263,7 @@ async def disconnect(
     current: Annotated[CurrentUser, Depends(require_user)],
     project: Annotated[Project, Depends(require_project)],
     provisioners: Annotated[ProvisionerFactory, Depends(get_provisioner_factory)],
+    inbound: Annotated[InboundProvisionerFactory, Depends(get_inbound_provisioner_factory)],
     settings: Annotated[Settings, Depends(get_app_settings)],
 ) -> HTMLResponse:
     """Forget the connection.
@@ -274,7 +277,12 @@ async def disconnect(
         return await _page(request, db, current, project)
 
     await disconnect_aws(
-        db, redis, connection, secret_key=settings.SECRET_KEY, provisioner_factory=provisioners
+        db,
+        redis,
+        connection,
+        secret_key=settings.SECRET_KEY,
+        provisioner_factory=provisioners,
+        inbound_factory=inbound,
     )
     await db.commit()
 
