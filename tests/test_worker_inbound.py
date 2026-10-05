@@ -25,7 +25,13 @@ from fakes import ses_events
 from fakes.ses import connect_project
 from seskit_core.errors import APIError, ErrorType
 from seskit_core.events import record_received as real_record_received
-from seskit_core.models import AWSConnection, Identity, InboundEmail
+from seskit_core.models import (
+    AWSConnection,
+    Identity,
+    InboundEmail,
+    WebhookDelivery,
+    WebhookEndpoint,
+)
 from seskit_core.providers import AWSCredentials, InboundInfrastructure, QueuedNotification
 from seskit_core.services import create_project, register_user
 from seskit_worker.inbound import drain_inbound, handle_inbound, poll_inbound
@@ -131,6 +137,7 @@ async def _drain(
     project_ids: set[str],
     bucket: str = BUCKET,
     max_batches: int = 5,
+    enqueue: Any = None,
 ) -> int:
     return await drain_inbound(
         queue,
@@ -142,6 +149,7 @@ async def _drain(
         max_batches=max_batches,
         wait_seconds=0,
         visibility_timeout=30,
+        enqueue=enqueue,
     )
 
 
@@ -505,3 +513,118 @@ async def test_one_unreachable_queue_does_not_abandon_the_others(
     )
 
     assert recorded == 1
+
+
+# ------------------------------------------------------------- webhooks ---
+
+
+async def _with_endpoint(session: AsyncSession, connection: AWSConnection) -> WebhookEndpoint:
+    endpoint = WebhookEndpoint(
+        project_id=connection.project_id,
+        url="https://hooks.example.com/seskit",
+        secret="whsec_test_secret",
+        status="active",
+    )
+    session.add(endpoint)
+    await session.commit()
+    return endpoint
+
+
+async def test_a_recorded_message_asks_the_queue_to_attempt_its_deliveries_now(
+    db_session: AsyncSession, session_factory: async_sessionmaker[AsyncSession]
+) -> None:
+    """Latency only - the delivery row is what makes the webhook durable - but it
+    is the difference between a webhook in seconds and one in a minute.
+    """
+    connection, _ = await _receiving(db_session, "a@example.com")
+    await db_session.commit()
+    await _with_endpoint(db_session, connection)
+    enqueued: list[str] = []
+
+    async def enqueue(delivery_id: str) -> None:
+        enqueued.append(delivery_id)
+
+    await _drain(
+        FakeNotificationQueue(_body(1)),
+        FakeStore("seskit-x/1"),
+        session_factory,
+        project_ids={connection.project_id},
+        enqueue=enqueue,
+    )
+
+    deliveries = list(await db_session.scalars(select(WebhookDelivery)))
+    assert len(deliveries) == 1
+    assert enqueued == [deliveries[0].id]
+
+
+async def test_a_duplicate_is_not_enqueued_a_second_time(
+    db_session: AsyncSession, session_factory: async_sessionmaker[AsyncSession]
+) -> None:
+    connection, _ = await _receiving(db_session, "a@example.com")
+    await db_session.commit()
+    await _with_endpoint(db_session, connection)
+    enqueued: list[str] = []
+
+    async def enqueue(delivery_id: str) -> None:
+        enqueued.append(delivery_id)
+
+    body = _body(1, sns_id="sns-same")
+    await _drain(
+        FakeNotificationQueue(body, body),
+        FakeStore("seskit-x/1"),
+        session_factory,
+        project_ids={connection.project_id},
+        enqueue=enqueue,
+    )
+
+    assert len(enqueued) == 1
+
+
+async def test_a_project_with_no_endpoint_enqueues_nothing(
+    db_session: AsyncSession, session_factory: async_sessionmaker[AsyncSession]
+) -> None:
+    connection, _ = await _receiving(db_session, "a@example.com")
+    await db_session.commit()
+    enqueued: list[str] = []
+
+    async def enqueue(delivery_id: str) -> None:
+        enqueued.append(delivery_id)
+
+    await _drain(
+        FakeNotificationQueue(_body(1)),
+        FakeStore("seskit-x/1"),
+        session_factory,
+        project_ids={connection.project_id},
+        enqueue=enqueue,
+    )
+
+    assert enqueued == []
+
+
+async def test_a_failed_enqueue_does_not_keep_a_recorded_message_on_the_queue(
+    db_session: AsyncSession, session_factory: async_sessionmaker[AsyncSession]
+) -> None:
+    """The message is recorded and the delivery row exists, so the sweep will
+    send the webhook within the minute. Leaving the announcement on the queue
+    would only make it come back to be recognised as a duplicate.
+    """
+    connection, _ = await _receiving(db_session, "a@example.com")
+    await db_session.commit()
+    await _with_endpoint(db_session, connection)
+
+    async def enqueue(delivery_id: str) -> None:
+        raise ConnectionError("redis went away")
+
+    queue = FakeNotificationQueue(_body(1))
+    recorded = await _drain(
+        queue,
+        FakeStore("seskit-x/1"),
+        session_factory,
+        project_ids={connection.project_id},
+        enqueue=enqueue,
+    )
+
+    assert recorded == 1
+    assert queue.deleted == ["receipt-0"]
+    assert await _stored(db_session) == 1
+    assert len(list(await db_session.scalars(select(WebhookDelivery)))) == 1

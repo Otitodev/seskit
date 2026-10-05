@@ -44,6 +44,7 @@ from seskit_core.events import (
     MalformedEnvelope,
     NotAReceipt,
     Outcome,
+    event_for,
     is_recorded,
     locate,
     parse_received,
@@ -57,10 +58,11 @@ from seskit_core.providers import (
     NotificationQueue,
     QueuedNotification,
 )
+from seskit_core.services import pending_delivery_ids
 from seskit_core.services.inbound import distinct_inbound_queues
 from seskit_provider_aws_ses import S3InboundStore
 
-from seskit_worker.events import SessionFactory, build_queue
+from seskit_worker.events import Enqueue, SessionFactory, _enqueue_via, build_queue
 
 logger = get_logger(__name__)
 
@@ -83,6 +85,7 @@ async def poll_inbound(
     build: Callable[[str, str, AWSCredentials], NotificationQueue] | None = None,
     store_builder: StoreBuilder | None = None,
     session_factory: SessionFactory | None = None,
+    enqueue: Enqueue | None = None,
 ) -> int:
     """Drain every inbound queue this instance has. Returns messages recorded.
 
@@ -97,6 +100,7 @@ async def poll_inbound(
     build = build or build_queue
     store_builder = store_builder or build_store
     factory = session_factory or get_session_factory()
+    enqueue = enqueue or _enqueue_via(ctx)
     recorded = 0
 
     async with factory() as session:
@@ -111,6 +115,7 @@ async def poll_inbound(
                 session_factory=factory,
                 project_ids=inbox.project_ids,
                 retention_days=settings.INBOUND_RETENTION_DAYS,
+                enqueue=enqueue,
                 max_batches=settings.EVENT_POLL_MAX_BATCHES,
                 wait_seconds=settings.EVENT_POLL_WAIT_SECONDS,
                 visibility_timeout=settings.EVENT_VISIBILITY_TIMEOUT_SECONDS,
@@ -135,6 +140,7 @@ async def drain_inbound(
     max_batches: int,
     wait_seconds: int,
     visibility_timeout: int,
+    enqueue: Enqueue | None = None,
 ) -> int:
     """Read batches until the queue is empty or the budget runs out.
 
@@ -161,6 +167,7 @@ async def drain_inbound(
                     session_factory=session_factory,
                     project_ids=project_ids,
                     retention_days=retention_days,
+                    enqueue=enqueue,
                 )
             except Exception as exc:
                 # Left on the queue, and the rest of the batch carries on. The
@@ -187,6 +194,7 @@ async def handle_inbound(
     session_factory: SessionFactory,
     project_ids: Collection[str],
     retention_days: int,
+    enqueue: Enqueue | None = None,
 ) -> bool:
     """Process one announcement. Returns whether a message was recorded.
 
@@ -249,7 +257,7 @@ async def handle_inbound(
         raise
 
     async with session_factory() as session:
-        outcome, _ = await record_received(
+        outcome, row = await record_received(
             session,
             identity,
             received,
@@ -257,7 +265,22 @@ async def handle_inbound(
             provider_event_id=event_id,
             retention_days=retention_days,
         )
+        # Read before the commit closes the session, so the ids survive.
+        delivery_ids: list[str] = []
+        if enqueue is not None and row is not None and outcome is Outcome.RECORDED:
+            event = await event_for(session, row.id)
+            if event is not None:
+                delivery_ids = await pending_delivery_ids(session, event.id)
         await session.commit()
+
+    for delivery_id in delivery_ids:
+        # Latency only: the delivery row is what makes the webhook durable, and
+        # the sweep attempts anything the enqueue lost within the minute. A
+        # failure here must not keep the message on the queue - it is recorded.
+        try:
+            await enqueue(delivery_id)  # type: ignore[misc]
+        except Exception as exc:
+            logger.warning("inbound_enqueue_failed", error=type(exc).__name__)
 
     if outcome.is_settled:
         await queue.delete(notification)
