@@ -21,7 +21,7 @@ from seskit_core.config import Settings
 from seskit_core.db import get_session
 from seskit_core.errors import APIError, ErrorType
 from seskit_core.logging import get_logger
-from seskit_core.models import Project
+from seskit_core.models import AWSConnection, Identity, Project
 from seskit_core.redis import get_redis
 from seskit_core.services import (
     InboundProvisionerFactory,
@@ -33,7 +33,10 @@ from seskit_core.services import (
     list_projects,
     refresh_identity,
     remove_identity,
+    setup_receiving,
+    teardown_receiving,
 )
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from seskit_api.dependencies import (
@@ -45,6 +48,7 @@ from seskit_api.dependencies import (
     require_user,
     verify_csrf,
 )
+from seskit_api.receiving import ReceivingView, receiving_view
 from seskit_api.templating import render
 
 logger = get_logger(__name__)
@@ -68,6 +72,7 @@ async def _page(
     status_code: int = 200,
 ) -> HTMLResponse:
     connection = await get_connection(db, project.id)
+    identities = await list_identities(db, project.id)
     return render(
         request,
         "pages/domains.html",
@@ -78,9 +83,55 @@ async def _page(
         project=project,
         projects=await list_projects(db, current.user.id),
         connection=connection,
-        identities=await list_identities(db, project.id),
+        identities=identities,
+        receiving=await _receiving_views(request, db, project, connection, identities),
         error=error,
     )
+
+
+async def _receiving_views(
+    request: Request,
+    db: AsyncSession,
+    project: Project,
+    connection: AWSConnection | None,
+    identities: list[Identity],
+) -> dict[str, ReceivingView]:
+    """Receiving for each domain, keyed by identity id.
+
+    Computed here, once, so every handler that re-renders the page - add, refresh,
+    remove, and the two below - shows the same answer without each having to ask.
+    """
+    settings: Settings = request.app.state.settings
+    taken = await _receiving_elsewhere(db, project.id, [i.value for i in identities if i.is_domain])
+    views: dict[str, ReceivingView] = {}
+    for identity in identities:
+        view = receiving_view(
+            identity,
+            connection,
+            settings,
+            taken_elsewhere=identity.value in taken,
+        )
+        if view is not None:
+            views[identity.id] = view
+    return views
+
+
+async def _receiving_elsewhere(db: AsyncSession, project_id: str, values: list[str]) -> set[str]:
+    """Which of these domains already receive mail through another project.
+
+    The database refuses a second receiver for a domain outright; this is so the
+    page can say so before somebody presses a button that cannot work.
+    """
+    if not values:
+        return set()
+    rows = await db.scalars(
+        select(Identity.value).where(
+            Identity.value.in_(values),
+            Identity.inbound_rule_name.is_not(None),
+            Identity.project_id != project_id,
+        )
+    )
+    return set(rows)
 
 
 @router.get("/domains", response_class=HTMLResponse, summary="Sending identities")
@@ -241,3 +292,124 @@ def _status_for(error: APIError) -> int:
     if error.error_type in {ErrorType.AUTHORIZATION_FAILED, ErrorType.AUTHENTICATION_FAILED}:
         return 400
     return error.status_code
+
+
+@router.post(
+    "/domains/{identity_id}/receiving",
+    response_class=HTMLResponse,
+    dependencies=[Depends(verify_csrf)],
+    summary="Start receiving mail for a domain",
+)
+async def start_receiving(
+    request: Request,
+    identity_id: str,
+    db: Annotated[AsyncSession, Depends(get_session)],
+    current: Annotated[CurrentUser, Depends(require_user)],
+    project: Annotated[Project, Depends(require_project)],
+    inbound: Annotated[InboundProvisionerFactory, Depends(get_inbound_provisioner_factory)],
+    settings: Annotated[Settings, Depends(get_app_settings)],
+) -> HTMLResponse:
+    """Create the receiving plumbing in the user's AWS account and add this
+    domain's rule.
+
+    Refuses on the server for every reason the page shows a disabled button for:
+    the button is a courtesy, and a form can be posted by hand.
+
+    No rollback on an error, as on the AWS page. A rollback expires every loaded
+    object and the template then lazy-loads from inside sync Jinja, so the user
+    sees a 500 instead of the message. ``setup_receiving`` gives the domain back
+    itself when AWS refuses, which is what makes that safe.
+    """
+    identity = await get_owned_identity(db, identity_id=identity_id, project_id=project.id)
+    if identity is None:
+        return await _page(request, db, current, project)
+
+    connection = await get_connection(db, project.id)
+    taken = await _receiving_elsewhere(db, project.id, [identity.value])
+    view = receiving_view(identity, connection, settings, taken_elsewhere=identity.value in taken)
+    if view is None:
+        return await _page(
+            request,
+            db,
+            current,
+            project,
+            error="Only a domain can receive mail.",
+            status_code=400,
+        )
+    if view.blocked and connection is not None:
+        return await _page(request, db, current, project, error=view.blocked, status_code=400)
+    if connection is None:
+        return await _page(
+            request, db, current, project, error=NO_CONNECTION_MESSAGE, status_code=400
+        )
+
+    try:
+        await setup_receiving(
+            db,
+            inbound,
+            connection,
+            identity,
+            resource_prefix=settings.EVENT_RESOURCE_PREFIX,
+            retention_days=settings.INBOUND_RETENTION_DAYS,
+            secret_key=settings.SECRET_KEY,
+        )
+    except APIError as error:
+        return await _page(
+            request, db, current, project, error=error.message, status_code=_status_for(error)
+        )
+
+    await db.commit()
+    return await _page(
+        request,
+        db,
+        current,
+        project,
+        flash=(
+            f"Receiving is on for {identity.value}. SESKit created a bucket, a topic, a queue "
+            "and one receipt rule. Add the MX record below to start receiving."
+        ),
+    )
+
+
+@router.post(
+    "/domains/{identity_id}/receiving/stop",
+    response_class=HTMLResponse,
+    dependencies=[Depends(verify_csrf)],
+    summary="Stop receiving mail for a domain",
+)
+async def stop_receiving(
+    request: Request,
+    identity_id: str,
+    db: Annotated[AsyncSession, Depends(get_session)],
+    current: Annotated[CurrentUser, Depends(require_user)],
+    project: Annotated[Project, Depends(require_project)],
+    inbound: Annotated[InboundProvisionerFactory, Depends(get_inbound_provisioner_factory)],
+    settings: Annotated[Settings, Depends(get_app_settings)],
+) -> HTMLResponse:
+    """Remove this domain's receipt rule, and the plumbing if nothing else uses it.
+
+    Mail already received is kept. Stopping receiving is not deleting what arrived.
+    """
+    identity = await get_owned_identity(db, identity_id=identity_id, project_id=project.id)
+    connection = await get_connection(db, project.id)
+    if identity is None or connection is None:
+        return await _page(request, db, current, project)
+
+    try:
+        await teardown_receiving(db, inbound, connection, identity, secret_key=settings.SECRET_KEY)
+    except APIError as error:
+        return await _page(
+            request, db, current, project, error=error.message, status_code=_status_for(error)
+        )
+
+    await db.commit()
+    return await _page(
+        request,
+        db,
+        current,
+        project,
+        flash=(
+            f"Stopped receiving for {identity.value}. Mail already received is kept. "
+            "Remember to remove the MX record."
+        ),
+    )
