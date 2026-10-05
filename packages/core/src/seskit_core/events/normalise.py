@@ -226,3 +226,26 @@ def to_public(
         "created_at": occurred.isoformat(),
         "data": data,
     }
+
+
+def to_public_received(
+    *,
+    event_id: str,
+    inbound_id: str,
+    occurred: datetime,
+    data: dict[str, Any],
+) -> dict[str, Any]:
+    """The normalised event for a message that arrived.
+
+    The same envelope as :func:`to_public` with ``inbound_id`` where ``email_id``
+    would be. Not an ``email_id`` that happens to hold a different kind of id: a
+    receiver switching on the field's presence has to be able to trust what it
+    refers to, and ``GET /v1/emails/{id}`` must never be handed an inbound id.
+    """
+    return {
+        "id": event_id,
+        "type": f"email.{EventType.RECEIVED.value}",
+        "inbound_id": inbound_id,
+        "created_at": occurred.isoformat(),
+        "data": data,
+    }
