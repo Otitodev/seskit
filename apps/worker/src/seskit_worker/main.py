@@ -15,6 +15,7 @@ from seskit_core.logging import configure_logging, get_logger
 
 from seskit_worker.events import poll_events
 from seskit_worker.identities import recheck_identities
+from seskit_worker.inbound import poll_inbound
 from seskit_worker.jobs import ping
 from seskit_worker.sending import send_email
 from seskit_worker.webhooks import deliver_webhook, sweep_webhooks
@@ -50,6 +51,7 @@ class WorkerSettings:
     functions = [  # noqa: RUF012 - ARQ needs a plain attribute
         ping,
         poll_events,
+        poll_inbound,
         recheck_identities,
         send_email,
         deliver_webhook,
@@ -75,6 +77,18 @@ class WorkerSettings:
             timeout=300,
             # Overlapping passes would have two consumers competing for the
             # same messages, each stealing events from the other's batch.
+            max_tries=1,
+        ),
+        # Every minute, offset from the event poll so the two long polls do not
+        # start together. Received mail is what a person is waiting on, and a
+        # pass over an instance that receives nothing finds no queues and returns
+        # at once. Same single-pass rule as above: overlapping passes would have
+        # two consumers competing for the same announcements.
+        cron(
+            poll_inbound,
+            second=15,
+            run_at_startup=True,
+            timeout=300,
             max_tries=1,
         ),
         # Every minute. The immediate enqueue is what makes a webhook prompt;
