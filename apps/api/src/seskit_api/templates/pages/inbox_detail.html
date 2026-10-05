@@ -152,9 +152,25 @@
   {% endif %}
 
   {% if message.html_body %}
-    {{ card_open("HTML source") }}
-      {{ code_block(message.html_body, language="html") }}
+    {{ card_open("HTML") }}
+      {# The message's HTML, in a frame. It is a stranger's document and it is fetched
+         as its own response with its own policy, never written into this page. The
+         attribute is `sandbox` with no tokens: no scripts, no forms, no same-origin
+         access, no popups. Neither `allow-scripts` nor `allow-same-origin` may ever be
+         added here - together they let the frame remove its own sandbox. #}
+      <iframe class="frame" sandbox="" src="/inbox/{{ message.id }}/html"
+              title="HTML body of this message, shown in a sandbox"
+              loading="lazy" referrerpolicy="no-referrer"></iframe>
+      <p class="muted">
+        Shown in a sandbox: no script runs and nothing loads from the network, so
+        remote images and tracking pixels are blocked, and forms do nothing. A link you
+        click opens inside this frame, still without scripts.
+      </p>
     {{ card_close() }}
+
+    {{ card_open("HTML source", collapsible=True, open=False) }}
+      {{ code_block(message.html_body, language="html") }}
+    {{ card_close(collapsible=True) }}
   {% endif %}
 
   {{ card_open("Original") }}

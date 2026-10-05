@@ -223,6 +223,60 @@ async def inbox_attachment(
         )
 
 
+#: Headers for a received message's HTML, served as a document of its own.
+#:
+#: This is a stranger's markup, and the policy is as tight as one that still shows it can
+#: be. ``sandbox`` gives the document an opaque origin with no script, no forms and no
+#: top navigation; ``default-src 'none'`` means nothing loads from the network, which
+#: also blocks every tracking pixel and remote image; inline styles are the one thing
+#: allowed, because without them nearly every message is unreadable; images may only be
+#: ``data:``. ``frame-ancestors 'self'`` and ``SAMEORIGIN`` let the message page, and only
+#: the message page, put it in a frame.
+MAIL_DOCUMENT_HEADERS = {
+    "Content-Security-Policy": (
+        "sandbox; default-src 'none'; style-src 'unsafe-inline'; img-src data:; "
+        "frame-ancestors 'self'"
+    ),
+    "X-Frame-Options": "SAMEORIGIN",
+    "X-Content-Type-Options": "nosniff",
+    "Cache-Control": "private, no-store",
+    "Referrer-Policy": "no-referrer",
+}
+
+
+@router.get("/inbox/{inbound_id}/html", summary="A received message's HTML, sandboxed")
+async def inbox_html(
+    request: Request,
+    inbound_id: str,
+    db: Annotated[AsyncSession, Depends(get_session)],
+    current: Annotated[CurrentUser, Depends(require_user)],
+    project: Annotated[Project, Depends(require_project)],
+) -> Response:
+    """The HTML body as a document of its own, for the message page to frame.
+
+    Served exactly as it was sent - nothing is cleaned or rewritten, because a
+    sanitiser would be one more thing to get wrong. What contains it is the policy
+    above and the ``sandbox`` attribute on the frame that shows it, which is the same
+    belt and braces on both sides: opened directly in a tab it is still sandboxed.
+    """
+    message = await _owned(db, project, inbound_id)
+    if not message.html_body:
+        return await _detail_page(
+            request,
+            db,
+            current,
+            project,
+            message,
+            error="This message has no HTML body.",
+            status_code=404,
+        )
+    return Response(
+        content=message.html_body,
+        media_type="text/html; charset=utf-8",
+        headers=MAIL_DOCUMENT_HEADERS,
+    )
+
+
 @router.get("/inbox/{inbound_id}/raw", summary="Download the original message")
 async def inbox_raw(
     request: Request,

