@@ -33,6 +33,7 @@ from seskit_core.models import (
     DeliveryStatus,
     Email,
     EmailEvent,
+    InboundEmail,
     WebhookDelivery,
     WebhookEndpoint,
     WebhookStatus,
@@ -232,6 +233,24 @@ async def delete_endpoint(session: AsyncSession, endpoint: WebhookEndpoint) -> N
 # -------------------------------------------------------------- queueing ---
 
 
+async def _project_of(session: AsyncSession, event: EmailEvent) -> str | None:
+    """The project an event belongs to, found through whichever parent it has.
+
+    A message SESKit sent, or one that arrived. An event has exactly one - the
+    database holds that - so exactly one of these runs, and an event with
+    neither (which cannot be stored) delivers to nobody.
+    """
+    if event.email_id is not None:
+        found = await session.scalar(select(Email.project_id).where(Email.id == event.email_id))
+    elif event.inbound_email_id is not None:
+        found = await session.scalar(
+            select(InboundEmail.project_id).where(InboundEmail.id == event.inbound_email_id)
+        )
+    else:
+        return None
+    return str(found) if found is not None else None
+
+
 async def queue_deliveries(session: AsyncSession, event: EmailEvent) -> list[WebhookDelivery]:
     """Create a delivery row per enabled endpoint on the event's project.
 
@@ -245,7 +264,7 @@ async def queue_deliveries(session: AsyncSession, event: EmailEvent) -> list[Web
     if event.type not in PUBLIC_EVENT_TYPES:
         return []
 
-    project_id = await session.scalar(select(Email.project_id).where(Email.id == event.email_id))
+    project_id = await _project_of(session, event)
     if project_id is None:
         return []
 

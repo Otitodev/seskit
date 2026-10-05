@@ -39,8 +39,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from seskit_core.email.parse import parse_message
 from seskit_core.events.ingest import Outcome
+from seskit_core.events.normalise import to_public_received
+from seskit_core.ids import IDPrefix, generate_id
 from seskit_core.logging import get_logger
-from seskit_core.models import Identity, InboundEmail
+from seskit_core.models import EmailEvent, EventType, Identity, InboundEmail
+from seskit_core.services.webhooks import queue_deliveries
 
 logger = get_logger(__name__)
 
@@ -317,6 +320,11 @@ async def record_received(
         )
         return Outcome.DUPLICATE, existing
 
+    # In the same transaction as the row, so a webhook cannot be lost to the
+    # process dying between the two. A duplicate returned above and never gets
+    # here, so it raises no second event.
+    await _raise_received(session, row)
+
     # Ids and sizes only. This is somebody's mail; what is in it, and who it is
     # from and to, is not a reason to put any of it in a log.
     logger.info(
@@ -328,3 +336,82 @@ async def record_received(
         parse_failed=row.parse_failed,
     )
     return Outcome.RECORDED, row
+
+
+def received_data(row: InboundEmail) -> dict[str, Any]:
+    """What a webhook says about a message that arrived.
+
+    A description, not the message. No body, no headers and no attachment bytes:
+    the payload stays small however large the mail is, and a receiver that wants
+    more asks for it with its API key, which is what the endpoint is for. The
+    subject and sender are here because a receiver deciding whether to bother
+    fetching needs them, and because they are the same fields every other mail
+    webhook leads with.
+
+    ``to`` is the header; ``recipients`` is who the message was actually
+    addressed to on the wire, which is the address that received it and can be
+    one the headers never mention.
+    """
+    return {
+        "domain": row.domain,
+        "from": row.from_address,
+        "from_name": row.from_name,
+        "to": row.to_addresses,
+        "cc": row.cc_addresses,
+        "recipients": row.envelope_to,
+        "subject": row.subject,
+        "received_at": row.received_at.isoformat(),
+        "size": row.size_bytes,
+        "attachment_count": len(row.attachments),
+        # Verbatim, and null where SES did not say - which is not a PASS.
+        "verdicts": {
+            "spf": row.spf_verdict,
+            "dkim": row.dkim_verdict,
+            "dmarc": row.dmarc_verdict,
+            "spam": row.spam_verdict,
+            "virus": row.virus_verdict,
+        },
+        "truncated": row.truncated,
+        "parse_failed": row.parse_failed,
+    }
+
+
+async def _raise_received(session: AsyncSession, row: InboundEmail) -> EmailEvent:
+    """Record that mail arrived, and queue it for every endpoint that wants it.
+
+    ``occurred_at`` is when SES received the message, not when this ran: a
+    backlog means SESKit can hear about mail long after it arrived, and
+    ``created_at`` on the payload says when it *happened*.
+
+    ``provider_event_id`` is null. The unique column is the SNS id for events
+    SES sent about mail SESKit sent; deduplication for received mail is on the
+    row itself, which is unique on its storage location and its own SNS id.
+    """
+    event_id = generate_id(IDPrefix.EVENT)
+    event = EmailEvent(
+        id=event_id,
+        inbound_email_id=row.id,
+        event_type=EventType.RECEIVED.value,
+        provider_event_id=None,
+        occurred_at=row.received_at,
+        payload=to_public_received(
+            event_id=event_id,
+            inbound_id=row.id,
+            occurred=row.received_at,
+            data=received_data(row),
+        ),
+    )
+    session.add(event)
+    await session.flush()
+    await queue_deliveries(session, event)
+    return event
+
+
+async def event_for(session: AsyncSession, inbound_id: str) -> EmailEvent | None:
+    """The ``received`` event raised for a message, so a caller can ask the queue
+    to attempt its deliveries now instead of waiting for the sweep.
+    """
+    found: EmailEvent | None = await session.scalar(
+        select(EmailEvent).where(EmailEvent.inbound_email_id == inbound_id)
+    )
+    return found
