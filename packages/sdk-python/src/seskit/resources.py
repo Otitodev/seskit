@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import base64
 from typing import Any
+from urllib.parse import quote
 
 from seskit._transport import Request, new_idempotency_key
 
@@ -24,6 +25,7 @@ from seskit._transport import Request, new_idempotency_key
 Attachment = tuple[str, bytes, str]
 
 EMAILS = "/emails"
+INBOUND = "/inbound"
 
 
 def _recipients(value: str | list[str] | None) -> list[str] | None:
@@ -122,3 +124,66 @@ def build_list(
         if value is not None:
             params[name] = value
     return Request(method="GET", path=EMAILS, params=params or None)
+
+
+# --------------------------------------------------------------- inbound ---
+
+
+def _segment(value: str) -> str:
+    """An id as one path segment, whatever it contains.
+
+    Ids are interpolated into a URL, and an id with a slash in it would otherwise
+    reach a different endpoint - ``../emails`` is a valid string. Quoting makes it
+    one segment that the API will say it does not know.
+    """
+    return quote(value, safe="")
+
+
+def build_inbound_get(inbound_id: str) -> Request:
+    """`GET /v1/inbound/{id}`."""
+    return Request(method="GET", path=f"{INBOUND}/{_segment(inbound_id)}")
+
+
+def build_inbound_list(
+    *,
+    limit: int | None = None,
+    starting_after: str | None = None,
+    domain: str | None = None,
+) -> Request:
+    """`GET /v1/inbound`, newest first, without bodies.
+
+    Cursor rather than offset, for the reason `emails.list` is: a message arriving
+    between two pages shifts every row of an offset down one.
+    """
+    params: dict[str, Any] = {}
+    for name, value in (
+        ("limit", limit),
+        ("starting_after", starting_after),
+        ("domain", domain),
+    ):
+        if value is not None:
+            params[name] = value
+    return Request(method="GET", path=INBOUND, params=params or None)
+
+
+def build_inbound_attachment(inbound_id: str, index: int) -> Request:
+    """`GET /v1/inbound/{id}/attachments/{index}`, as bytes.
+
+    ``index`` is forced through ``int`` so nothing but a number can reach the path.
+    """
+    return Request(
+        method="GET",
+        path=f"{INBOUND}/{_segment(inbound_id)}/attachments/{int(index)}",
+        headers={"Accept": "*/*"},
+        binary=True,
+    )
+
+
+def build_inbound_raw(inbound_id: str) -> Request:
+    """`GET /v1/inbound/{id}/raw`, as bytes."""
+    return Request(
+        method="GET",
+        path=f"{INBOUND}/{_segment(inbound_id)}/raw",
+        headers={"Accept": "*/*"},
+        binary=True,
+    )

@@ -54,6 +54,10 @@ class Request:
     json: dict[str, Any] | None = None
     params: dict[str, Any] | None = None
     headers: dict[str, str] = field(default_factory=dict)
+    #: The answer is a file, not JSON. A download is returned as bytes exactly as
+    #: received - decoding it as JSON would fail, and decoding it as text would
+    #: corrupt it. Errors are still JSON envelopes either way.
+    binary: bool = False
 
 
 def new_idempotency_key() -> str:
@@ -116,8 +120,15 @@ class BaseTransport:
 
     # ------------------------------------------------------------ answers ---
 
-    def unwrap(self, response: httpx.Response) -> Any:
-        """The response body, or the exception its error envelope describes."""
+    def unwrap(self, response: httpx.Response, *, binary: bool = False) -> Any:
+        """The response body, or the exception its error envelope describes.
+
+        ``binary`` is for a download: a success is the bytes, untouched. A failure is
+        always a JSON envelope, so it is read the same way whichever was asked for.
+        """
+        if binary and response.is_success:
+            return response.content
+
         try:
             payload = response.json()
         except ValueError:
