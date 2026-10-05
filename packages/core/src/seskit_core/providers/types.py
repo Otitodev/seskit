@@ -356,7 +356,3 @@ class InboundRule:
     #: Teardown may remove a set only if this is true and it is now empty;
     #: one the user made is theirs, empty or not.
     created_rule_set: bool = False
-    #: The name of an earlier rule that stops evaluation for this domain's
-    #: mail, when there is one. This rule would never run, and the user needs
-    #: to be told rather than left wondering why nothing arrives.
-    shadowed_by: str | None = None
