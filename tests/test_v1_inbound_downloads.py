@@ -83,7 +83,10 @@ async def _stored(
     project_id, key = await _project_key(session, owner=owner)
     if connected:
         await connect_project(session, project_id)
-    row = await _message(session, project_id=project_id, attachments=ATTACHMENTS, **overrides)
+    # Defaults first, so a test that overrides `attachments` replaces them
+    # instead of passing the keyword twice.
+    fields: dict[str, Any] = {"attachments": ATTACHMENTS, **overrides}
+    row = await _message(session, project_id=project_id, **fields)
     store.put(row.storage_bucket, row.storage_key, _raw())
     await session.commit()
     return project_id, key, row

@@ -91,7 +91,13 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 
         response = await call_next(request)
 
-        response.headers["Content-Security-Policy"] = policy_for(nonce)
+        # A route that set its own policy keeps it. This is the dashboard's
+        # policy, written for pages that render here; applying it over a route
+        # that deliberately set a stricter one - a download of somebody else's
+        # file, which sets `sandbox` - would silently discard the stricter one
+        # and ship the looser, with nothing to say so.
+        if "Content-Security-Policy" not in response.headers:
+            response.headers["Content-Security-Policy"] = policy_for(nonce)
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
         # same-origin rather than no-referrer: an unsubscribe token or an email
