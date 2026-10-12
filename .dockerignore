@@ -1,0 +1,54 @@
+# What `COPY . .` in docker/Dockerfile and docker/Dockerfile.worker may not see.
+#
+# Without this file the whole working tree is the build context, and the
+# runtime stage copies /app out of the builder - so anything in the tree is in
+# the image that gets pushed. .gitignore does not help: Docker does not read it,
+# and a file git ignores is exactly the kind a developer has locally (.env).
+
+# Secrets. `.env` holds SECRET_KEY, the key every stored AWS secret is encrypted
+# under. A local build pushed to a registry would otherwise carry it.
+.env
+.env.*
+*.pem
+*.key
+
+# Version control and CI: history can hold what was later removed, and none of
+# it runs in the container.
+.git
+.gitattributes
+.githooks
+.github
+.gitmessage
+.pre-commit-config.yaml
+
+# A host virtualenv. The image installs its own at /app/.venv, and copying a
+# Windows or macOS one over it replaces working interpreters with ones that
+# cannot start.
+.venv
+venv
+**/.venv
+
+# Caches and build output.
+__pycache__
+*.py[cod]
+.pytest_cache
+.mypy_cache
+.ruff_cache
+.coverage
+htmlcov
+site
+
+# Not part of the running service: the documentation site, its theme and
+# config, working notes, the specification, and the tests.
+docs
+overrides
+mkdocs.yml
+research
+SESKit_MVP.md
+tests
+
+# Local overrides and editor files.
+docker-compose.override.yml
+.vscode
+.idea
+.DS_Store
