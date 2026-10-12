@@ -310,9 +310,12 @@ def _needs_raw(message: OutboundEmail) -> bool:
     """Whether SES has to be given the assembled MIME rather than fields.
 
     Simple content is built by SES from what we pass, so anything it has no
-    field for - an attachment, a custom header - cannot survive that path.
+    field for - an attachment, a custom header, the List-Unsubscribe pair that
+    ``build_message`` derives from ``unsubscribe_url`` - cannot survive that
+    path. The last is the easy one to forget: it is not a header the caller
+    passed, so nothing in ``headers`` hints that it exists.
     """
-    return bool(message.attachments or message.headers)
+    return bool(message.attachments or message.headers or message.unsubscribe_url)
 
 
 def _content(message: OutboundEmail) -> dict[str, Any]:
