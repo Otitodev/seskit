@@ -220,8 +220,9 @@ def describe_use_case(mail_type: MailType, readiness: Readiness) -> str:
         "SESKit, a self-hosted email platform on Amazon SES "
         "(https://github.com/Otitodev/seskit). Recipients are the sender's own users. "
         "Bounce and complaint notifications are delivered by SNS to this installation "
-        "and the addresses are suppressed automatically; every message carries a "
-        f"one-click List-Unsubscribe header. {readiness.delivered_count} message(s) "
+        "and the addresses are suppressed automatically; a message to a single "
+        "recipient carries a one-click List-Unsubscribe header. "
+        f"{readiness.delivered_count} message(s) "
         "have been sent and confirmed delivered through this pipeline in the sandbox."
     )
 
