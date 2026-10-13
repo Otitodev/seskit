@@ -37,7 +37,7 @@ once all three are. Then: the kind of mail you send, your website, up to four
 contact addresses for AWS's reply, and AWS's acknowledgement to tick. SESKit
 fills in the use case for the reviewer from what it knows - that bounces and
 complaints come back over SNS and the addresses are
-[suppressed](suppression.md), and that every message carries a
+[suppressed](suppression.md), and that a message to a single recipient carries a
 [one-click unsubscribe](suppression.md#one-click-unsubscribe) header.
 
 The card then shows the wait, and the outcome when you refresh. If AWS asks a

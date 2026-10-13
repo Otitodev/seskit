@@ -228,3 +228,49 @@ def test_alembic_needs_no_configuration_of_its_own() -> None:
     env = (ROOT / "migrations" / "env.py").read_text("utf-8")
     assert "DATABASE_URL" in env
     assert 'set_main_option("sqlalchemy.url"' in env
+
+
+# ----------------------------------------------------------- .dockerignore ---
+
+DOCKERIGNORE = ROOT / ".dockerignore"
+
+
+def _ignored_patterns() -> set[str]:
+    return {
+        line.strip()
+        for line in DOCKERIGNORE.read_text(encoding="utf-8").splitlines()
+        if line.strip() and not line.lstrip().startswith("#")
+    }
+
+
+@pytest.mark.parametrize("pattern", [".env", ".env.*", ".git", ".venv", "*.pem", "*.key"])
+def test_the_build_context_leaves_out_secrets_history_and_the_host_venv(pattern: str) -> None:
+    """`COPY . .` takes the whole context, and the runtime stage copies /app out
+    of the builder, so whatever is not ignored is in the pushed image.
+
+    `.env` carries SECRET_KEY, which every stored AWS secret is encrypted under.
+    A host `.venv` would replace the image's interpreters with ones from another
+    operating system.
+    """
+    assert pattern in _ignored_patterns()
+
+
+def test_the_build_context_keeps_everything_the_build_reads() -> None:
+    """The opposite failure: an ignore rule that breaks the build.
+
+    The build reads the manifests, the lockfile, the sources, the migrations and
+    the entrypoint, and `pyproject.toml` names `README.md`. A pattern covering
+    any of them would fail the build for a reason that looks unrelated.
+    """
+    needed = {
+        "pyproject.toml",
+        "uv.lock",
+        "README.md",
+        "alembic.ini",
+        "apps",
+        "packages",
+        "migrations",
+        "docker",
+        "scripts",
+    }
+    assert not needed & _ignored_patterns()

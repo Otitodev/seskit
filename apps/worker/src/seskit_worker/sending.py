@@ -12,6 +12,13 @@ delivery and is not solved here. What is done is to narrow the window and to
 retry only when retrying could help: the status moves to `sending` before the
 call, the message id is written immediately after, and a terminal rejection
 fails the message rather than being attempted twice.
+
+**On retrying.** ARQ retries a job only when it raises :class:`arq.Retry`; any
+other exception is a final failure, whatever ``max_tries`` says. A retryable
+provider error therefore raises ``Retry``, and the message stays ``sending``
+between attempts - ``failed`` is not sendable, so recording it early would make
+the retry skip the very message it was scheduled for. The failure is recorded
+on the last attempt, when nothing is left to wait for.
 """
 
 from __future__ import annotations
@@ -19,6 +26,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
+from arq import Retry
 from seskit_core.config import get_settings
 from seskit_core.db import get_session_factory
 from seskit_core.errors import APIError, ErrorType
@@ -40,6 +48,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 logger = get_logger(__name__)
+
+#: Seconds to wait before attempt n+1 is ``n * RETRY_BACKOFF_SECONDS``: long
+#: enough for a throttle or a brief outage to clear, short enough that the
+#: three attempts finish within a few minutes.
+RETRY_BACKOFF_SECONDS = 30
 
 #: How the job turns a provider name into an adapter. Injectable so a test can
 #: substitute one without patching a module attribute.
@@ -89,7 +102,13 @@ async def send_email(ctx: dict[str, Any], email_id: str) -> str:
     """
     factory = get_session_factory()
     async with factory() as session:
-        return await send_one(session, email_id, job_id=ctx.get("job_id"))
+        return await send_one(
+            session,
+            email_id,
+            job_id=ctx.get("job_id"),
+            attempt=int(ctx.get("job_try", 1)),
+            max_attempts=get_settings().EMAIL_SEND_MAX_ATTEMPTS,
+        )
 
 
 async def send_one(
@@ -98,11 +117,16 @@ async def send_one(
     *,
     job_id: str | None = None,
     build: ProviderBuilder | None = None,
+    attempt: int = 1,
+    max_attempts: int = 1,
 ) -> str:
     """Send one queued message. Returns the resulting status.
 
-    Raises on a retryable failure so ARQ tries again; returns normally on a
-    terminal one, because re-sending a rejected message gets the same rejection.
+    Raises :class:`arq.Retry` on a retryable failure while attempts remain, so
+    ARQ tries again; returns normally on a terminal one, because re-sending a
+    rejected message gets the same rejection. ``attempt`` is ARQ's 1-based
+    ``job_try``. The defaults make a single attempt, which is the safe reading
+    for a caller that does not know about retries.
     """
     settings = get_settings()
     build = build or build_provider
@@ -160,17 +184,26 @@ async def send_one(
         )
         result = await provider.send_email(outbound)
     except APIError as error:
-        record_failure(email, error)
+        retryable = is_retryable(error)
+        will_retry = retryable and attempt < max_attempts
+        if will_retry:
+            # Still `sending`, so the next attempt may pick it up. The reason
+            # is kept for the dashboard, which would otherwise show a message
+            # that has been quietly stuck for minutes.
+            email.last_error = error.message
+        else:
+            record_failure(email, error)
         await session.commit()
         logger.info(
             "send_failed",
             email_id=email_id,
             error_type=error.error_type.value,
-            retryable=is_retryable(error),
+            retryable=retryable,
+            attempt=attempt,
+            will_retry=will_retry,
         )
-        if is_retryable(error):
-            # Back to ARQ, which will try again on its own schedule.
-            raise
+        if will_retry:
+            raise Retry(defer=attempt * RETRY_BACKOFF_SECONDS) from error
         return EmailStatus.FAILED.value
 
     record_sent(

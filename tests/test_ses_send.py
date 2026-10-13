@@ -124,6 +124,25 @@ async def test_a_custom_header_also_forces_raw(monkeypatch: pytest.MonkeyPatch) 
     assert b"X-Campaign: spring" in client.request["Content"]["Raw"]["Data"]
 
 
+async def test_an_unsubscribe_link_forces_raw_and_reaches_the_wire(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Simple content has no field for List-Unsubscribe either.
+
+    Only `build_message` turns `unsubscribe_url` into the two headers, so a plain
+    message sent as fields went out with neither: SMTP showed the one-click
+    button in local testing and SES silently did not in production.
+    """
+    client = FakeSESClient()
+    url = "https://mail.example.com/u/token"
+
+    await _provider(monkeypatch, client).send_email(_email(unsubscribe_url=url))
+
+    raw = client.request["Content"]["Raw"]["Data"]
+    assert f"List-Unsubscribe: <{url}>".encode() in raw
+    assert b"List-Unsubscribe-Post: List-Unsubscribe=One-Click" in raw
+
+
 async def test_raw_still_passes_the_destination(monkeypatch: pytest.MonkeyPatch) -> None:
     """Otherwise SES takes recipients from the headers, and a blind copy is
     deliberately not in the headers - it would simply never be delivered.
