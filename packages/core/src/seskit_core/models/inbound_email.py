@@ -46,7 +46,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from seskit_core.db import Base
 from seskit_core.ids import IDPrefix, generate_id
-from seskit_core.models.base import TimestampMixin
+from seskit_core.models.base import TimestampMixin, utcnow
 
 if TYPE_CHECKING:
     from seskit_core.models.project import Project
@@ -183,6 +183,16 @@ class InboundEmail(Base, TimestampMixin):
     )
 
     project: Mapped[Project] = relationship(back_populates="inbound_emails")
+
+    @property
+    def raw_available(self) -> bool:
+        """Whether the original is expected to still be in storage.
+
+        True when the expiry is unknown, because unknown is not gone: the download
+        settles it. The one definition, so the API and the dashboard cannot
+        disagree about whether a link should be offered.
+        """
+        return self.raw_expires_at is None or self.raw_expires_at > utcnow()
 
     @property
     def has_attachments(self) -> bool:

@@ -99,11 +99,16 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         if "Content-Security-Policy" not in response.headers:
             response.headers["Content-Security-Policy"] = policy_for(nonce)
         response.headers["X-Content-Type-Options"] = "nosniff"
-        response.headers["X-Frame-Options"] = "DENY"
+        # Framing and referrer policy follow the same rule as the CSP above: set only if
+        # the route did not. The preview of a received message's HTML is its own
+        # document, framed by the page that shows it, so it has to be able to say
+        # SAMEORIGIN and not be forced back to DENY - and it sends no Referer at all,
+        # which is stricter than the default and must not be loosened to it.
+        response.headers.setdefault("X-Frame-Options", "DENY")
         # same-origin rather than no-referrer: an unsubscribe token or an email
         # id in a Referer sent to another site is a leak, but SESKit's own
         # navigation is worth keeping.
-        response.headers["Referrer-Policy"] = "same-origin"
+        response.headers.setdefault("Referrer-Policy", "same-origin")
 
         if not self._settings.is_local:
             response.headers["Strict-Transport-Security"] = HSTS

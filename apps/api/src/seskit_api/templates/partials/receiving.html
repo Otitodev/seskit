@@ -1,0 +1,86 @@
+{# Receiving mail for one domain.
+
+   Shown on a domain's card. Says what turning it on will create in the user's own
+   AWS account before the button is pressed - the same rule the event reporting
+   panel follows, because both put resources in somebody else's account that then
+   appear on their bill - and says plainly why it is unavailable when it is, rather
+   than hiding the control. #}
+{% from "components/ui.html" import button, copy_value, code_block %}
+
+{% set view = receiving[identity.id] %}
+
+<div class="stack">
+  {% if view.enabled %}
+    <div class="alert alert--success" role="status">
+      <p class="alert__title">Receiving is on</p>
+      <p>
+        Mail sent to addresses at <code>{{ identity.value }}</code> is stored by
+        SESKit once the record below is in your DNS. The original message is kept
+        for {{ view.retention_days }} days; the parsed message stays after that,
+        but its attachments can no longer be downloaded.
+      </p>
+    </div>
+
+    <p>Add this MX record at your DNS provider.</p>
+    <div class="table-wrap">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Type</th>
+            <th>Name</th>
+            <th>Priority</th>
+            <th>Value</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>MX</td>
+            <td class="table__mono">{{ copy_value(view.mx.name) }}</td>
+            <td>{{ view.mx.priority }}</td>
+            <td class="table__mono">{{ copy_value(view.mx.value) }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    {{ code_block(view.mx.zone_line, language="DNS") }}
+
+    <div class="alert alert--warning" role="note">
+      <p class="alert__title">This replaces wherever the domain receives mail now</p>
+      <p>
+        An MX record sends <strong>all</strong> of <code>{{ identity.value }}</code>'s
+        mail to Amazon SES. If it receives mail somewhere else today, that mail
+        stops arriving there. To keep that, receive on a subdomain such as
+        <code>mail.{{ identity.value }}</code> instead: add it above as its own
+        domain, verify it, and turn receiving on there.
+      </p>
+    </div>
+
+    <form method="post" action="/domains/{{ identity.id }}/receiving/stop">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      {{ button("Stop receiving", variant="danger", type="submit") }}
+    </form>
+  {% else %}
+    <p>
+      Turn this on to have SESKit receive mail sent to
+      <code>{{ identity.value }}</code>, so your application can read it and be told
+      when it arrives.
+    </p>
+    <p class="muted">
+      It creates, in your AWS account: an S3 bucket to hold the messages, an SNS
+      topic and an SQS queue, and one receipt rule for this domain added to your
+      active Amazon SES rule set. SESKit never replaces a rule set you already
+      have, and removes only what it created. AWS bills these to your account.
+    </p>
+
+    {% if view.blocked %}
+      <div class="alert alert--warning" role="status">
+        <p>{{ view.blocked }}</p>
+      </div>
+    {% endif %}
+
+    <form method="post" action="/domains/{{ identity.id }}/receiving">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      {{ button("Start receiving", variant="primary", type="submit", disabled=view.blocked is not none) }}
+    </form>
+  {% endif %}
+</div>

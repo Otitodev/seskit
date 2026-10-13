@@ -14,13 +14,20 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Response
 from seskit_core.db import get_session
+from seskit_core.models import Identity
 from seskit_core.providers import IdentityType
 from seskit_core.services import list_identities
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from seskit_api.dependencies import APIContext, require_api_key
+from seskit_api.receiving import mx_record
 from seskit_api.routes.v1.api_keys import API_RESPONSES, apply_rate_limit_headers
-from seskit_api.schemas.domains import DomainList, DomainResponse
+from seskit_api.schemas.domains import (
+    DomainList,
+    DomainResponse,
+    MxRecordResponse,
+    ReceivingResponse,
+)
 
 router = APIRouter(tags=["domains"])
 
@@ -42,4 +49,26 @@ async def list_domains(
     identities = await list_identities(db, context.project.id)
     domains = [identity for identity in identities if identity.type is IdentityType.DOMAIN]
 
-    return DomainList(data=[DomainResponse.model_validate(domain) for domain in domains])
+    return DomainList(data=[_response(domain) for domain in domains])
+
+
+def _response(identity: Identity) -> DomainResponse:
+    """A domain as a customer sees it, with whether it receives mail.
+
+    ``receiving`` is attached here and not read off the row, because the MX host is
+    Amazon SES's and the row is core's, which knows nothing about a provider. The
+    record is withheld until receiving is on, so nobody publishes it early.
+    """
+    response = DomainResponse.model_validate(identity)
+    record = mx_record(identity)
+    response.receiving = ReceivingResponse(
+        enabled=identity.receives_mail,
+        mx=(
+            MxRecordResponse(
+                record_type="MX", name=record.name, priority=record.priority, value=record.value
+            )
+            if identity.receives_mail
+            else None
+        ),
+    )
+    return response

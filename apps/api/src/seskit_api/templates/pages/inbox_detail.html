@@ -1,0 +1,206 @@
+{% extends "base.html" %}
+{% from "components/ui.html" import card_open, card_close, badge, button, code_block, verdict %}
+
+{% block title %}{{ message.subject or "(no subject)" }} · SESKit{% endblock %}
+
+{# Everything about this message was written by somebody else. It is escaped by
+   Jinja and there is no |safe anywhere in this file. The HTML body is shown as
+   source and never rendered into this page: a signed-in person's session is the
+   most valuable thing here, and a stranger's markup does not belong next to it. #}
+
+{% block content %}
+  <div class="page-header">
+    <h1>{{ message.subject or "(no subject)" }}</h1>
+    <p class="page-header__subtitle">
+      <a class="link" href="/inbox">Back to inbox</a>
+    </p>
+  </div>
+
+  {% if error %}
+    <div class="alert alert--danger" role="alert">
+      <p>{{ error }}</p>
+    </div>
+  {% endif %}
+
+  {% if message.parse_failed %}
+    <div class="alert alert--warning" role="status">
+      <p class="alert__title">SESKit could not read this message</p>
+      <p>
+        Everything below is empty. The original is still stored
+        {% if message.raw_available %}and can be downloaded{% else %}but has passed its retention period{% endif %}.
+      </p>
+    </div>
+  {% elif message.truncated %}
+    <div class="alert alert--warning" role="status">
+      <p class="alert__title">Part of this message was left out</p>
+      <p>
+        It hit a limit while being read - a very long body, or a very large number of
+        parts or headers. The original has all of it.
+      </p>
+    </div>
+  {% endif %}
+
+  {{ card_open("Message") }}
+    <dl class="datalist">
+      <div class="datalist__row">
+        <dt>From</dt>
+        <dd class="table__mono">
+          {% if message.from_name %}{{ message.from_name }} {% endif %}{{ message.from_address or "unknown sender" }}
+        </dd>
+      </div>
+      <div class="datalist__row">
+        <dt>To</dt>
+        <dd class="table__mono">{{ message.to_addresses | join(", ") or "—" }}</dd>
+      </div>
+      {% if message.cc_addresses %}
+        <div class="datalist__row">
+          <dt>Cc</dt>
+          <dd class="table__mono">{{ message.cc_addresses | join(", ") }}</dd>
+        </div>
+      {% endif %}
+      {% if message.reply_to %}
+        <div class="datalist__row">
+          <dt>Reply-To</dt>
+          <dd class="table__mono">{{ message.reply_to | join(", ") }}</dd>
+        </div>
+      {% endif %}
+      <div class="datalist__row">
+        {# Who it was addressed to on the wire - the address that received it. It
+           can be one the headers never mention, such as a blind copy. #}
+        <dt>Delivered to</dt>
+        <dd class="table__mono">{{ message.envelope_to | join(", ") or "—" }}</dd>
+      </div>
+      <div class="datalist__row">
+        <dt>Domain</dt>
+        <dd><code>{{ message.domain }}</code></dd>
+      </div>
+      <div class="datalist__row">
+        <dt>Received</dt>
+        <dd class="muted">{{ message.received_at.strftime("%Y-%m-%d %H:%M UTC") }}</dd>
+      </div>
+      <div class="datalist__row">
+        <dt>Size</dt>
+        <dd class="muted">{{ (message.size_bytes / 1024) | round(1) }} KB</dd>
+      </div>
+      {% if message.message_id_header %}
+        <div class="datalist__row">
+          <dt>Message-ID</dt>
+          <dd class="table__mono">{{ message.message_id_header }}</dd>
+        </div>
+      {% endif %}
+      {% if message.in_reply_to %}
+        <div class="datalist__row">
+          <dt>In reply to</dt>
+          <dd class="table__mono">{{ message.in_reply_to }}</dd>
+        </div>
+      {% endif %}
+    </dl>
+  {{ card_close() }}
+
+  {{ card_open("Authentication") }}
+    <dl class="datalist">
+      <div class="datalist__row"><dt>SPF</dt><dd>{{ verdict(message.spf_verdict) }}</dd></div>
+      <div class="datalist__row"><dt>DKIM</dt><dd>{{ verdict(message.dkim_verdict) }}</dd></div>
+      <div class="datalist__row">
+        <dt>DMARC</dt>
+        <dd>
+          {{ verdict(message.dmarc_verdict) }}
+          {% if message.dmarc_policy %}<span class="muted">sender asks receivers to {{ message.dmarc_policy }}</span>{% endif %}
+        </dd>
+      </div>
+      <div class="datalist__row"><dt>Spam</dt><dd>{{ verdict(message.spam_verdict) }}</dd></div>
+      <div class="datalist__row"><dt>Virus</dt><dd>{{ verdict(message.virus_verdict) }}</dd></div>
+    </dl>
+    <p class="muted">
+      Amazon SES checked these. SESKit shows them and acts on none: whether to trust a
+      message is your decision. <em>Not checked</em> means SES did not say, which is
+      not the same as a pass.
+    </p>
+  {{ card_close() }}
+
+  {% if message.attachments %}
+    {{ card_open("Attachments") }}
+      <ul class="stack">
+        {% for attachment in message.attachments %}
+          <li>
+            <span class="table__mono">{{ attachment.filename }}</span>
+            {# What the sender *declared*, labelled as such. It is not checked, and
+               a download is always served as opaque bytes whatever it says. #}
+            <span class="muted">
+              declared {{ attachment.content_type }} · {{ (attachment.size / 1024) | round(1) }} KB{% if attachment.inline %} · inline{% endif %}
+            </span>
+            {% if message.raw_available %}
+              {# A plain link: it changes nothing, and a download is what it is for. #}
+              <a class="link" href="/inbox/{{ message.id }}/attachments/{{ attachment.index }}">Download</a>
+            {% endif %}
+          </li>
+        {% endfor %}
+      </ul>
+      {% if not message.raw_available %}
+        <p class="muted">
+          The original has passed its retention period, so attachments can no longer be
+          downloaded.
+        </p>
+      {% endif %}
+    {{ card_close() }}
+  {% endif %}
+
+  {% if message.text_body %}
+    {{ card_open("Text") }}
+      {{ code_block(message.text_body, language="text") }}
+    {{ card_close() }}
+  {% endif %}
+
+  {% if message.html_body %}
+    {{ card_open("HTML") }}
+      {# The message's HTML, in a frame. It is a stranger's document and it is fetched
+         as its own response with its own policy, never written into this page. The
+         attribute is `sandbox` with no tokens: no scripts, no forms, no same-origin
+         access, no popups. Neither `allow-scripts` nor `allow-same-origin` may ever be
+         added here - together they let the frame remove its own sandbox. #}
+      <iframe class="frame" sandbox="" src="/inbox/{{ message.id }}/html"
+              title="HTML body of this message, shown in a sandbox"
+              loading="lazy" referrerpolicy="no-referrer"></iframe>
+      <p class="muted">
+        Shown in a sandbox: no script runs and nothing loads from the network, so
+        remote images and tracking pixels are blocked, and forms do nothing. A link you
+        click opens inside this frame, still without scripts.
+      </p>
+    {{ card_close() }}
+
+    {{ card_open("HTML source", collapsible=True, open=False) }}
+      {{ code_block(message.html_body, language="html") }}
+    {{ card_close(collapsible=True) }}
+  {% endif %}
+
+  {{ card_open("Original") }}
+    {% if message.raw_available %}
+      <p>
+        The message exactly as Amazon SES received it, every header and every part.
+        {% if message.raw_expires_at %}
+          It is removed after {{ message.raw_expires_at.strftime("%Y-%m-%d") }}; the parsed
+          message above stays.
+        {% endif %}
+      </p>
+      <div class="row">
+        {{ button("Download .eml", href="/inbox/" ~ message.id ~ "/raw", icon_name="arrow-right") }}
+      </div>
+    {% else %}
+      <p class="muted">
+        The original was removed when its retention period passed. The parsed message
+        above stays readable.
+      </p>
+    {% endif %}
+  {{ card_close() }}
+
+  {% if message.headers %}
+    {{ card_open("Headers", collapsible=True, open=False, meta=message.headers | length ~ " headers") }}
+      {%- set lines = [] %}
+      {%- for header in message.headers %}
+        {%- set _ = lines.append(header[0] ~ ": " ~ header[1]) %}
+      {%- endfor %}
+      {{ code_block(lines | join("
+"), language="headers") }}
+    {{ card_close(collapsible=True) }}
+  {% endif %}
+{% endblock %}

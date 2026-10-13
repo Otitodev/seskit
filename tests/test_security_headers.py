@@ -248,3 +248,36 @@ async def test_a_route_that_sets_no_policy_still_gets_the_dashboards(client: Asy
     policy = (await client.get("/healthz")).headers["Content-Security-Policy"]
 
     assert "script-src 'self' 'nonce-" in policy
+
+
+async def test_a_route_that_sets_its_own_framing_and_referrer_policy_keeps_them(
+    app: Any, client: AsyncClient
+) -> None:
+    """The preview of a received message's HTML is a document of its own, framed by
+    the page that shows it. The middleware forced every response to ``DENY``, which
+    would have made it unframeable, and to ``same-origin`` for the referrer, which
+    would have loosened a route that sends none at all.
+    """
+
+    async def framed() -> Response:
+        return Response(
+            "x", headers={"X-Frame-Options": "SAMEORIGIN", "Referrer-Policy": "no-referrer"}
+        )
+
+    app.add_api_route("/_framed", framed)
+
+    response = await client.get("/_framed")
+
+    assert response.headers["X-Frame-Options"] == "SAMEORIGIN"
+    assert response.headers["Referrer-Policy"] == "no-referrer"
+    # Everything the route did not set is still applied.
+    assert response.headers["X-Content-Type-Options"] == "nosniff"
+    assert "Content-Security-Policy" in response.headers
+
+
+async def test_every_other_route_is_still_unframeable_and_same_origin(client: AsyncClient) -> None:
+    """The other half. Letting a route override must leave the default where it was."""
+    response = await client.get("/healthz")
+
+    assert response.headers["X-Frame-Options"] == "DENY"
+    assert response.headers["Referrer-Policy"] == "same-origin"

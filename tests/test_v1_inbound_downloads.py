@@ -20,7 +20,7 @@ import pytest
 from fakes.inbound import EXPIRED, FakeInboundStore
 from fakes.ses import FAKE_CREDENTIALS, connect_project
 from httpx import AsyncClient
-from seskit_api.routes.v1.inbound import DOWNLOAD_HEADERS, content_disposition
+from seskit_api.downloads import DOWNLOAD_HEADERS, content_disposition
 from seskit_core.errors import APIError, ErrorType
 from seskit_core.models import InboundEmail
 from sqlalchemy.ext.asyncio import AsyncSession

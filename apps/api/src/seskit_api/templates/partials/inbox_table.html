@@ -1,0 +1,89 @@
+{# The Inbox table and its domain filter.
+
+   A partial so the filter can swap just this fragment over HTMX rather than
+   reloading, the pattern the Emails page uses. The filter is links, not buttons:
+   a filtered list is a view, and a view should be linkable and survive a refresh.
+   Without JavaScript they are ordinary navigation that still works.
+
+   Every value from a message below is somebody else's. It is escaped, and there
+   is no |safe anywhere in this file. #}
+
+<div class="stack" id="inbox-table">
+  {% if domains | length > 1 %}
+    <nav class="segmented" aria-label="Filter by domain">
+      <a class="segmented__item{{ '' if selected_domain else ' is-active' }}"
+         href="/inbox"
+         hx-get="/partials/inbox"
+         hx-target="#inbox-table"
+         hx-indicator="#inbox-filter-busy"
+         hx-swap="outerHTML"
+         hx-push-url="/inbox"
+         {% if not selected_domain %}aria-current="page"{% endif %}>All</a>
+      {% for domain in domains %}
+        <a class="segmented__item{{ ' is-active' if domain == selected_domain else '' }}"
+           href="/inbox?domain={{ domain | urlencode }}"
+           hx-get="/partials/inbox?domain={{ domain | urlencode }}"
+           hx-target="#inbox-table"
+           hx-indicator="#inbox-filter-busy"
+           hx-swap="outerHTML"
+           hx-push-url="/inbox?domain={{ domain | urlencode }}"
+           {% if domain == selected_domain %}aria-current="page"{% endif %}>{{ domain }}</a>
+      {% endfor %}
+    </nav>
+    {# aria-hidden: the swapped table is the announcement, and a live region for the
+       wait as well would say two things about one click. #}
+    <span class="segmented-busy htmx-indicator" id="inbox-filter-busy" aria-hidden="true">
+      <span class="spinner"></span>
+    </span>
+  {% endif %}
+
+  {% if messages %}
+    <div class="table-wrap">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>From</th>
+            <th>Subject</th>
+            <th>Received</th>
+            <th>Files</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for message in messages %}
+            <tr>
+              <td>
+                {% if message.from_name %}{{ message.from_name }}{% endif %}
+                <span class="table__mono muted">{{ message.from_address or "unknown sender" }}</span>
+              </td>
+              {# The subject is the link, so the row does not carry two links to the
+                 same page. A message with none still needs something to click. #}
+              <td>
+                <a class="link" href="/inbox/{{ message.id }}">{{ message.subject or "(no subject)" }}</a>
+              </td>
+              <td class="muted">{{ message.received_at.strftime("%Y-%m-%d %H:%M UTC") }}</td>
+              <td class="muted">{{ message.attachments | length or "—" }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    {% if older %}
+      <p>
+        <a class="link" href="/inbox?before={{ older | urlencode }}{{ '&domain=' ~ (selected_domain | urlencode) if selected_domain else '' }}">Older messages</a>
+      </p>
+    {% endif %}
+  {% elif selected_domain %}
+    <p class="muted">No mail for {{ selected_domain }}. <a class="link" href="/inbox">Show all</a>.</p>
+  {% else %}
+    {# Receiving is on and nothing has come in. The likeliest reason is the one
+       thing SESKit cannot check, so it says what it can: where mail would go. #}
+    <div class="alert" role="status">
+      <p class="alert__title">Waiting for the first message</p>
+      <p>
+        Mail sent to {{ domains | join(", ") }} appears here once the MX record is in
+        your DNS. The Domains page shows the record to add.
+      </p>
+    </div>
+  {% endif %}
+</div>

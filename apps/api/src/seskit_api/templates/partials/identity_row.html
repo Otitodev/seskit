@@ -47,6 +47,18 @@
       <dt>Region</dt>
       <dd><code>{{ identity.region }}</code></dd>
     </div>
+    {% if receiving is defined and receiving.get(identity.id) %}
+      <div class="datalist__row">
+        <dt>Receiving</dt>
+        <dd>
+          {% if receiving[identity.id].enabled %}
+            {{ badge("On", tone="success") }}
+          {% else %}
+            {{ badge("Off", dot=False) }}
+          {% endif %}
+        </dd>
+      </div>
+    {% endif %}
     <div class="datalist__row">
       <dt>Last checked</dt>
       <dd class="muted">
@@ -79,6 +91,10 @@
         </p>
       </div>
     {% endif %}
+  {% endif %}
+
+  {% if receiving is defined and receiving.get(identity.id) %}
+    {% include "partials/receiving.html" %}
   {% endif %}
 
   <div class="row row--end">

@@ -26,6 +26,7 @@ and dashboard.
 - **Verify senders** — email addresses and domains, with the DNS records to add
 - **Delivery events** — see whether each message was delivered, bounced, opened or clicked
 - **Webhooks** — get notified when something happens to a message
+- **Receive email** — mail sent to a domain you choose is stored, shown in an Inbox, readable through the API, and announced by webhook
 - **Suppression list** — bounced and unsubscribed addresses are never sent to again
 - **Dashboard** — send a test message, watch deliveries, manage everything
 - **Request SES production access** from the dashboard
