@@ -470,17 +470,21 @@ async def test_guessing_stops_however_the_caller_claims_to_be_addressed(
 
 
 @pytest.fixture
-async def keyed_client(
-    monkeypatch: pytest.MonkeyPatch, request: pytest.FixtureRequest
-) -> AsyncClient:
+def recovery_key_in_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("RECOVERY_KEY", KEY)
+
+
+@pytest.fixture
+async def keyed_client(recovery_key_in_env: None, app_client: AsyncClient) -> AsyncClient:
     """An app built after `RECOVERY_KEY` is in the environment.
 
     The `settings` fixture reads the environment when it first runs, so the
-    variable has to be set before `app_client` is requested, not after.
+    variable has to be set before `app_client` is requested. Pytest sets up a
+    fixture's arguments left to right, which is what makes the order here
+    load-bearing - and why it is spelt out as arguments rather than fetched with
+    `getfixturevalue`, which cannot start an async fixture from inside another.
     """
-    monkeypatch.setenv("RECOVERY_KEY", KEY)
-    client: AsyncClient = request.getfixturevalue("app_client")
-    return client
+    return app_client
 
 
 async def test_the_key_signs_an_owner_with_no_code_back_in(

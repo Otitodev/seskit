@@ -345,11 +345,14 @@ async def signed_in_client(app_client: AsyncClient) -> AsyncClient:
 
     Since Phase 2 the dashboard is not reachable while signed out, so a test
     about how a page renders needs an account before it can see a page at all.
+
+    Signing up answers with the page that shows the recovery code, so it is a
+    200 and not the redirect it once was; the session cookie is on that response.
     """
     response = await app_client.post(
         "/signup",
         data={"email": "owner@example.com", "password": "correct-horse-battery"},
         follow_redirects=False,
     )
-    assert response.status_code == 303, response.text
+    assert response.status_code == 200, response.text
     return app_client
