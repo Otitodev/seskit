@@ -102,6 +102,34 @@ in the selected range, and `0%` would assert something untrue.
 If open and click read **"Not tracked"**, tracking is off for that project,
 which is the default. See [reading your metrics](../guides/metrics.md).
 
+## I have forgotten my dashboard password
+
+There is no emailed reset link: a new instance may not be able to send email
+until somebody can sign in and connect AWS, which is when a password gets
+forgotten. Reset it from the command line instead, on the machine that runs
+SESKit:
+
+```bash
+docker compose exec api seskit reset-password
+```
+
+It asks for the account's email address and the new password, twice. The
+password is read from a hidden prompt and is not an argument, so it stays out
+of your shell history. It must be at least 12 characters, the same as at
+sign-up.
+
+To skip the email prompt, pass `--email you@example.com`. If the address does
+not match an account, nothing is changed and the command says so; the
+addresses on the instance are in the `users` table.
+
+A reset signs the account out everywhere. Anyone with a session open under the
+old password has to sign in again, which matters if you are resetting because
+somebody else may have had access. It does not reactivate a deactivated
+account.
+
+Without Docker, run `seskit reset-password` from the environment the API runs
+in, so it reads the same `.env`.
+
 ## It will not start
 
 | Symptom | Cause |
