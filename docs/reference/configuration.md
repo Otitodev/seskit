@@ -116,8 +116,9 @@ so a value you find in the code has somewhere to be looked up.
 | `ALLOW_SIGNUP` | `false` | Registration opens anyway while no account exists, then closes behind the first one |
 | `SESSION_COOKIE_NAME` | `seskit_session` | |
 | `SESSION_TTL_DAYS` | `14` | Idle timeout, not absolute — reading a session refreshes it, so an active user is never signed out mid-task |
-| `LOGIN_MAX_ATTEMPTS` | `10` | Failed logins per email and IP before the door closes for a while |
+| `LOGIN_MAX_ATTEMPTS` | `10` | Failed logins per email and IP before the door closes for a while. Also the number of failed [password recoveries](../operating/troubleshooting.md#i-have-forgotten-my-dashboard-password) per email |
 | `LOGIN_ATTEMPT_WINDOW_SECONDS` | `900` | The window those attempts are counted in |
+| `RECOVERY_KEY` | *(empty)* | A secret that lets you set a new dashboard password for an account with no recovery code, or a lost one. At least 24 characters, or empty to turn it off. Anyone who can set it already controls the deployment, so it grants nothing they did not have; but treat it like `SECRET_KEY` |
 
 ### The public API
 

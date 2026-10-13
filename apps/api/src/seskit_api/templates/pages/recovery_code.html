@@ -1,0 +1,62 @@
+{% extends "base_auth.html" %}
+{% from "components/ui.html" import button %}
+
+{% block title %}Your recovery code · SESKit{% endblock %}
+
+{# The one and only time this code is displayed - the same contract as a newly
+   created API key, and it borrows that component's look on purpose: a user who
+   has learnt that this red-bordered box means "copy it now" should not have to
+   learn it twice.
+
+   Three ways to arrive, told apart by `reason`, because what the reader has just
+   done decides what they need to hear first. #}
+
+{% block content %}
+  <div class="auth__header">
+    {% if reason == "signup" %}
+      <h1 class="auth__title">Save your recovery code</h1>
+      <p class="auth__subtitle">
+        Your account is created. Keep this code somewhere safe - it is the way
+        back in if you forget your password.
+      </p>
+    {% elif reason == "recovered" %}
+      <h1 class="auth__title">Password changed</h1>
+      <p class="auth__subtitle">
+        You are signed in. The code you just used is spent, so here is the
+        next one.
+      </p>
+    {% else %}
+      <h1 class="auth__title">New recovery code</h1>
+      <p class="auth__subtitle">
+        The old code no longer works. Keep this one somewhere safe.
+      </p>
+    {% endif %}
+  </div>
+
+  <div class="keyreveal" role="alert">
+    <div class="keyreveal__header">
+      <span class="keyreveal__title">Recovery code</span>
+      <span class="badge badge--warning"><span class="badge__dot"></span>Copy it now</span>
+    </div>
+
+    <p class="keyreveal__note">
+      This is the only time it is shown. It is stored hashed, so it cannot be
+      looked up again - if you lose it you can make a new one from Settings,
+      while you can still sign in.
+    </p>
+
+    <div class="keyreveal__value">
+      <code class="keyreveal__key">{{ recovery_code }}</code>
+      <button class="btn btn--sm" type="button" data-copy="{{ recovery_code }}">Copy</button>
+    </div>
+  </div>
+
+  <p class="auth__subtitle">
+    Use it on the <strong>Forgot password</strong> page, with your email, to set
+    a new password. Each code works once. Do not reload this page before you
+    have saved it.
+  </p>
+
+  {{ button("I have saved it - continue", variant="primary", href="/",
+            attrs='class="btn btn--primary auth__submit"') }}
+{% endblock %}

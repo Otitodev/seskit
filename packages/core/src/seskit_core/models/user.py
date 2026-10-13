@@ -38,6 +38,12 @@ class User(Base, TimestampMixin):
     #: Argon2id. Never the password itself (§22).
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
 
+    #: SHA-256 of the account's recovery code, or NULL when it has none (§7).
+    #: The code itself exists only on the page that shows it, once. NULL is every
+    #: account created before recovery codes existed, and those recover through
+    #: the operator's ``RECOVERY_KEY`` or by being issued a code from Settings.
+    recovery_code_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+
     #: The first account on an install. Set once, at registration.
     is_owner: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 

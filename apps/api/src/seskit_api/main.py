@@ -27,6 +27,7 @@ from seskit_api.middleware import (
 )
 from seskit_api.queue import create_queue
 from seskit_api.routes import (
+    account,
     api_keys,
     auth,
     aws,
@@ -261,6 +262,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(emails.router)
     app.include_router(inbox.router)
     app.include_router(webhooks.router)
+    app.include_router(account.router)
     app.include_router(suppressions.router)
     # Public and unauthenticated, unlike everything above it.
     app.include_router(unsubscribe.router)

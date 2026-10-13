@@ -17,7 +17,7 @@ async def _sign_in(client: AsyncClient, email: str = "owner@example.com") -> Non
     response = await client.post(
         "/signup", data={"email": email, "password": PASSWORD}, follow_redirects=False
     )
-    assert response.status_code == 303, response.text
+    assert response.status_code == 200, response.text
 
 
 # --------------------------------------------------------- access control ---

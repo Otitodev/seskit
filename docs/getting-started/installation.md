@@ -142,6 +142,11 @@ an open sign-up page someone else can find.
 
 Set `ALLOW_SIGNUP=true` if you want it to stay open.
 
+**Save the recovery code it shows you.** Right after registering, SESKit shows a
+code like `K7QD-4M2X-9PHB-TWE6`, once. It is how you get back in if you forget
+your password, without email and without a shell. See
+[I have forgotten my dashboard password](../operating/troubleshooting.md#i-have-forgotten-my-dashboard-password).
+
 ## What next
 
 - [Your first email](first-email.md) — about a minute, still no AWS account.

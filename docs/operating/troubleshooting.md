@@ -102,6 +102,58 @@ in the selected range, and `0%` would assert something untrue.
 If open and click read **"Not tracked"**, tracking is off for that project,
 which is the default. See [reading your metrics](../guides/metrics.md).
 
+## I have forgotten my dashboard password
+
+There is no emailed reset link: a new instance may not be able to send email
+until somebody can sign in and connect AWS, which is when a password gets
+forgotten. And a deployment made by pushing to Git gives you no shell to run a
+command in. So the way back in is something you already hold.
+
+**With your recovery code.** When you created the account, SESKit showed a
+code like `K7QD-4M2X-9PHB-TWE6`, once. On the sign-in page choose **Forgot your
+password?**, then give your email, that code, and a new password. Capitals and
+hyphens are optional.
+
+- The code works **once**. Using it signs you in and shows the next one, so
+  save that too.
+- It signs the account out everywhere, which matters if you are recovering
+  because somebody else may have had access.
+- The new password must be at least 12 characters, the same as at sign-up.
+- After 10 wrong attempts for an email, recovery pauses for 15 minutes.
+  Signing in is not affected. The number and window are `LOGIN_MAX_ATTEMPTS` and
+  `LOGIN_ATTEMPT_WINDOW_SECONDS`.
+
+**If you have lost the code, or the account never had one** (accounts created
+before recovery codes existed have none), use the recovery key. Whoever runs
+the deployment sets `RECOVERY_KEY` in its environment, redeploys, and gives that
+value in the same box in place of a code. Make it at least 24 characters:
+
+```bash
+python -c "import secrets; print(secrets.token_urlsafe(32))"
+```
+
+An instance refuses to start if `RECOVERY_KEY` is set but shorter than that,
+rather than quietly ignoring it. The key is not used up by recovering, so remove
+it from the environment once you are back in, unless you want it kept as a
+standing way in. See [configuration](../reference/configuration.md).
+
+**Make sure you have a code.** Once signed in, **Settings** says whether the
+account has one and makes a new one, after asking for your password again. Do
+that now if you have an older account.
+
+**With a shell**, there is also a command, for instance on a machine you run
+yourself:
+
+```bash
+docker compose exec api seskit reset-password
+```
+
+It asks for the email and the new password at a hidden prompt, so the password
+stays out of your shell history, and signs the account out everywhere. It does
+not reactivate a deactivated account. Without Docker, run `seskit
+reset-password` from the environment the API runs in, so it reads the same
+`.env`.
+
 ## It will not start
 
 | Symptom | Cause |

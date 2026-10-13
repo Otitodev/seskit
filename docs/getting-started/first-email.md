@@ -12,7 +12,8 @@ depended on that, most people would never get there.
 ## Three steps
 
 1. Open <http://localhost:8000> and create the owner account. The first
-   registration claims the instance; signup closes behind you.
+   registration claims the instance; signup closes behind you. Save the
+   recovery code it shows — it is the way back in if you forget your password.
 2. Go to **API Keys**, create one, and copy it — **it is shown once**. SESKit
    stores a SHA-256 hash, so a lost key cannot be recovered, only replaced.
 3. Send:
