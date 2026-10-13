@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% from "components/ui.html" import button, card_open, card_close, field, badge %}
+
+{% block title %}Settings · SESKit{% endblock %}
+
+{% block content %}
+  <div class="page-header">
+    <h1>Settings</h1>
+    <p class="page-header__subtitle">Your account, and the way back into it.</p>
+  </div>
+
+  {{ card_open("Recovery code") }}
+    <p>
+      {% if has_recovery_code %}
+        {{ badge("Set", tone="success") }}
+        You have a recovery code. It lets you set a new password from the
+        <a href="/forgot-password">Forgot password</a> page if you ever lose
+        this one, without email.
+      {% else %}
+        {{ badge("Not set", tone="warning") }}
+        This account has no recovery code, so there is no way back in if you
+        forget your password. Make one now.
+      {% endif %}
+    </p>
+    <p class="subtle">
+      Making a new code replaces the old one. A code is shown once and stored
+      only as a hash, so it cannot be looked up later.
+    </p>
+
+    {% if error %}
+      <div class="alert alert--danger" role="alert">{{ error }}</div>
+    {% endif %}
+
+    {# The password is asked for even though you are signed in: a session is
+       also what a stolen cookie looks like, and a new code would let whoever
+       holds it keep the account after you change your password. #}
+    <form method="post" action="/settings/recovery-code">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      {{ field("password", "Current password", type="password", required=True,
+               hint="To confirm it is you.",
+               attrs='autocomplete="current-password"',
+               action=button("Make a new code" if has_recovery_code else "Make a code",
+                             variant="primary", type="submit")) }}
+    </form>
+  {{ card_close() }}
+{% endblock %}

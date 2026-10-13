@@ -25,6 +25,11 @@ EVENT_HTTPS_PATH = "/v1/events/ses"
 #: because it is a page a person opens, not an API a program calls.
 UNSUBSCRIBE_PATH = "/u"
 
+#: Shortest ``RECOVERY_KEY`` that will be accepted (§7). Here and not in
+#: ``security.recovery`` because the settings validator needs it, and settings
+#: cannot import the security package without a cycle.
+MIN_RECOVERY_KEY_LENGTH = 24
+
 # Placeholder used in .env.example. Refusing to boot on this value is what stops
 # it reaching a real deployment.
 INSECURE_PLACEHOLDER = "changeme"
@@ -95,6 +100,13 @@ class Settings(BaseSettings):
     #: Failed logins per email and IP before the door closes for a while.
     LOGIN_MAX_ATTEMPTS: int = 10
     LOGIN_ATTEMPT_WINDOW_SECONDS: int = 900
+
+    #: A secret the operator sets so a forgotten dashboard password can be
+    #: recovered on an account that has no recovery code, or whose code is lost
+    #: (§7). Presented on the forgot-password page together with the account's
+    #: email. Empty turns the feature off; an empty value is how most platforms
+    #: represent "declared, not set", so it must not mean "accept anything".
+    RECOVERY_KEY: str = ""
 
     # -- Public API (§7, §20) ------------------------------------------------
 
@@ -418,6 +430,21 @@ class Settings(BaseSettings):
             raise ValueError(
                 "DATABASE_URL must use the postgresql+asyncpg:// scheme - "
                 "SESKit drives the database asynchronously."
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _require_a_strong_recovery_key(self) -> Self:
+        """A short key is a guessable password to every account.
+
+        Refused at boot rather than ignored: a key that silently does nothing
+        leaves the operator believing they have a way back in.
+        """
+        if self.RECOVERY_KEY and len(self.RECOVERY_KEY) < MIN_RECOVERY_KEY_LENGTH:
+            raise ValueError(
+                f"RECOVERY_KEY must be at least {MIN_RECOVERY_KEY_LENGTH} characters, "
+                "or empty to turn recovery by key off. "
+                "Generate one: python -c 'import secrets; print(secrets.token_urlsafe(32))'"
             )
         return self
 

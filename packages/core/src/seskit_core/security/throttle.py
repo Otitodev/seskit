@@ -18,6 +18,20 @@ from redis.asyncio import Redis
 
 THROTTLE_KEY_PREFIX = "login_attempts:"
 
+#: Stands in for a client address when recovery attempts are counted (§7).
+#:
+#: Recovery is limited per **email alone**, where login is per email *and*
+#: address, and the difference is deliberate. The address is whatever the
+#: caller's ``X-Forwarded-For`` says it is, so a limit that includes it is a
+#: limit the attacker chooses the size of. Keyed on the email alone, an
+#: attacker cannot buy more guesses; what it costs is that they can use up the
+#: allowance for a known email and delay that person's recovery for one window.
+#: That is the right way round for a limit that guards account takeover: signing
+#: in is unaffected, and the delay ends by itself.
+#:
+#: It cannot collide with a real address, so the two never share a counter.
+RECOVERY_SCOPE = "recovery"
+
 
 def _key(email: str, client: str) -> str:
     return f"{THROTTLE_KEY_PREFIX}{email}:{client}"

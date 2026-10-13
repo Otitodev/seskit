@@ -6,11 +6,19 @@ without HTTP and reused from the CLI (§24) later (§32.12).
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from seskit_core.models import DEFAULT_PROJECT_NAME, Project, User, normalise_email
-from seskit_core.security.passwords import burn_dummy_hash, hash_password, verify_and_update
+from seskit_core.security.passwords import (
+    burn_dummy_hash,
+    hash_password,
+    verify_and_update,
+    verify_password,
+)
+from seskit_core.security.recovery import code_matches, generate_code, hash_code, key_matches
 
 #: Long enough to be worth hashing. OWASP's floor is 8; this is an email
 #: platform holding AWS access, so it asks for a little more. Here rather than in
@@ -153,3 +161,87 @@ async def reset_password(session: AsyncSession, *, email: str, password: str) ->
     user.password_hash = hash_password(password)
     await session.flush()
     return user
+
+
+# --------------------------------------------------------------- recovery ---
+
+
+@dataclass(frozen=True, slots=True)
+class Recovered:
+    """A successful recovery: who, and the replacement code to show them once."""
+
+    user: User
+    recovery_code: str
+
+
+def issue_recovery_code(user: User) -> str:
+    """Give an account a new recovery code, replacing any it had.
+
+    Returns the code, which is the only moment it exists in the clear; the row
+    keeps its hash. The caller flushes or commits.
+    """
+    code = generate_code()
+    user.recovery_code_hash = hash_code(code)
+    return code
+
+
+async def recover_password(
+    session: AsyncSession,
+    *,
+    email: str,
+    proof: str,
+    new_password: str,
+    recovery_key: str = "",
+) -> Recovered | None:
+    """Set a new password for someone who can prove they own the account.
+
+    ``proof`` is either the account's recovery code or the operator's recovery
+    key, accepted from the same field so the page asks for one thing. Returns
+    None for every way of being wrong - no such account, a deactivated one, no
+    code on file, a wrong code, a wrong key - so a caller cannot tell them
+    apart and the page cannot be used to find out which addresses have accounts.
+
+    Spending a code issues the next one, in the same step: an account must not
+    be left without a way back in by having used it. The operator's key is not
+    spent, because it is not the account's.
+
+    Raises :class:`PasswordTooShort` before looking at anything else, which
+    reveals nothing: it depends only on what the caller typed.
+
+    Flushes and does not commit. Sessions live in Redis and are the caller's to
+    end.
+    """
+    if len(new_password) < MIN_PASSWORD_LENGTH:
+        raise PasswordTooShort
+
+    user = await get_user_by_email(session, email)
+
+    # Both checks always run, whatever the first says, and run against a stand-in
+    # when there is no account: the cost of a wrong answer must not depend on
+    # which half was wrong.
+    code_ok = code_matches(proof, user.recovery_code_hash if user else None)
+    key_ok = key_matches(proof, recovery_key)
+
+    if user is None or not user.is_active or not (code_ok or key_ok):
+        return None
+
+    user.password_hash = hash_password(new_password)
+    next_code = issue_recovery_code(user)
+    await session.flush()
+    return Recovered(user=user, recovery_code=next_code)
+
+
+async def regenerate_recovery_code(
+    session: AsyncSession, user: User, *, password: str
+) -> str | None:
+    """Replace an account's recovery code, after the current password is given.
+
+    The password is asked for because a signed-in session is not proof of
+    ownership - it is also what a stolen cookie looks like, and a new code would
+    let the thief take the account for good. None when the password is wrong.
+    """
+    if not verify_password(password, user.password_hash):
+        return None
+    code = issue_recovery_code(user)
+    await session.flush()
+    return code

@@ -7,9 +7,11 @@
 **Why this is the first command.** A forgotten password is the one problem the
 dashboard cannot solve for itself. There is no emailed reset link, on purpose: a
 fresh instance may not be able to send email until somebody can log in and
-connect AWS, which is exactly when a password gets forgotten. The login page has
-promised "reset from the command line" for as long as it has existed, and this
-is that command.
+connect AWS, which is exactly when a password gets forgotten.
+
+This is for an operator with a shell. Someone without one - a deployment made by
+pushing to Git has none - recovers from the Forgot password page with a recovery
+code or the ``RECOVERY_KEY``; see ``seskit_core.security.recovery``.
 
 **Why it asks rather than accepts.** The password is read from a hidden prompt
 and is deliberately not an argument or an environment variable: either would put

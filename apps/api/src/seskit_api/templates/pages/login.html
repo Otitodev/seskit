@@ -31,7 +31,8 @@
      once an owner exists the link would be a dead end, so it goes away. #}
   {% if signup_allowed %}
     Not set up yet? <a href="/signup">Create the owner account</a>.
-  {% else %}
-    Self-hosted SESKit. Forgotten passwords are reset from the command line.
   {% endif %}
+  {# Always offered, including while registration is open: ALLOW_SIGNUP can
+     reopen it on an instance that already has accounts. #}
+  <a href="/forgot-password">Forgot your password?</a>
 {% endblock %}
