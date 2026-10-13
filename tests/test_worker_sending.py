@@ -15,6 +15,7 @@ from typing import Any
 
 import httpx
 import pytest
+from arq import Retry
 from fakes.queue import FakeQueue
 from httpx import AsyncClient
 from seskit_core.errors import APIError, ErrorType
@@ -178,19 +179,65 @@ async def test_a_terminal_rejection_fails_without_retrying(
     assert email.last_error == "Refused."
 
 
-async def test_a_retryable_failure_is_raised_for_arq(
+async def test_a_retryable_failure_asks_arq_to_retry(
     db_session: AsyncSession,
 ) -> None:
-    """A provider that could not be reached may well be reachable in a minute,
-    so the job goes back to the queue rather than giving up.
+    """A provider that could not be reached may well be reachable in a minute.
+
+    ARQ retries only on `Retry` - any other exception is final - and the message
+    must stay sendable, or the retry would skip the message it was scheduled for.
     """
     provider = StubProvider(error=APIError(ErrorType.PROVIDER_ERROR, "Unreachable."))
     email = await _queued(db_session)
 
-    with pytest.raises(APIError):
-        await sending.send_one(db_session, email.id, build=_builder(provider))
+    with pytest.raises(Retry):
+        await sending.send_one(
+            db_session, email.id, build=_builder(provider), attempt=1, max_attempts=3
+        )
 
     await db_session.refresh(email)
+    assert email.status == EmailStatus.SENDING.value
+    assert email.is_sendable
+    assert email.last_error == "Unreachable."
+
+
+async def test_a_retry_after_a_transient_failure_sends_the_message(
+    db_session: AsyncSession,
+) -> None:
+    """The regression: the first attempt used to mark the message `failed`, and
+    the second attempt then skipped it as settled."""
+    failing = StubProvider(error=APIError(ErrorType.PROVIDER_ERROR, "Throttled."))
+    email = await _queued(db_session)
+    with pytest.raises(Retry):
+        await sending.send_one(
+            db_session, email.id, build=_builder(failing), attempt=1, max_attempts=3
+        )
+
+    working = StubProvider()
+    status = await sending.send_one(
+        db_session, email.id, build=_builder(working), attempt=2, max_attempts=3
+    )
+
+    await db_session.refresh(email)
+    assert status == EmailStatus.SENT.value
+    assert email.status == EmailStatus.SENT.value
+    assert email.last_error is None
+    assert len(working.sent) == 1
+
+
+async def test_the_last_attempt_records_the_failure(
+    db_session: AsyncSession,
+) -> None:
+    provider = StubProvider(error=APIError(ErrorType.PROVIDER_ERROR, "Unreachable."))
+    email = await _queued(db_session)
+
+    status = await sending.send_one(
+        db_session, email.id, build=_builder(provider), attempt=3, max_attempts=3
+    )
+
+    await db_session.refresh(email)
+    assert status == EmailStatus.FAILED.value
+    assert email.status == EmailStatus.FAILED.value
     assert email.last_error == "Unreachable."
 
 

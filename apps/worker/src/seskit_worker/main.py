@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from arq import cron
+from arq import cron, func
 from arq.connections import RedisSettings
 from seskit_core.config import get_settings
 from seskit_core.db import dispose_engine
@@ -53,7 +53,9 @@ class WorkerSettings:
         poll_events,
         poll_inbound,
         recheck_identities,
-        send_email,
+        # Its own try count: the class-wide max_tries below is for jobs that
+        # never ask ARQ to retry them, and this one does.
+        func(send_email, max_tries=get_settings().EMAIL_SEND_MAX_ATTEMPTS),
         deliver_webhook,
     ]
 
