@@ -12,6 +12,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from seskit_core.models import DEFAULT_PROJECT_NAME, Project, User, normalise_email
 from seskit_core.security.passwords import burn_dummy_hash, hash_password, verify_and_update
 
+#: Long enough to be worth hashing. OWASP's floor is 8; this is an email
+#: platform holding AWS access, so it asks for a little more. Here rather than in
+#: a route because the sign-up form and the command line must agree on it - a
+#: password the dashboard would refuse is not one a reset should accept.
+MIN_PASSWORD_LENGTH = 12
+
+
+class PasswordTooShort(Exception):
+    """A password below :data:`MIN_PASSWORD_LENGTH`."""
+
 
 class SignupClosed(Exception):
     """Registration attempted while it is not permitted."""
@@ -117,4 +127,29 @@ async def authenticate(session: AsyncSession, *, email: str, password: str) -> U
         user.password_hash = updated_hash
         await session.flush()
 
+    return user
+
+
+async def reset_password(session: AsyncSession, *, email: str, password: str) -> User | None:
+    """Set a new password for an account, or return None when there is none.
+
+    For the operator, not the account holder: there is no emailed reset link,
+    because a self-hosted instance may be unable to send email until somebody
+    can log in and connect AWS - the situation a forgotten password is most
+    likely to arrive in. Whoever can run this already holds the database and
+    ``SECRET_KEY``, so naming an unknown address here discloses nothing.
+
+    Flushes and does not commit; the caller owns the transaction. It also does
+    not end sessions, which live in Redis - see
+    :func:`seskit_core.security.sessions.delete_user_sessions`.
+    """
+    if len(password) < MIN_PASSWORD_LENGTH:
+        raise PasswordTooShort
+
+    user = await get_user_by_email(session, email)
+    if user is None:
+        return None
+
+    user.password_hash = hash_password(password)
+    await session.flush()
     return user

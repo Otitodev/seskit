@@ -103,13 +103,16 @@ from seskit_core.services.suppression import (
     suppressed_among,
 )
 from seskit_core.services.users import (
+    MIN_PASSWORD_LENGTH,
     EmailAlreadyRegistered,
+    PasswordTooShort,
     SignupClosed,
     authenticate,
     count_users,
     get_user_by_email,
     get_user_by_id,
     register_user,
+    reset_password,
     signup_allowed,
 )
 from seskit_core.services.webhooks import (
@@ -134,6 +137,7 @@ from seskit_core.services.webhooks import (
 __all__ = [
     "ACKNOWLEDGEMENT",
     "MAX_CONTACTS",
+    "MIN_PASSWORD_LENGTH",
     "ActivityPoint",
     "EmailAlreadyRegistered",
     "InboundProvisionerFactory",
@@ -141,6 +145,7 @@ __all__ = [
     "IssuedKey",
     "Metrics",
     "Outgoing",
+    "PasswordTooShort",
     "PolledInbox",
     "PolledQueue",
     "ProviderFactory",
@@ -216,6 +221,7 @@ __all__ = [
     "remove_identity",
     "remove_suppression",
     "request_production_access",
+    "reset_password",
     "revoke_api_key",
     "rotate_secret",
     "rule_name_for",

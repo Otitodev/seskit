@@ -19,6 +19,7 @@ from seskit_core.security.sessions import (
 from seskit_core.security.throttle import clear as clear_attempts
 from seskit_core.security.throttle import is_throttled, record_failure
 from seskit_core.services import (
+    MIN_PASSWORD_LENGTH,
     EmailAlreadyRegistered,
     SignupClosed,
     authenticate,
@@ -39,10 +40,6 @@ from seskit_api.templating import render
 
 router = APIRouter(tags=["auth"], include_in_schema=False)
 logger = get_logger(__name__)
-
-#: Long enough to be worth hashing. OWASP's floor is 8; this is an email
-#: platform holding AWS access, so it asks for a little more.
-MIN_PASSWORD_LENGTH = 12
 
 #: One message for every failure. Naming which half was wrong would let anyone
 #: with the login form discover which addresses have accounts.
