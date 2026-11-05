@@ -600,3 +600,32 @@ async def test_deleting_a_project_deletes_its_identities(db_session: AsyncSessio
     await db_session.flush()
 
     assert await list_identities(db_session, project_id) == []
+
+
+# ---------------------------------------------------------- mail from records ---
+
+
+def test_a_domain_with_no_mail_from_publishes_nothing_extra() -> None:
+    assert _domain().mail_from_records == []
+    assert _address().mail_from_records == []
+
+
+def test_a_mail_from_domain_needs_one_mx_and_one_txt() -> None:
+    """The two records SES asks for, built here because SES does not return
+    them. The host is per region, and the MX carries a priority.
+    """
+    identity = _domain(mail_from_domain="send.example.com", region="eu-west-2")
+
+    mx, txt = identity.mail_from_records
+
+    assert (mx.record_type, mx.name, mx.priority) == ("MX", "send.example.com", 10)
+    assert mx.value == "feedback-smtp.eu-west-2.amazonses.com"
+    assert (txt.record_type, txt.name, txt.priority) == ("TXT", "send.example.com", None)
+    assert txt.value == "v=spf1 include:amazonses.com ~all"
+
+
+def test_mail_from_records_leave_the_dkim_instructions_alone() -> None:
+    """`dns_records` is the three CNAMEs and is what the API returns."""
+    identity = _domain(mail_from_domain="send.example.com")
+
+    assert [record.record_type for record in identity.dns_records] == ["CNAME"] * 3
