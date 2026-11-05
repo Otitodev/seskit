@@ -120,6 +120,14 @@ class DomainResponse(BaseModel):
         description="Same vocabulary, for a custom MAIL FROM domain. Optional.",
         examples=["not_started"],
     )
+    mail_from_domain: str | None = Field(
+        default=None,
+        description=(
+            "The custom MAIL FROM domain SES holds for this domain, if any. It applies to "
+            "the whole AWS account in the region, so it may have been set elsewhere."
+        ),
+        examples=["send.example.com"],
+    )
     dns_records: list[DnsRecordResponse] = Field(
         default_factory=list,
         description=(
