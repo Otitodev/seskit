@@ -185,6 +185,8 @@ class DnsRecord:
     record_type: str
     name: str
     value: str
+    #: Only an MX record has one. Most DNS providers ask for it in a separate box.
+    priority: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -202,6 +204,10 @@ class IdentityStatus:
     verification_status: VerificationStatus
     dkim_status: VerificationStatus | None = None
     mail_from_status: VerificationStatus | None = None
+    #: The custom MAIL FROM domain, if one is set. Read back from SES every time
+    #: rather than assumed, because the identity belongs to the AWS account and
+    #: somebody may have set it in the console or from another project.
+    mail_from_domain: str | None = None
     #: The three DKIM tokens, for a domain. The CNAMEs are built from these.
     dkim_tokens: list[str] = field(default_factory=list)
     records: list[DnsRecord] = field(default_factory=list)

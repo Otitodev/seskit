@@ -248,3 +248,39 @@ async def test_a_missing_identity_is_not_found(monkeypatch: pytest.MonkeyPatch) 
         await _provider(monkeypatch, client).get_identity_status(DOMAIN)
 
     assert caught.value.error_type is ErrorType.NOT_FOUND
+
+
+def test_a_custom_mail_from_domain_is_carried_through() -> None:
+    """SES reports the domain beside its status. Keeping only the status left
+    a row that said "pending" about nothing the page could name.
+    """
+    response = {
+        **GET_DOMAIN_VERIFIED,
+        "MailFromAttributes": {
+            "MailFromDomain": "Send.Example.com",
+            "MailFromDomainStatus": "PENDING",
+        },
+    }
+
+    status = to_identity_status(DOMAIN, response, fallback_type=IdentityType.DOMAIN)
+
+    assert status.mail_from_domain == "send.example.com"
+    assert status.mail_from_status is VerificationStatus.PENDING
+
+
+def test_a_domain_without_custom_mail_from_has_no_mail_from_domain() -> None:
+    status = to_identity_status(
+        DOMAIN,
+        {"IdentityType": "DOMAIN", "VerificationStatus": "SUCCESS", "DkimAttributes": {}},
+        fallback_type=IdentityType.DOMAIN,
+    )
+
+    assert status.mail_from_domain is None
+
+
+def test_an_address_has_no_mail_from_domain() -> None:
+    status = to_identity_status(
+        ADDRESS, CREATE_ADDRESS_RESPONSE, fallback_type=IdentityType.EMAIL_ADDRESS
+    )
+
+    assert status.mail_from_domain is None

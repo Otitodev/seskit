@@ -43,6 +43,21 @@
         </dd>
       </div>
     {% endif %}
+    {% if identity.mail_from_domain %}
+      <div class="datalist__row">
+        <dt>Return path</dt>
+        <dd>
+          {% if identity.mail_from_status == "success" %}
+            {{ badge("Verified", tone="success") }}
+          {% elif identity.mail_from_status in ("failed", "temporary_failure") %}
+            {{ badge("Failed", tone="danger") }}
+          {% else %}
+            {{ badge("Pending", tone="warning") }}
+          {% endif %}
+          <code>{{ identity.mail_from_domain }}</code>
+        </dd>
+      </div>
+    {% endif %}
     <div class="datalist__row">
       <dt>Region</dt>
       <dd><code>{{ identity.region }}</code></dd>
@@ -91,6 +106,10 @@
         </p>
       </div>
     {% endif %}
+  {% endif %}
+
+  {% if identity.mail_from_domain and identity.mail_from_status != "success" %}
+    {% include "partials/mail_from_records.html" %}
   {% endif %}
 
   {% if receiving is defined and receiving.get(identity.id) %}

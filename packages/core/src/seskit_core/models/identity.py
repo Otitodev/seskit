@@ -52,6 +52,13 @@ DKIM_RECORD_SUFFIX = "dkim.amazonses.com"
 #: The label DKIM records live under, by convention and by RFC 6376.
 DKIM_RECORD_LABEL = "_domainkey"
 
+#: What a custom MAIL FROM domain's TXT record says: SES may send for it.
+MAIL_FROM_SPF_VALUE = "v=spf1 include:amazonses.com ~all"
+
+#: Preference of the one MX record a MAIL FROM domain publishes. SES requires
+#: exactly one, so the number only has to exist.
+MAIL_FROM_MX_PRIORITY = 10
+
 
 class Identity(Base, TimestampMixin):
     __tablename__ = "identities"
@@ -120,6 +127,12 @@ class Identity(Base, TimestampMixin):
     #: one would be a bug the user has to interpret.
     dkim_status: Mapped[str | None] = mapped_column(String(32), nullable=True)
     mail_from_status: Mapped[str | None] = mapped_column(String(32), nullable=True)
+
+    #: The custom MAIL FROM domain SES holds for this identity, or NULL for the
+    #: default. Read back from SES on every check, never assumed: an SES identity
+    #: belongs to the AWS account, so it may have been set in the console or by
+    #: another project.
+    mail_from_domain: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
     #: The three Easy DKIM tokens. Stored so the DNS records can be rendered
     #: without an AWS round trip on every page view, the same reasoning as the
@@ -190,6 +203,30 @@ class Identity(Base, TimestampMixin):
                 value=f"{token}.{DKIM_RECORD_SUFFIX}",
             )
             for token in self.dkim_tokens
+        ]
+
+    @property
+    def mail_from_records(self) -> list[DnsRecord]:
+        """The two records a custom MAIL FROM domain needs, built here.
+
+        SES does not return them. Kept apart from :attr:`dns_records` because that
+        list is what the three-CNAME instructions and the API response are
+        written around.
+        """
+        if not self.mail_from_domain:
+            return []
+        return [
+            DnsRecord(
+                record_type="MX",
+                name=self.mail_from_domain,
+                value=f"feedback-smtp.{self.region}.amazonses.com",
+                priority=MAIL_FROM_MX_PRIORITY,
+            ),
+            DnsRecord(
+                record_type="TXT",
+                name=self.mail_from_domain,
+                value=MAIL_FROM_SPF_VALUE,
+            ),
         ]
 
     def __repr__(self) -> str:
