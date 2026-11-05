@@ -350,6 +350,7 @@ def _apply(identity: Identity, status: IdentityStatus) -> None:
     identity.verification_status = status.verification_status.value
     identity.dkim_status = status.dkim_status.value if status.dkim_status else None
     identity.mail_from_status = status.mail_from_status.value if status.mail_from_status else None
+    identity.mail_from_domain = status.mail_from_domain
     identity.dkim_tokens = list(status.dkim_tokens)
     identity.last_checked_at = utcnow()
     identity.last_error = None

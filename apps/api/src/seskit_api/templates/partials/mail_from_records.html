@@ -1,0 +1,42 @@
+{# The two records a custom MAIL FROM domain needs.
+
+   Shown until SES has verified them. Mail still sends in the meantime: SES falls
+   back to its own bounce address, so a missing record costs SPF alignment and
+   nothing else. #}
+{% from "components/ui.html" import copy_value %}
+
+<div class="stack">
+  <p>
+    Amazon SES is set to use <code>{{ identity.mail_from_domain }}</code> as the
+    return path for this domain. Add these two records at your DNS provider so
+    SPF lines up with your own domain. Mail keeps sending until then.
+  </p>
+
+  <div class="table-wrap">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Type</th>
+          <th>Name</th>
+          <th>Priority</th>
+          <th>Value</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for record in identity.mail_from_records %}
+          <tr>
+            <td>{{ record.record_type }}</td>
+            <td class="table__mono">{{ copy_value(record.name) }}</td>
+            <td>{{ record.priority if record.priority is not none else "" }}</td>
+            <td class="table__mono">{{ copy_value(record.value) }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <p class="muted">
+    Publish exactly one MX record. If this name has more than one, SES cannot
+    verify it.
+  </p>
+</div>

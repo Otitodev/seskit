@@ -82,6 +82,7 @@ def to_identity_status(
     dkim: VerificationStatus | None = None
     tokens: list[str] = []
     mail_from: VerificationStatus | None = None
+    mail_from_domain: str | None = None
 
     # DKIM and MAIL FROM are inapplicable to an email address. Leaving them None
     # is the whole reason those columns are nullable - "pending" would promise
@@ -97,6 +98,8 @@ def to_identity_status(
         # and not a failure. NOT_STARTED says that; PENDING would imply we are
         # waiting on something.
         mail_from = parse_status(raw_mail_from) if raw_mail_from else VerificationStatus.NOT_STARTED
+        raw_domain = mail_from_attributes.get("MailFromDomain")
+        mail_from_domain = raw_domain.lower() if raw_domain else None
 
     return IdentityStatus(
         value=value,
@@ -104,5 +107,6 @@ def to_identity_status(
         verification_status=verification,
         dkim_status=dkim,
         mail_from_status=mail_from,
+        mail_from_domain=mail_from_domain,
         dkim_tokens=tokens,
     )
