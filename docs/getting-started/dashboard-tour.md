@@ -54,6 +54,10 @@ Identities and their state. Unverified ones are re-checked every few hours,
 verified ones monthly — the slow one catches a DKIM record removed long after
 setup, which otherwise looks healthy right up until a send fails.
 
+If the domain has a custom MAIL FROM set in Amazon SES, a **Return path** row shows
+whether SES has verified it, and the two DNS records it needs until it has. SESKit
+reads this from SES; it cannot set it yet. Mail keeps sending either way.
+
 ## AWS
 
 The connection, and the one page that creates things in your account. Setting
