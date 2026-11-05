@@ -149,6 +149,37 @@ later without a flag day.
   after a logout cannot re-display the previous user's dashboard from the
   browser cache.
 
+## Getting back into an account
+
+There is no emailed reset link. A new instance may not be able to send email until
+somebody can sign in and connect AWS, which is when a password gets forgotten, and
+a deployment made by pushing to Git gives you no shell. The way back in is
+something the account holder already has.
+
+- **The recovery code** is 80 random bits, shown once at sign-up and stored only
+  as a SHA-256 hash. Argon2 is for secrets short enough to guess; this one is not.
+  Using it replaces it, so a spent code cannot be used again.
+- **The recovery key** is `RECOVERY_KEY`, set by whoever runs the deployment. It
+  covers accounts with no code, or a lost one. Whoever can set it controls the
+  instance already, so it grants nothing they did not hold. It must be at least
+  24 characters, and a shorter one stops the server booting rather than being
+  quietly ignored.
+- **`seskit reset-password`** is for an operator with a shell. It reads the new
+  password from a hidden prompt, never from an argument or environment variable.
+- **Every recovery ends the account's sessions**, because the person recovering
+  may have lost control of it.
+- **Attempts are limited per email address alone.** Sign-in is limited per email
+  and per client address; recovery leaves the address out because it comes from
+  `X-Forwarded-For`, which a caller can set, so a limit that included it would be
+  one the attacker sizes. The cost is that someone who knows an email can use up
+  its allowance and delay that person's recovery for one window. Signing in is
+  not affected.
+- **Making a new code asks for the current password**, so a stolen session cookie
+  cannot be used to mint a code that outlives a password change.
+
+How to use each is in
+[troubleshooting](../operating/troubleshooting.md#i-have-forgotten-my-dashboard-password).
+
 ## Received mail is hostile input
 
 Everything in a message somebody sent to you was written by somebody who may mean

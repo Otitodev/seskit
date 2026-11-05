@@ -11,11 +11,13 @@ ordinary links that still work.
 |---|---|
 | **Overview** | The six counts and five rates, over 24 hours, 7 days or 30 days, with an activity chart |
 | **Emails** | Everything this project sent, filterable by status. Each row links to the message |
-| **Domains** | Sending identities and their verification state, with the DNS records to add |
+| **Inbox** | Mail received on your domains, newest first |
+| **Domains** | Sending identities and their verification state, with the DNS records to add, and the switch for receiving |
 | **AWS** | The connection, the region, your quota, sandbox status, and event reporting setup |
 | **API keys** | Create and revoke. Shown once at creation |
 | **Webhooks** | Endpoints, signing secrets, and the delivery history for each |
 | **Suppressions** | Addresses this project will not send to, why, and the button that puts one back |
+| **Settings** | Your account's recovery code |
 
 ## Overview
 
@@ -54,6 +56,27 @@ Identities and their state. Unverified ones are re-checked every few hours,
 verified ones monthly — the slow one catches a DKIM record removed long after
 setup, which otherwise looks healthy right up until a send fails.
 
+A verified domain also has a **Start receiving** button. If it is greyed out, the
+card says why. See [receive email](../guides/receive-email.md).
+
+## Inbox
+
+Mail sent to your domains, newest first. With more than one domain, the buttons
+above the list narrow it to one; the view is a link you can share.
+
+A message's page shows the sender, recipients and subject, the text body, the
+HTML body, the attachments, the headers, and the SPF, DKIM, DMARC, spam and virus
+verdicts Amazon SES recorded. A verdict reads "not checked" when SES did not
+check it, which is not the same as passing.
+
+Everything in a received message came from someone else, so the HTML body is
+shown in a sandbox: no script runs and nothing loads from the network. Attachments
+download as opaque bytes whatever type they claim. **Download .eml** gives you the
+original message, until its retention period passes.
+
+Until a domain is receiving, the page says so and links to Domains. See
+[receive email](../guides/receive-email.md).
+
 ## AWS
 
 The connection, and the one page that creates things in your account. Setting
@@ -83,6 +106,13 @@ state, not a setup step.
 An address can also be added by hand, for the case automation cannot cover:
 somebody asks to be left alone and there is no bounce to record it. Full
 detail in the [suppression guide](../guides/suppression.md).
+
+## Settings
+
+Whether your account has a recovery code, and a way to make a new one. A new
+code replaces the old one, and you are asked for your current password first. The
+code is shown once and stored only as a hash. See
+[I have forgotten my dashboard password](../operating/troubleshooting.md#i-have-forgotten-my-dashboard-password).
 
 ## Dark mode
 
