@@ -1,0 +1,10 @@
+{% extends "pages/domain_base.html" %}
+
+{% block tab %}
+  <p class="muted">
+    {{ counts.total|thousands }} {{ "message" if counts.total == 1 else "messages" }} sent
+    from {{ identity.value }}{% if identity.is_domain %}, and from its subdomains that
+    have no identity of their own{% endif %}.
+  </p>
+  {% include "partials/email_table.html" %}
+{% endblock %}

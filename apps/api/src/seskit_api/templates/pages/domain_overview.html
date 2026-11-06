@@ -1,0 +1,42 @@
+{% extends "pages/domain_base.html" %}
+{% from "components/ui.html" import card_open, card_close, empty %}
+
+{% block head %}
+  {# As on the Overview: the charting library is loaded only where it is drawn. #}
+  <script defer src="{{ static('/js/vendor/chart.umd.js') }}"></script>
+  <script defer src="{{ static('/js/charts.js') }}"></script>
+{% endblock %}
+
+{% block tab %}
+  {% if metrics.has_activity or counts.total %}
+    {# The same panel as the Overview, narrowed to this domain: every rate here
+       divides by this domain's sends, not the project's. #}
+    {% include "partials/metrics.html" %}
+
+    {% if activity %}
+      {{ card_open("Activity") }}
+        <div class="chart">
+          <canvas id="activity-chart" aria-label="Sends, deliveries and bounces over time"
+                  role="img"></canvas>
+        </div>
+        <script nonce="{{ csp_nonce }}" type="application/json" id="activity-data">{{ activity | tojson }}</script>
+      {{ card_close() }}
+    {% endif %}
+
+    {% if not events_configured %}
+      <p class="muted">
+        Delivery, bounce and complaint figures need event reporting, which is not
+        set up for this project. <a class="link" href="/aws">Set it up on the AWS page</a>.
+      </p>
+    {% endif %}
+  {% else %}
+    {{ card_open("Nothing sent yet") }}
+      {{ empty(
+        "Nothing sent from " ~ identity.value,
+        "Mail sent from an address on this " ~ ("domain" if identity.is_domain else "address") ~ "
+         appears here with its delivery, bounce and complaint rates.",
+        icon_name="inbox"
+      ) }}
+    {{ card_close() }}
+  {% endif %}
+{% endblock %}

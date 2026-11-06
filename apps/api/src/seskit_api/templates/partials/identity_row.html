@@ -117,6 +117,10 @@
   {% endif %}
 
   <div class="row row--end">
+    {# The domain's own page, unless this card is already on it. #}
+    {% if not workspace %}
+      {{ button("Open", href="/domains/" ~ identity.id) }}
+    {% endif %}
     <form method="post" action="/domains/{{ identity.id }}/refresh">
       <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
       {{ button("Refresh", type="submit") }}
