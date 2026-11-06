@@ -14,7 +14,7 @@ inserted, that a cursor from another project cannot position a page, and that
 from __future__ import annotations
 
 from httpx import AsyncClient
-from seskit_core.models import Email, EmailStatus
+from seskit_core.models import Email, EmailStatus, Identity
 from seskit_core.services import create_api_key, create_project, register_user
 from sqlalchemy.ext.asyncio import AsyncSession
 from ulid import ULID
@@ -48,11 +48,12 @@ async def _send(
     subject: str = "Welcome",
     status: str = EmailStatus.SENT.value,
     second: int = 0,
+    sender: str = "hello@example.com",
 ) -> Email:
     row = Email(
         id=f"email_{ULID.from_timestamp(FIRST_SECOND + second)}",
         project_id=project_id,
-        from_address="hello@example.com",
+        from_address=sender,
         to_addresses=["user@example.com"],
         cc_addresses=[],
         bcc_addresses=[],
@@ -316,3 +317,163 @@ async def test_listing_needs_a_key(app_client: AsyncClient) -> None:
 
     assert response.status_code == 401
     assert response.json()["error"]["type"] == "authentication_failed"
+
+
+# ------------------------------------------------------------ by domain ---
+
+
+async def _identity(
+    session: AsyncSession, project_id: str, value: str, kind: str = "domain"
+) -> Identity:
+    row = Identity(
+        project_id=project_id,
+        identity_type=kind,
+        value=value,
+        region="us-east-1",
+        verification_status="success",
+        dkim_tokens=[],
+    )
+    session.add(row)
+    await session.flush()
+    return row
+
+
+def _ids(response: object) -> list[str]:
+    return [item["id"] for item in response.json()["data"]]  # type: ignore[attr-defined]
+
+
+async def test_domain_returns_only_mail_sent_from_it(
+    app_client: AsyncClient, db_session: AsyncSession
+) -> None:
+    project_id, raw_key = await _project_key(db_session, owner="o@example.com", name="Sending")
+    await _identity(db_session, project_id, "alpha.example")
+    await _identity(db_session, project_id, "beta.example")
+    mine = await _send(db_session, project_id=project_id, sender="a@alpha.example", second=1)
+    await _send(db_session, project_id=project_id, sender="b@beta.example", second=2)
+
+    response = await app_client.get(
+        EMAILS_URL, params={"domain": "alpha.example"}, headers=_auth(raw_key)
+    )
+
+    assert response.status_code == 200
+    assert _ids(response) == [mine.id]
+
+
+async def test_domain_follows_the_dashboards_subdomain_rule(
+    app_client: AsyncClient, db_session: AsyncSession
+) -> None:
+    project_id, raw_key = await _project_key(db_session, owner="o@example.com", name="Sending")
+    await _identity(db_session, project_id, "alpha.example")
+    await _identity(db_session, project_id, "mail.alpha.example")
+    parent = await _send(db_session, project_id=project_id, sender="a@alpha.example", second=1)
+    child = await _send(db_session, project_id=project_id, sender="a@mail.alpha.example", second=2)
+    unclaimed = await _send(
+        db_session, project_id=project_id, sender="a@news.alpha.example", second=3
+    )
+
+    of_parent = await app_client.get(
+        EMAILS_URL, params={"domain": "alpha.example"}, headers=_auth(raw_key)
+    )
+    of_child = await app_client.get(
+        EMAILS_URL, params={"domain": "mail.alpha.example"}, headers=_auth(raw_key)
+    )
+
+    assert set(_ids(of_parent)) == {parent.id, unclaimed.id}
+    assert _ids(of_child) == [child.id]
+
+
+async def test_an_address_matches_only_itself(
+    app_client: AsyncClient, db_session: AsyncSession
+) -> None:
+    project_id, raw_key = await _project_key(db_session, owner="o@example.com", name="Sending")
+    await _identity(db_session, project_id, "bob@alpha.example", "email_address")
+    bob = await _send(db_session, project_id=project_id, sender="Bob <bob@alpha.example>", second=1)
+    await _send(db_session, project_id=project_id, sender="alice@alpha.example", second=2)
+
+    response = await app_client.get(
+        EMAILS_URL, params={"domain": "bob@alpha.example"}, headers=_auth(raw_key)
+    )
+
+    assert _ids(response) == [bob.id]
+
+
+async def test_domain_ignores_case_and_a_trailing_dot(
+    app_client: AsyncClient, db_session: AsyncSession
+) -> None:
+    project_id, raw_key = await _project_key(db_session, owner="o@example.com", name="Sending")
+    await _identity(db_session, project_id, "alpha.example")
+    mine = await _send(db_session, project_id=project_id, sender="a@alpha.example", second=1)
+
+    response = await app_client.get(
+        EMAILS_URL, params={"domain": "Alpha.Example."}, headers=_auth(raw_key)
+    )
+
+    assert _ids(response) == [mine.id]
+
+
+async def test_an_unknown_domain_is_not_found_not_empty(
+    app_client: AsyncClient, db_session: AsyncSession
+) -> None:
+    project_id, raw_key = await _project_key(db_session, owner="o@example.com", name="Sending")
+    await _send(db_session, project_id=project_id, sender="a@alpha.example", second=1)
+
+    response = await app_client.get(
+        EMAILS_URL, params={"domain": "alpha.example"}, headers=_auth(raw_key)
+    )
+
+    assert response.status_code == 404
+    assert response.json()["error"]["type"] == "not_found"
+
+
+async def test_another_projects_domain_is_the_same_not_found(
+    app_client: AsyncClient, db_session: AsyncSession
+) -> None:
+    _, raw_key = await _project_key(db_session, owner="o@example.com", name="Mine")
+    theirs, _ = await _project_key(db_session, owner="p@example.com", name="Theirs")
+    await _identity(db_session, theirs, "theirs.example")
+
+    response = await app_client.get(
+        EMAILS_URL, params={"domain": "theirs.example"}, headers=_auth(raw_key)
+    )
+
+    assert response.status_code == 404
+
+
+async def test_domain_pages_and_combines_with_status(
+    app_client: AsyncClient, db_session: AsyncSession
+) -> None:
+    project_id, raw_key = await _project_key(db_session, owner="o@example.com", name="Sending")
+    await _identity(db_session, project_id, "alpha.example")
+    sent = [
+        await _send(db_session, project_id=project_id, sender="a@alpha.example", second=n)
+        for n in range(1, 4)
+    ]
+    await _send(
+        db_session,
+        project_id=project_id,
+        sender="a@alpha.example",
+        status=EmailStatus.FAILED.value,
+        second=4,
+    )
+    await _send(db_session, project_id=project_id, sender="b@beta.example", second=5)
+
+    first = await app_client.get(
+        EMAILS_URL,
+        params={"domain": "alpha.example", "status": "sent", "limit": 2},
+        headers=_auth(raw_key),
+    )
+    second = await app_client.get(
+        EMAILS_URL,
+        params={
+            "domain": "alpha.example",
+            "status": "sent",
+            "limit": 2,
+            "starting_after": _ids(first)[-1],
+        },
+        headers=_auth(raw_key),
+    )
+
+    assert _ids(first) == [sent[2].id, sent[1].id]
+    assert first.json()["has_more"] is True
+    assert _ids(second) == [sent[0].id]
+    assert second.json()["has_more"] is False

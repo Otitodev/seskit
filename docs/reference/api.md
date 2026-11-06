@@ -162,6 +162,11 @@ comparison is lexical, so an id from another project would otherwise return
 a page of real messages positioned by an id the caller cannot see - a wrong
 answer that looks like a right one.
 
+**``domain`` is the dashboard's rule, not a text match.** It must name one of
+the project's identities and then selects exactly what that identity's page
+shows (``DomainScope``). A name that is not one - including another
+project's - is a 404, never an empty page that reads as "sent nothing".
+
 **Parameters**
 
 | Name | In | | |
@@ -169,6 +174,7 @@ answer that looks like a right one.
 | `limit` | query | optional | How many messages to return, newest first. |
 | `starting_after` | query | optional | Return messages older than this id - the last id from the previous page. The id must belong to this project. |
 | `status` | query | optional | Only messages in this status. |
+| `domain` | query | optional | Only messages sent from this domain or address, one of the project's sending identities. A domain includes its subdomains unless a more specific identity of the project exists; an address matches only itself. |
 
 **Responses**
 

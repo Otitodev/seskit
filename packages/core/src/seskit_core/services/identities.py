@@ -106,6 +106,26 @@ async def find_identity(
     return identity
 
 
+async def find_identity_by_value(
+    session: AsyncSession, *, project_id: str, value: str
+) -> Identity | None:
+    """One of the project's identities by its domain or address, in any region.
+
+    For a caller that names an identity the way a person does, as ``example.com``.
+    The same value in two regions is one sender for this purpose, so either row
+    answers. Case and a trailing dot are ignored, as they are in DNS.
+    """
+    identity: Identity | None = await session.scalar(
+        select(Identity)
+        .where(
+            Identity.project_id == project_id,
+            func.lower(Identity.value) == value.strip().lower().rstrip("."),
+        )
+        .limit(1)
+    )
+    return identity
+
+
 async def count_other_references(session: AsyncSession, identity: Identity) -> int:
     """How many *other* projects hold this same SES identity.
 
