@@ -22,10 +22,12 @@ from seskit_core.db import get_session
 from seskit_core.errors import APIError, ErrorType
 from seskit_core.logging import get_logger
 from seskit_core.models import AWSConnection, Identity, Project
+from seskit_core.models.base import utcnow
 from seskit_core.redis import get_redis
 from seskit_core.services import (
     InboundProvisionerFactory,
     ProviderFactory,
+    TimeRange,
     add_identity,
     get_connection,
     get_owned_identity,
@@ -33,6 +35,8 @@ from seskit_core.services import (
     list_projects,
     refresh_identity,
     remove_identity,
+    scopes_for,
+    sent_since,
     setup_receiving,
     teardown_receiving,
 )
@@ -85,6 +89,9 @@ async def _page(
         connection=connection,
         identities=identities,
         receiving=await receiving_views(request, db, project, connection, identities),
+        sent_24h=await sent_since(
+            db, project.id, scopes_for(identities), utcnow() - TimeRange.DAY.duration
+        ),
         error=error,
     )
 

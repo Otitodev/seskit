@@ -74,6 +74,18 @@
         </dd>
       </div>
     {% endif %}
+    {% if sent_24h is defined and identity.id in sent_24h %}
+      <div class="datalist__row">
+        <dt>Last 24 hours</dt>
+        <dd>
+          {% if sent_24h[identity.id] %}
+            {{ sent_24h[identity.id] }} sent
+          {% else %}
+            <span class="muted">Nothing sent</span>
+          {% endif %}
+        </dd>
+      </div>
+    {% endif %}
     <div class="datalist__row">
       <dt>Last checked</dt>
       <dd class="muted">

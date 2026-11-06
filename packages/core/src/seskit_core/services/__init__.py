@@ -31,7 +31,7 @@ from seskit_core.services.aws import (
     refresh_connection,
 )
 from seskit_core.services.credentials import stored_credentials
-from seskit_core.services.domain_scope import DomainScope, scope_for
+from seskit_core.services.domain_scope import DomainScope, scope_for, scopes_for, sent_since
 from seskit_core.services.events import (
     PolledQueue,
     ProvisionerFactory,
@@ -240,7 +240,9 @@ __all__ = [
     "rotate_secret",
     "rule_name_for",
     "scope_for",
+    "scopes_for",
     "sender_is_verified",
+    "sent_since",
     "set_enabled",
     "set_open_click_tracking",
     "setup_events",
