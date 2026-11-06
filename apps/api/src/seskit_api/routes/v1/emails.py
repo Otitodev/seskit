@@ -22,6 +22,8 @@ from seskit_core.services import (
     Outgoing,
     accept_email,
     find_by_idempotency_key,
+    find_identity_by_value,
+    scope_for,
 )
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -194,6 +196,16 @@ async def list_emails(
             description="Only messages in this status.",
         ),
     ] = None,
+    domain: Annotated[
+        str | None,
+        Query(
+            description=(
+                "Only messages sent from this domain or address, one of the project's "
+                "sending identities. A domain includes its subdomains unless a more "
+                "specific identity of the project exists; an address matches only itself."
+            ),
+        ),
+    ] = None,
 ) -> EmailList:
     """This key's project, newest first.
 
@@ -208,6 +220,11 @@ async def list_emails(
     comparison is lexical, so an id from another project would otherwise return
     a page of real messages positioned by an id the caller cannot see - a wrong
     answer that looks like a right one.
+
+    **``domain`` is the dashboard's rule, not a text match.** It must name one of
+    the project's identities and then selects exactly what that identity's page
+    shows (``DomainScope``). A name that is not one - including another
+    project's - is a 404, never an empty page that reads as "sent nothing".
     """
     apply_rate_limit_headers(response, context)
 
@@ -225,6 +242,12 @@ async def list_emails(
 
     if status_filter is not None:
         query = query.where(Email.status == status_filter.value)
+
+    if domain is not None:
+        identity = await find_identity_by_value(db, project_id=context.project.id, value=domain)
+        if identity is None:
+            raise APIError(ErrorType.NOT_FOUND, "No sending identity with that name.")
+        query = query.where((await scope_for(db, identity)).sent_from())
 
     # One more than asked for, so "is there another page?" is answered by the
     # query that fetched this one rather than by a second round trip.
