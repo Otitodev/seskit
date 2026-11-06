@@ -44,7 +44,7 @@ router = APIRouter(tags=["dashboard"], include_in_schema=False)
 RANGES = (TimeRange.DAY, TimeRange.WEEK, TimeRange.MONTH)
 
 
-def _chart_data(points: list[ActivityPoint], time_range: TimeRange) -> dict[str, object]:
+def chart_data(points: list[ActivityPoint], time_range: TimeRange) -> dict[str, object]:
     """The activity series as the shape the chart script reads.
 
     Labels are formatted here rather than in JavaScript, because the server
@@ -88,7 +88,7 @@ async def overview(
         projects=await list_projects(db, current.user.id),
         counts=await status_counts(db, project.id),
         metrics=await compute_metrics(db, project.id, time_range=time_range),
-        activity=_chart_data(
+        activity=chart_data(
             await activity_series(db, project.id, time_range=time_range), time_range
         ),
         ranges=RANGES,

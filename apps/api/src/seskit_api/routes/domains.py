@@ -84,12 +84,12 @@ async def _page(
         projects=await list_projects(db, current.user.id),
         connection=connection,
         identities=identities,
-        receiving=await _receiving_views(request, db, project, connection, identities),
+        receiving=await receiving_views(request, db, project, connection, identities),
         error=error,
     )
 
 
-async def _receiving_views(
+async def receiving_views(
     request: Request,
     db: AsyncSession,
     project: Project,

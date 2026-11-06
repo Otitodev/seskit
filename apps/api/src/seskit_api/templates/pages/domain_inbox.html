@@ -1,0 +1,19 @@
+{% extends "pages/domain_base.html" %}
+{% from "components/ui.html" import empty %}
+
+{% block tab %}
+  {% if receiving_on or messages %}
+    {% include "partials/inbox_table.html" %}
+  {% else %}
+    {# Its own state: a domain that is not receiving has nothing to wait for, and
+       "no mail yet" would hide the one thing to do. #}
+    {{ empty(
+      "Not receiving mail for " ~ identity.value,
+      "Turn receiving on in Setup and mail sent to this domain appears here, and
+       your application is told as it arrives.",
+      icon_name="inbox",
+      action_label="Go to Setup",
+      action_href=base ~ "/setup"
+    ) }}
+  {% endif %}
+{% endblock %}

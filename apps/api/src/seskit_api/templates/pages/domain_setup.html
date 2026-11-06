@@ -1,0 +1,8 @@
+{% extends "pages/domain_base.html" %}
+
+{% block tab %}
+  {# The card from the Domains page. Its buttons act through the same routes and
+     answer on that page, so nothing about an identity can change from here that
+     could not change from there. #}
+  {% include "partials/identity_row.html" %}
+{% endblock %}

@@ -263,3 +263,74 @@ def test_every_migration_says_what_it_does(path: Path) -> None:
     source = path.read_text(encoding="utf-8").lstrip()
 
     assert source.startswith('"""'), f"{path.name} has no docstring"
+
+
+# --------------------------------------------------------------- backfills ---
+
+BACKFILL_DATABASE = "seskit_backfill_test"
+
+
+async def test_the_from_domain_migration_fills_in_the_rows_that_already_exist() -> None:
+    """A column that is NULL for every old row would leave a domain's page empty
+    until it was sent from again. This builds the schema one step before the
+    migration, writes mail the way the old code did, and runs the migration.
+    """
+    get_settings.cache_clear()
+    base = str(get_settings().DATABASE_URL).rsplit("/", 1)[0]
+    url = _url(base, BACKFILL_DATABASE)
+
+    admin = create_async_engine(f"{base}/postgres", isolation_level="AUTOCOMMIT")
+    async with admin.connect() as connection:
+        await connection.execute(text(f'DROP DATABASE IF EXISTS "{BACKFILL_DATABASE}"'))
+        await connection.execute(text(f'CREATE DATABASE "{BACKFILL_DATABASE}"'))
+
+    engine = create_async_engine(url)
+    try:
+        _alembic("upgrade", "d5a2c8f13e70", url=url)
+
+        addresses = {
+            "email_1": "hello@Example.com",
+            "email_2": "Acme Support <help@mail.example.com>",
+            "email_3": '"billing@old.example" <real@example.com>',
+            "email_4": "nonsense",
+        }
+        async with engine.begin() as connection:
+            await connection.execute(
+                text(
+                    "INSERT INTO users (id, email, password_hash, is_owner, is_active) "
+                    "VALUES ('user_1', 'owner@example.com', 'x', true, true)"
+                )
+            )
+            await connection.execute(
+                text("INSERT INTO projects (id, user_id, name) VALUES ('proj_1', 'user_1', 'P')")
+            )
+            for email_id, address in addresses.items():
+                await connection.execute(
+                    text(
+                        "INSERT INTO emails (id, project_id, from_address, to_addresses, "
+                        "cc_addresses, bcc_addresses, reply_to, subject, headers, status) "
+                        "VALUES (:id, 'proj_1', :address, '[]', '[]', '[]', '[]', 's', '{}', "
+                        "'queued')"
+                    ),
+                    {"id": email_id, "address": address},
+                )
+
+        _alembic("upgrade", "head", url=url)
+
+        async with engine.connect() as connection:
+            result = await connection.execute(
+                text("SELECT id, from_domain FROM emails ORDER BY id")
+            )
+            found = {row[0]: row[1] for row in result}
+    finally:
+        await engine.dispose()
+        async with admin.connect() as connection:
+            await connection.execute(text(f'DROP DATABASE IF EXISTS "{BACKFILL_DATABASE}"'))
+        await admin.dispose()
+
+    assert found == {
+        "email_1": "example.com",
+        "email_2": "mail.example.com",
+        "email_3": "example.com",
+        "email_4": None,
+    }

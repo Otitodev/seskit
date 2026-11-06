@@ -31,6 +31,7 @@ from seskit_core.services.aws import (
     refresh_connection,
 )
 from seskit_core.services.credentials import stored_credentials
+from seskit_core.services.domain_scope import DomainScope, scope_for
 from seskit_core.services.events import (
     PolledQueue,
     ProvisionerFactory,
@@ -145,6 +146,7 @@ __all__ = [
     "MAX_CONTACTS",
     "MIN_PASSWORD_LENGTH",
     "ActivityPoint",
+    "DomainScope",
     "EmailAlreadyRegistered",
     "InboundProvisionerFactory",
     "InboundStoreFactory",
@@ -237,6 +239,7 @@ __all__ = [
     "revoke_api_key",
     "rotate_secret",
     "rule_name_for",
+    "scope_for",
     "sender_is_verified",
     "set_enabled",
     "set_open_click_tracking",
