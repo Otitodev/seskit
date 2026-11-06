@@ -11,7 +11,7 @@ ordinary links that still work.
 |---|---|
 | **Overview** | The six counts and five rates, over 24 hours, 7 days or 30 days, with an activity chart |
 | **Emails** | Everything this project sent, filterable by status. Each row links to the message |
-| **Domains** | Sending identities and their verification state, with the DNS records to add |
+| **Domains** | Sending identities and their verification state, with the DNS records to add. **Open** one for its own page |
 | **AWS** | The connection, the region, your quota, sandbox status, and event reporting setup |
 | **API keys** | Create and revoke. Shown once at creation |
 | **Webhooks** | Endpoints, signing secrets, and the delivery history for each |
@@ -57,6 +57,26 @@ setup, which otherwise looks healthy right up until a send fails.
 If the domain has a custom MAIL FROM set in Amazon SES, a **Return path** row shows
 whether SES has verified it, and the two DNS records it needs until it has. SESKit
 reads this from SES; it cannot set it yet. Mail keeps sending either way.
+
+### A page for each domain
+
+**Open** on a domain's card leads to a page with everything about that domain,
+so one domain's numbers are never mixed with another's:
+
+| Tab | Shows |
+|---|---|
+| **Overview** | The same counts, rates and chart as the main Overview, for mail sent from this domain only. Rates divide by this domain's own sends |
+| **Emails** | Mail sent from it, filterable by status |
+| **Inbox** | Mail received for it. If receiving is off, the tab says so and points to Setup |
+| **Setup** | The card from the Domains page: verification, DNS records, return path, receiving |
+
+The main **Overview**, **Emails** and **Inbox** stay as the view across every
+domain.
+
+A verified domain includes its subdomains: mail from `news.example.com` shows
+under `example.com`. If you also add `news.example.com`, that mail moves to its
+own page. An email-address identity gets a page for mail from that address only,
+and no Inbox, because an address has no MX record to receive at.
 
 ## AWS
 
