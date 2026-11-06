@@ -8,6 +8,10 @@
    an enhancement. With JavaScript unavailable this panel still says everything
    §17 asks for. #}
 {% from "components/ui.html" import metric, badge %}
+{# Where the range links point. The Overview's defaults are right for it; a
+   domain's page passes its own so the same panel narrows to that domain. #}
+{% set metrics_url = metrics_url | default("/") %}
+{% set metrics_partial_url = metrics_partial_url | default("/partials/metrics") %}
 
 <div class="stack" id="metrics">
   <div class="row row--end">
@@ -17,11 +21,11 @@
     <nav class="segmented" aria-label="Time range">
       {% for option in ranges %}
         <a class="segmented__item{{ ' is-active' if option == metrics.range else '' }}"
-           href="/?range={{ option.value }}"
-           hx-get="/partials/metrics?range={{ option.value }}"
+           href="{{ metrics_url }}?range={{ option.value }}"
+           hx-get="{{ metrics_partial_url }}?range={{ option.value }}"
            hx-target="#metrics"
            hx-swap="outerHTML"
-           hx-push-url="/?range={{ option.value }}"
+           hx-push-url="{{ metrics_url }}?range={{ option.value }}"
            hx-indicator="#metrics-busy"
            {% if option == metrics.range %}aria-current="page"{% endif %}>
           {{ option.value }}

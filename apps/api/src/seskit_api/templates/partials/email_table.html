@@ -8,16 +8,19 @@
    should be linkable and survive a refresh. Without JavaScript they are
    ordinary navigation that still works. #}
 {% from "components/ui.html" import badge %}
+{# The page and fragment URLs, so a domain's page can filter its own list. #}
+{% set emails_url = emails_url | default("/emails") %}
+{% set emails_partial_url = emails_partial_url | default("/partials/emails") %}
 
 <div class="stack" id="email-table">
   <nav class="segmented" aria-label="Filter by status">
     {% for option in statuses %}
       <a class="segmented__item{{ ' is-active' if option == selected_status else '' }}"
-         href="/emails{{ '?status=' ~ option.value if option else '' }}"
-         hx-get="/partials/emails{{ '?status=' ~ option.value if option else '' }}"
+         href="{{ emails_url }}{{ '?status=' ~ option.value if option else '' }}"
+         hx-get="{{ emails_partial_url }}{{ '?status=' ~ option.value if option else '' }}"
          hx-target="#email-table"
          hx-swap="outerHTML"
-         hx-push-url="/emails{{ '?status=' ~ option.value if option else '' }}"
+         hx-push-url="{{ emails_url }}{{ '?status=' ~ option.value if option else '' }}"
          hx-indicator="#email-filter-busy"
          {% if option == selected_status %}aria-current="page"{% endif %}>
         {{ option.value | capitalize if option else "All" }}
@@ -86,7 +89,7 @@
        messages and no failures is not a new install, and telling it to create
        its first API key would be nonsense. #}
     {% if selected_status %}
-      <p class="muted">No {{ selected_status.value }} messages. <a class="link" href="/emails">Show all messages</a>.</p>
+      <p class="muted">No {{ selected_status.value }} messages. <a class="link" href="{{ emails_url }}">Show all messages</a>.</p>
     {% else %}
       {# Reachable through the fragment route on an empty project; the page
          itself shows the onboarding block instead of ever rendering this. #}

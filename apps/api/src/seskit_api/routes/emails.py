@@ -27,6 +27,7 @@ from seskit_core.errors import APIError
 from seskit_core.logging import get_logger
 from seskit_core.models import Email, EmailEvent, EmailStatus, EventType, Project
 from seskit_core.services import (
+    DomainScope,
     Outgoing,
     accept_email,
     list_events,
@@ -81,10 +82,23 @@ def parse_status(value: str | None) -> EmailStatus | None:
         return None
 
 
-async def _list(db: AsyncSession, project_id: str, status: EmailStatus | None) -> list[Email]:
+async def recent_emails(
+    db: AsyncSession,
+    project_id: str,
+    status: EmailStatus | None,
+    scope: DomainScope | None = None,
+) -> list[Email]:
+    """One page of the project's messages, newest first.
+
+    With a ``scope``, only mail sent from that domain. Public because a domain's
+    page lists the same table, narrowed, and two copies of this query would not
+    stay the same query.
+    """
     query = select(Email).where(Email.project_id == project_id)
     if status is not None:
         query = query.where(Email.status == status.value)
+    if scope is not None:
+        query = query.where(scope.sent_from())
     return list(await db.scalars(query.order_by(Email.id.desc()).limit(PAGE_SIZE)))
 
 
@@ -117,7 +131,7 @@ async def _page(
         nav_active="emails",
         project=project,
         projects=await list_projects(db, current.user.id),
-        emails=await _list(db, project_id, selected),
+        emails=await recent_emails(db, project_id, selected),
         # Unfiltered, deliberately. These are the project's totals; a "Total"
         # that changed when you clicked "Failed" would no longer mean anything.
         counts=await status_counts(db, project_id),
@@ -238,7 +252,7 @@ async def emails_partial(
         "partials/email_table.html",
         current=current,
         project=project,
-        emails=await _list(db, project_id, selected),
+        emails=await recent_emails(db, project_id, selected),
         statuses=STATUS_FILTERS,
         selected_status=selected,
     )
@@ -305,17 +319,22 @@ def _outcome(email: Email, events: list[EmailEvent]) -> tuple[str, str] | None:
     return None
 
 
-async def status_counts(db: AsyncSession, project_id: str) -> dict[str, int]:
+async def status_counts(
+    db: AsyncSession, project_id: str, scope: DomainScope | None = None
+) -> dict[str, int]:
     """How many messages sit in each status.
 
     The Overview has shown hardcoded zeroes since Phase 1. This is what lets it
-    tell the truth.
+    tell the truth. With a ``scope``, the counts are that domain's own.
     """
-    rows = await db.execute(
+    query = (
         select(Email.status, func.count())
         .where(Email.project_id == project_id)
         .group_by(Email.status)
     )
+    if scope is not None:
+        query = query.where(scope.sent_from())
+    rows = await db.execute(query)
     counts = {status.value: 0 for status in EmailStatus}
     for status, count in rows:
         counts[status] = count
