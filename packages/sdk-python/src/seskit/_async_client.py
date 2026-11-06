@@ -135,10 +135,11 @@ class AsyncEmails:
         limit: int | None = None,
         starting_after: str | None = None,
         status: str | None = None,
+        domain: str | None = None,
     ) -> EmailPage:
         """One page of this project's messages, newest first."""
         payload = await self._transport.send(
-            build_list(limit=limit, starting_after=starting_after, status=status)
+            build_list(limit=limit, starting_after=starting_after, status=status, domain=domain)
         )
         return EmailPage.from_payload(payload)
 

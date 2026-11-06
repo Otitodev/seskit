@@ -142,14 +142,19 @@ class Emails:
         limit: int | None = None,
         starting_after: str | None = None,
         status: str | None = None,
+        domain: str | None = None,
     ) -> EmailPage:
         """One page of this project's messages, newest first.
 
         One page, not all of them. Pass `page.last_id` as `starting_after`
         while `page.has_more`.
+
+        `domain` is one of your sending identities, such as `"example.com"`: only
+        mail sent from it, the way its page in the dashboard shows it. A name that
+        is not one of your identities raises `NotFound`.
         """
         payload = self._transport.send(
-            build_list(limit=limit, starting_after=starting_after, status=status)
+            build_list(limit=limit, starting_after=starting_after, status=status, domain=domain)
         )
         return EmailPage.from_payload(payload)
 

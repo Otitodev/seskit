@@ -108,6 +108,7 @@ def build_list(
     limit: int | None = None,
     starting_after: str | None = None,
     status: str | None = None,
+    domain: str | None = None,
 ) -> Request:
     """`GET /v1/emails`, newest first.
 
@@ -120,6 +121,7 @@ def build_list(
         ("limit", limit),
         ("starting_after", starting_after),
         ("status", status),
+        ("domain", domain),
     ):
         if value is not None:
             params[name] = value

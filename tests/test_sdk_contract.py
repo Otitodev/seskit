@@ -19,6 +19,7 @@ both.
 
 from __future__ import annotations
 
+import pytest
 from httpx import AsyncClient
 from seskit import (
     AsyncSesKit,
@@ -27,7 +28,7 @@ from seskit import (
     NotFound,
     SuppressedRecipient,
 )
-from seskit_core.models import Email, EmailStatus, SuppressionReason
+from seskit_core.models import Email, EmailStatus, Identity, SuppressionReason
 from seskit_core.services import create_api_key, create_project, register_user, suppress
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -255,6 +256,34 @@ async def test_the_status_filter_reaches_the_query(
     page = await client.emails.list(status="failed")
 
     assert len(page) == 0
+
+
+async def test_the_domain_filter_reaches_the_query(
+    app_client: AsyncClient, db_session: AsyncSession
+) -> None:
+    project_id, raw_key = await _key(db_session)
+    db_session.add(
+        Identity(
+            project_id=project_id,
+            identity_type="domain",
+            value="example.com",
+            region="us-east-1",
+            verification_status="success",
+            dkim_tokens=[],
+        )
+    )
+    await db_session.flush()
+    client = _sdk(app_client, raw_key)
+    mine = await client.emails.send(from_=SENDER, to=[RECIPIENT], subject="Mine", text="x")
+    await client.emails.send(
+        from_="Other <hello@other.org>", to=[RECIPIENT], subject="Other", text="x"
+    )
+
+    page = await client.emails.list(domain="example.com")
+
+    assert [email.id for email in page] == [mine.id]
+    with pytest.raises(NotFound):
+        await client.emails.list(domain="other.org")
 
 
 # ------------------------------------------------------------------ errors ---

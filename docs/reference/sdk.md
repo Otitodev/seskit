@@ -90,7 +90,14 @@ A field this version of the client does not know about is still available in
 page = client.emails.list(limit=50, status="failed")
 for email in page:
     print(email.id, email.last_error)
+
+page = client.emails.list(domain="example.com")  # only mail sent from that domain
 ```
+
+`domain` is one of your sending identities. It selects what that domain's page in
+the dashboard shows: a domain includes its subdomains unless you added a more
+specific one, and an address matches only itself. Anything else raises
+`NotFound`.
 
 **One page**, newest first. Iterating gives the messages on that page and
 deliberately does not fetch more — a loop that silently made more requests
