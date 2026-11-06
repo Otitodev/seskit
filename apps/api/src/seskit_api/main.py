@@ -32,6 +32,7 @@ from seskit_api.routes import (
     auth,
     aws,
     dashboard,
+    domain_pages,
     domains,
     emails,
     health,
@@ -259,6 +260,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(api_keys.router)
     app.include_router(aws.router)
     app.include_router(domains.router)
+    app.include_router(domain_pages.router)
     app.include_router(emails.router)
     app.include_router(inbox.router)
     app.include_router(webhooks.router)

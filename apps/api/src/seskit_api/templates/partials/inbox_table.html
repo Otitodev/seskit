@@ -8,6 +8,9 @@
    Every value from a message below is somebody else's. It is escaped, and there
    is no |safe anywhere in this file. #}
 
+{# Where "Older messages" points; a domain's page passes its own. #}
+{% set inbox_url = inbox_url | default("/inbox") %}
+
 <div class="stack" id="inbox-table">
   {% if domains | length > 1 %}
     <nav class="segmented" aria-label="Filter by domain">
@@ -70,7 +73,7 @@
 
     {% if older %}
       <p>
-        <a class="link" href="/inbox?before={{ older | urlencode }}{{ '&domain=' ~ (selected_domain | urlencode) if selected_domain else '' }}">Older messages</a>
+        <a class="link" href="{{ inbox_url }}?before={{ older | urlencode }}{{ '&domain=' ~ (selected_domain | urlencode) if selected_domain and inbox_url == '/inbox' else '' }}">Older messages</a>
       </p>
     {% endif %}
   {% elif selected_domain %}

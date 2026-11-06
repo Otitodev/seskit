@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% from "components/ui.html" import badge %}
+
+{% block title %}{{ identity.value }} · SESKit{% endblock %}
+
+{# The frame every tab of a domain's page shares: who it is, whether it works, and
+   the way to the other tabs. The tabs are links, not buttons - a tab is a view,
+   and a view should be linkable and survive a refresh. #}
+{% set labels = {"overview": "Overview", "emails": "Emails", "inbox": "Inbox", "setup": "Setup"} %}
+
+{% block content %}
+  <div class="page-header">
+    <p class="muted"><a class="link" href="/domains">All domains</a></p>
+    <h1>{{ identity.value }}</h1>
+    <p class="page-header__subtitle">
+      {% if identity.is_verified %}
+        {{ badge("Verified", tone="success") }}
+      {% elif identity.verification_status in ("failed", "temporary_failure") %}
+        {{ badge("Failed", tone="danger") }}
+      {% else %}
+        {{ badge("Pending", tone="warning") }}
+      {% endif %}
+      {{ "Domain" if identity.is_domain else "Email address" }} in
+      <code>{{ identity.region }}</code>, for <code>{{ project.name }}</code>.
+    </p>
+  </div>
+
+  <nav class="segmented" aria-label="{{ identity.value }}">
+    {% for name in tabs %}
+      <a class="segmented__item{{ ' is-active' if name == tab else '' }}"
+         href="{{ base }}{{ '' if name == 'overview' else '/' ~ name }}"
+         {% if name == tab %}aria-current="page"{% endif %}>{{ labels[name] }}</a>
+    {% endfor %}
+  </nav>
+
+  {% block tab %}{% endblock %}
+{% endblock %}
