@@ -45,6 +45,7 @@ from seskit_core.models import (
     EventType,
     utcnow,
 )
+from seskit_core.services.domain_scope import DomainScope
 
 
 class TimeRange(StrEnum):
@@ -184,7 +185,9 @@ class ActivityPoint:
     bounced: int = 0
 
 
-def _project_events(project_id: str, since: datetime) -> Select[tuple[str, int]]:
+def _project_events(
+    project_id: str, since: datetime, scope: DomainScope | None = None
+) -> Select[tuple[str, int]]:
     """Distinct emails per event type, for one project, in one window.
 
     ``COUNT(DISTINCT email_id)`` rather than ``COUNT(*)`` - see the module
@@ -192,12 +195,13 @@ def _project_events(project_id: str, since: datetime) -> Select[tuple[str, int]]
     ``created_at`` precisely so a queue backlog cannot file a bounce under the
     day SESKit happened to hear about it.
     """
-    return (
+    query = (
         select(EmailEvent.event_type, func.count(func.distinct(EmailEvent.email_id)))
         .join(Email, Email.id == EmailEvent.email_id)
         .where(Email.project_id == project_id, EmailEvent.occurred_at >= since)
         .group_by(EmailEvent.event_type)
     )
+    return query.where(scope.sent_from()) if scope else query
 
 
 async def compute_metrics(
@@ -206,8 +210,12 @@ async def compute_metrics(
     *,
     time_range: TimeRange = TimeRange.DAY,
     now: datetime | None = None,
+    scope: DomainScope | None = None,
 ) -> Metrics:
     """The Overview's numbers, for one project and one window.
+
+    With a ``scope``, only mail sent from that domain is counted. Every rate is
+    then that domain's own, divided by its own sends, never by the project's.
 
     Two queries and a lookup: one counting sends, one counting distinct emails
     per event type, and one for whether tracking is on.
@@ -215,7 +223,7 @@ async def compute_metrics(
     current = now or utcnow()
     since = current - time_range.duration
 
-    sent = await session.scalar(
+    sent_query = (
         select(func.count())
         .select_from(Email)
         .where(
@@ -224,8 +232,11 @@ async def compute_metrics(
             Email.sent_at >= since,
         )
     )
+    if scope:
+        sent_query = sent_query.where(scope.sent_from())
+    sent = await session.scalar(sent_query)
 
-    rows = await session.execute(_project_events(project_id, since))
+    rows = await session.execute(_project_events(project_id, since, scope))
     counts: dict[str, int] = dict(rows.all())  # type: ignore[arg-type]
 
     tracking = await session.scalar(
@@ -251,6 +262,7 @@ async def activity_series(
     *,
     time_range: TimeRange = TimeRange.DAY,
     now: datetime | None = None,
+    scope: DomainScope | None = None,
 ) -> list[ActivityPoint]:
     """Sends, deliveries and bounces per bucket, oldest first.
 
@@ -269,7 +281,7 @@ async def activity_series(
     send_bucket = func.date_trunc(unit, Email.sent_at).label("bucket")
     event_bucket = func.date_trunc(unit, EmailEvent.occurred_at).label("bucket")
 
-    sends = await session.execute(
+    sends_query = (
         select(send_bucket, func.count())
         .where(
             Email.project_id == project_id,
@@ -278,7 +290,7 @@ async def activity_series(
         )
         .group_by(send_bucket)
     )
-    events = await session.execute(
+    events_query = (
         select(
             event_bucket,
             EmailEvent.event_type,
@@ -292,6 +304,11 @@ async def activity_series(
         )
         .group_by(event_bucket, EmailEvent.event_type)
     )
+    if scope:
+        sends_query = sends_query.where(scope.sent_from())
+        events_query = events_query.where(scope.sent_from())
+    sends = await session.execute(sends_query)
+    events = await session.execute(events_query)
 
     sent_by: dict[datetime, int] = {at: total for at, total in sends if at is not None}
     delivered_by: dict[datetime, int] = {}

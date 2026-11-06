@@ -17,8 +17,9 @@ from enum import StrEnum
 from typing import TYPE_CHECKING
 
 from sqlalchemy import JSON, DateTime, ForeignKey, Index, String, Text, UniqueConstraint
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, mapped_column, relationship, validates
 
+from seskit_core.addressing import domain_of
 from seskit_core.db import Base
 from seskit_core.ids import IDPrefix, generate_id
 from seskit_core.models.base import TimestampMixin
@@ -66,6 +67,8 @@ class Email(Base, TimestampMixin):
         UniqueConstraint("project_id", "idempotency_key", name="uq_emails_project_idempotency"),
         # The dashboard and /v1/emails both list newest-first within a project.
         Index("ix_emails_project_created", "project_id", "id"),
+        # A domain's page lists and counts what was sent from it, newest first.
+        Index("ix_emails_project_from_domain", "project_id", "from_domain", "id"),
     )
 
     id: Mapped[str] = mapped_column(
@@ -93,6 +96,16 @@ class Email(Base, TimestampMixin):
     configuration_set: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
     from_address: Mapped[str] = mapped_column(String(320), nullable=False)
+
+    #: The domain of ``from_address``, lower-cased, so a domain's page can find
+    #: what was sent from it without parsing every row. Derived, never set by
+    #: hand: assigning ``from_address`` fills it in, which is why a test or a code
+    #: path that builds an ``Email`` directly cannot leave it out of step.
+    #:
+    #: Text and not a reference to the identity, for the reason ``InboundEmail``
+    #: does the same: removing a domain stops future mail, and must not erase or
+    #: orphan what was already sent. NULL only for an address with no domain.
+    from_domain: Mapped[str | None] = mapped_column(String(255), nullable=True)
     to_addresses: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
     cc_addresses: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
     #: Stored because we sent it and support will be asked about it. Never
@@ -143,6 +156,16 @@ class Email(Base, TimestampMixin):
     events: Mapped[list[EmailEvent]] = relationship(
         back_populates="email", cascade="all, delete-orphan"
     )
+
+    @validates("from_address")
+    def _derive_from_domain(self, _key: str, value: str) -> str:
+        """Keep ``from_domain`` in step with the address it comes from.
+
+        Runs on every assignment, including the keyword arguments of the
+        constructor, so there is no way to hold one without the other.
+        """
+        self.from_domain = domain_of(value)
+        return value
 
     @property
     def is_sendable(self) -> bool:
