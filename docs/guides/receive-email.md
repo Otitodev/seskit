@@ -36,6 +36,8 @@ needs.
 ## Turn it on
 
 Open the **Domains** page, find the domain, and press **Start receiving**.
+Once it is on, the domain's own page has an **Inbox** tab with only that domain's
+mail; the main Inbox shows every domain.
 
 Before you press it the card names what it will create, in your AWS account:
 
