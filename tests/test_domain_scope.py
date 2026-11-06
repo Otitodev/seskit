@@ -19,6 +19,8 @@ from seskit_core.services import (
     create_project,
     register_user,
     scope_for,
+    scopes_for,
+    sent_since,
 )
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -240,3 +242,41 @@ async def test_the_chart_for_a_domain_counts_only_its_own_mail(db_session: Async
     )
 
     assert sum(point.sent for point in points) == 2
+
+
+# ------------------------------------------------------- one count per card ---
+
+
+async def test_one_query_counts_each_identitys_own_mail(db_session: AsyncSession) -> None:
+    """The Domains page shows every identity's count at once. Each must equal
+    what that identity's own page counts, with no mail counted twice."""
+    project_id = await _project(db_session)
+    parent = _identity(project_id, "example.com")
+    child = _identity(project_id, "mail.example.com")
+    address = _identity(project_id, "bob@other.org", IdentityType.EMAIL_ADDRESS)
+    quiet = _identity(project_id, "quiet.example")
+    db_session.add_all([parent, child, address, quiet])
+    senders = [
+        "a@example.com",
+        "b@example.com",
+        "a@news.example.com",
+        "a@mail.example.com",
+        "Bob <bob@other.org>",
+        "alice@other.org",
+    ]
+    for index, sender in enumerate(senders):
+        db_session.add(_email(project_id, sender, index=index))
+    await db_session.flush()
+
+    counts = await sent_since(
+        db_session,
+        project_id,
+        scopes_for([parent, child, address, quiet]),
+        NOW - timedelta(hours=24),
+    )
+
+    assert counts == {parent.id: 3, child.id: 1, address.id: 1, quiet.id: 0}
+
+
+async def test_no_identities_is_no_query_and_no_counts(db_session: AsyncSession) -> None:
+    assert await sent_since(db_session, "proj_x", {}, NOW) == {}

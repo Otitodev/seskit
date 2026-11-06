@@ -310,3 +310,22 @@ async def test_the_setup_tab_is_the_domains_card(
     # Already on the domain's page, so the card does not link to itself.
     assert f'href="/domains/{first.id}"' in page.text  # the Overview tab
     assert ">Open<" not in page.text
+
+
+async def test_the_domains_list_shows_each_domains_own_count(
+    app_client: AsyncClient, db_session: AsyncSession
+) -> None:
+    project, _, _ = await _two_domains(app_client, db_session)
+    db_session.add_all(
+        [
+            _sent(project, "hello@alpha.example", "a", 1),
+            _sent(project, "hello@beta.example", "b", 2),
+            _sent(project, "hello@beta.example", "c", 3),
+        ]
+    )
+    await db_session.flush()
+
+    page = await app_client.get("/domains")
+
+    assert "1 sent" in page.text
+    assert "2 sent" in page.text

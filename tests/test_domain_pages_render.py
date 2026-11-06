@@ -208,3 +208,24 @@ def test_the_domains_list_card_links_to_the_domain() -> None:
 
     assert 'href="/domains/dom_1"' in card
     assert "Open" in card
+
+
+def _card(**context: object) -> str:
+    return templates.env.get_template("partials/identity_row.html").render(
+        identity=_identity(), csrf_token="token", **context
+    )
+
+
+def test_the_card_says_how_much_was_sent_in_the_last_day() -> None:
+    assert "42 sent" in _card(sent_24h={"dom_1": 42})
+
+
+def test_the_card_says_when_nothing_was_sent() -> None:
+    card = _card(sent_24h={"dom_1": 0})
+
+    assert "Nothing sent" in card
+    assert "0 sent" not in card
+
+
+def test_a_card_without_the_counts_has_no_such_row() -> None:
+    assert "Last 24 hours" not in _card()

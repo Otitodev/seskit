@@ -23,14 +23,16 @@ cases through both.
 
 from __future__ import annotations
 
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
+from datetime import datetime
 
 from sqlalchemy import ColumnElement, and_, func, not_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from seskit_core.addressing import domain_of
 from seskit_core.email.message import bare_address
-from seskit_core.models import Email, Identity
+from seskit_core.models import Email, EmailStatus, Identity
 from seskit_core.providers.types import IdentityType
 
 
@@ -102,14 +104,66 @@ async def scope_for(session: AsyncSession, identity: Identity) -> DomainScope:
             Identity.identity_type == IdentityType.DOMAIN.value,
         )
     )
-    narrower = sorted(
-        {
-            other.lower()
-            for other in others
-            if other.lower() != value and _under(other.lower(), value)
-        }
+    return DomainScope(value=value, narrower=_narrower(value, others))
+
+
+def _narrower(value: str, domains: Iterable[str]) -> tuple[str, ...]:
+    """The domains from ``domains`` that sit beneath ``value``."""
+    return tuple(
+        sorted(
+            {
+                other.lower()
+                for other in domains
+                if other.lower() != value and _under(other.lower(), value)
+            }
+        )
     )
-    return DomainScope(value=value, narrower=tuple(narrower))
 
 
-__all__ = ["DomainScope", "scope_for"]
+def scopes_for(identities: Sequence[Identity]) -> dict[str, DomainScope]:
+    """The scope of each identity, keyed by id, from a list already in hand.
+
+    For a page showing all of a project's identities at once: the same answer as
+    :func:`scope_for` for each, without a query per identity. ``identities`` must
+    be the whole project's, or a domain would claim mail that belongs to one
+    that was left out.
+    """
+    domains = [i.value for i in identities if i.identity_type == IdentityType.DOMAIN.value]
+    scopes: dict[str, DomainScope] = {}
+    for identity in identities:
+        value = identity.value.lower()
+        if identity.identity_type == IdentityType.EMAIL_ADDRESS.value:
+            scopes[identity.id] = DomainScope(value=value, is_address=True)
+        else:
+            scopes[identity.id] = DomainScope(value=value, narrower=_narrower(value, domains))
+    return scopes
+
+
+async def sent_since(
+    session: AsyncSession,
+    project_id: str,
+    scopes: Mapping[str, DomainScope],
+    since: datetime,
+) -> dict[str, int]:
+    """How many emails each scope sent since ``since``, in one query.
+
+    Keyed like ``scopes``. Counts mail that was sent, as the Overview's "Sent"
+    does.
+    """
+    if not scopes:
+        return {}
+    keys = list(scopes)
+    columns = [func.count().filter(scopes[key].sent_from()) for key in keys]
+    row = (
+        await session.execute(
+            select(*columns).where(
+                Email.project_id == project_id,
+                Email.status == EmailStatus.SENT.value,
+                Email.sent_at >= since,
+            )
+        )
+    ).one()
+    return dict(zip(keys, row, strict=True))
+
+
+__all__ = ["DomainScope", "scope_for", "scopes_for", "sent_since"]
